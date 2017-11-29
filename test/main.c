@@ -55,10 +55,12 @@
 #include <qatzipP.h>
 #include <qz_utils.h>
 #include <qae_mem.h>
+#include <numa.h>
 
 #define QZ_FMT_NAME         "QZ"
 #define GZIP_FMT_NAME       "GZIP"
 #define MAX_FMT_NAME        8
+#define MAX_NUMA_NODE       8
 
 #define ARRAY_LEN(arr)      (sizeof(arr) / sizeof((arr)[0]))
 #define INTER_SZ(src_sz)    (2 * (src_sz))
@@ -102,6 +104,16 @@ typedef enum {
     PINNED_MEM
 } PinMem_T;
 
+typedef struct CPUCore_S {
+    int seq;
+    int used;
+} CPUCore_T;
+
+typedef struct NUMANode_S {
+    int num_cores;
+    CPUCore_T *core;
+} NUMANode_T;
+
 typedef struct {
     long thd_id;
     ServiceType_T service;
@@ -119,6 +131,7 @@ typedef struct {
     QzBlock_T *blks;
     int init_engine_disabled;
     int init_sess_disabled;
+    int cpu_core;
 } TestArg_T;
 
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * MB - 5 * KB);
@@ -130,6 +143,12 @@ QzSession_T g_session_th[100];
 QzSessionParams_T g_params_th;
 
 static pthread_mutex_t g_lock_print = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_cond_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_ready_cond = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t g_start_cond = PTHREAD_COND_INITIALIZER;
+static int g_ready_to_start;
+static int g_ready_thread_count;
+
 static struct timeval g_timers[100][100];
 static struct timeval g_timer_start;
 extern void dumpAllCounters();
@@ -214,6 +233,100 @@ QzBlock_T *parseFormatOption(char *buf)
         r = head;
     }
     return r;
+}
+
+static int get_nodes_cpus(NUMANode_T **numa_nodes)
+{
+    int i, j, m, n;
+    int err, nodes_num;
+    extern struct bitmask *numa_nodes_ptr;
+    struct bitmask *cpus;
+    NUMANode_T *p_numa_nodes;
+    CPUCore_T *node_core;
+    int total_cpu_cores = sysconf(_SC_NPROCESSORS_ONLN);
+
+    for (i = 0, nodes_num = 0; i <= numa_max_node(); i++) {
+        if (numa_bitmask_isbitset(numa_nodes_ptr, i)) {
+            nodes_num++;
+        }
+    }
+
+    *numa_nodes = (NUMANode_T *)calloc(nodes_num, sizeof(NUMANode_T));
+    assert(NULL != *numa_nodes);
+    p_numa_nodes = *numa_nodes;
+
+    node_core = (CPUCore_T *)calloc(total_cpu_cores, sizeof(CPUCore_T));
+    assert(NULL != node_core);
+
+    for (i = 0, m = 0; i < nodes_num; i++) {
+        p_numa_nodes[i].core = &node_core[m];
+        cpus = numa_allocate_cpumask();
+        err = numa_node_to_cpus(i, cpus);
+        if (err >= 0) {
+            for (j = 0, n = 0; j < cpus->size; j++) {
+                if (numa_bitmask_isbitset(cpus, j)) {
+                    node_core[m].seq  = j;
+                    node_core[m].used = 0;
+                    m++;
+                    n++;
+                }
+            }
+            p_numa_nodes[i].num_cores = n;
+        }
+        numa_bitmask_free(cpus);
+    }
+
+    return nodes_num;
+}
+
+static int find_unused_core_from_numanode(NUMANode_T *numa_nodes)
+{
+    assert(NULL != numa_nodes);
+    for (int i = 0; i < numa_nodes->num_cores; i++) {
+        if (numa_nodes->core[i].used == 0) {
+            numa_nodes->core[i].used = 1;
+            return numa_nodes->core[i].seq;
+        }
+    }
+
+    return -1;
+}
+
+static void free_numa_node(NUMANode_T *numa_nodes)
+{
+    if (NULL == numa_nodes) return;
+
+    free(numa_nodes->core);
+    numa_nodes->core = NULL;
+
+    free(numa_nodes);
+    numa_nodes = NULL;
+}
+
+static void get_cpu_policy(int qat_node, int thd_cnt, TestArg_T *test_arg)
+{
+    int nodes_num = 0;
+    NUMANode_T *numa_nodes = NULL;
+
+    nodes_num = get_nodes_cpus(&numa_nodes);
+    for (int i = 0; i < thd_cnt; i++) {
+        if (i < numa_nodes[qat_node].num_cores) {
+            test_arg[i].cpu_core = find_unused_core_from_numanode(&numa_nodes[qat_node]);
+            assert(-1 != test_arg[i].cpu_core);
+        } else if (i >= numa_nodes[qat_node].num_cores &&
+                   i < sysconf(_SC_NPROCESSORS_ONLN)) {
+            for (int j = 0; j < nodes_num; j++) {
+                if (j == qat_node) continue;
+                test_arg[i].cpu_core = find_unused_core_from_numanode(&numa_nodes[j]);
+                assert(-1 != test_arg[i].cpu_core);
+            }
+        } else { /*preferred used qat node*/
+            int index = i % numa_nodes[qat_node].num_cores;
+            test_arg[i].cpu_core = numa_nodes[qat_node].core[index].seq;
+        }
+    }
+
+    free_numa_node(numa_nodes);
 }
 
 static void genRandomData(uint8_t *data, size_t size)
@@ -992,6 +1105,31 @@ void *qzCompressAndDecompress(void *arg)
             dumpInputData(src_sz, src);
             goto done;
         }
+    }
+
+    /* mutex lock for thread count */
+    rc = pthread_mutex_lock(&g_cond_mutex);
+    if (rc != 0) {
+        QZ_ERROR("Failure to release Mutex Lock, status = %d\n", rc);
+        goto done;
+    }
+    g_ready_thread_count++;
+    rc = pthread_cond_signal(&g_ready_cond);
+    if (rc != 0) {
+        QZ_ERROR("Failure to pthread_cond_signal, status = %d\n", rc);
+        goto done;
+    }
+    while (!g_ready_to_start) {
+        rc = pthread_cond_wait(&g_start_cond, &g_cond_mutex);
+        if (rc != 0) {
+            QZ_ERROR("Failure to pthread_cond_wait, status = %d\n", rc);
+            goto done;
+        }
+    }
+    rc = pthread_mutex_unlock(&g_cond_mutex);
+    if (rc != 0) {
+        QZ_ERROR("Failure to release Mutex Lock, status = %d\n", rc);
+        goto done;
     }
 
     // Start the testing
@@ -2065,14 +2203,15 @@ int qzFuncTests(void)
     "    -v                    verify, disabled by default\n"                   \
     "    -e init engine        enable | disable. enabled by default\n"          \
     "    -s init session       enable | disable. enabled by default\n"          \
-    "    -A comp_algorithm      deflate | snappy | lz4\n"                        \
+    "    -A comp_algorithm     deflate | snappy | lz4\n"                        \
     "    -B                    swBack, disabled by default\n"                   \
-    "    -C hw_buff_sz           default 64K\n"                                   \
+    "    -C hw_buff_sz         default 64K\n"                                   \
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
-    "    -L comp_lvl            1 - 9\n"                                         \
+    "    -L comp_lvl           1 - 9\n"                                         \
     "    -T huffmanType        static | dynamic\n"                              \
-    "    -P poll_sleep          0 means disable thread polling\n"                \
+    "    -P poll_sleep         0 means disable thread polling\n"                \
+    "    -n NUMA node          enable CPU affinity, node can be set to 0,1 \n"  \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -2084,7 +2223,7 @@ void qzPrintUsageAndExit(char *progName)
 int main(int argc, char *argv[])
 {
     int rc = 0, ret = 0;
-    int i;
+    int i, qat_node = 0;
     void *p_rc;
     int thread_count = 1, test = 0;
     ServiceType_T service = COMP;
@@ -2101,12 +2240,13 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:P:i:l:e:s:Bvh";
+    const char *optstring = "m:t:A:C:D:F:L:T:P:i:l:e:s:n:Bvh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
     QzThdOps *qzThdOps = NULL;
     QzBlock_T  *qzBlocks = NULL;
+    int affinity_is_enabled = 0;
 
     if (qzGetDefaults(&g_params_th) != QZ_OK) {
         return -1;
@@ -2228,6 +2368,14 @@ int main(int argc, char *argv[])
                 return -1;
             }
             break;
+        case 'n':
+            qat_node = GET_LOWER_32BITS(strtol(optarg, &stop, 0));
+            if (*stop != '\0' || errno || qat_node > MAX_NUMA_NODE) {
+                QZ_ERROR("Error input: %s\n", optarg);
+                return -1;
+            }
+            affinity_is_enabled = 1;
+            break;
         default:
             qzPrintUsageAndExit(argv[0]);
         }
@@ -2339,6 +2487,48 @@ int main(int argc, char *argv[])
         if (0 != rc) {
             QZ_ERROR("Error from pthread_create %d\n", rc);
             return rc;
+        }
+    }
+
+    if (affinity_is_enabled) {
+        get_cpu_policy(qat_node, thread_count, test_arg);
+        for (i = 0; i < thread_count; i++) {
+            /* cpu affinity setup */
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            CPU_SET(test_arg[i].cpu_core, &cpuset);
+            rc = pthread_setaffinity_np(threads[i], sizeof(cpu_set_t), &cpuset);
+            if (rc != 0) {
+                QZ_ERROR("pthread_setaffinity_np error, status = %d \n", rc);
+                goto done;
+            }
+        }
+    }
+
+    /*for qzCompressAndDecompress test*/
+    if (test == 4) {
+        ret = pthread_mutex_lock(&g_cond_mutex);
+        if (ret != 0) {
+            QZ_ERROR("Failure to get Mutex Lock, status = %d\n", ret);
+            goto done;
+        }
+        while (g_ready_thread_count < thread_count) {
+            ret = pthread_cond_wait(&g_ready_cond, &g_cond_mutex);
+            if (ret != 0) {
+                QZ_ERROR("Failure calling pthread_cond_wait, status = %d\n", ret);
+                goto done;
+            }
+        }
+        g_ready_to_start = 1;
+        ret = pthread_cond_broadcast(&g_start_cond);
+        if (ret != 0) {
+            QZ_ERROR("Failure calling pthread_cond_broadcast, status = %d\n", ret);
+            goto done;
+        }
+        ret = pthread_mutex_unlock(&g_cond_mutex);
+        if (ret != 0) {
+            QZ_ERROR("Failure to release Mutex Lock, status = %d\n", ret);
+            goto done;
         }
     }
 
