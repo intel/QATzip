@@ -1,0 +1,516 @@
+################################################################
+#   BSD LICENSE
+#
+#   Copyright(c) 2007-2017 Intel Corporation. All rights reserved.
+#   All rights reserved.
+#
+#   Redistribution and use in source and binary forms, with or without
+#   modification, are permitted provided that the following conditions
+#   are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in
+#       the documentation and/or other materials provided with the
+#       distribution.
+#     * Neither the name of Intel Corporation nor the names of its
+#       contributors may be used to endorse or promote products derived
+#       from this software without specific prior written permission.
+#
+#   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+#   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+#   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+#   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+#   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+#   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+#   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+#   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+#   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+################################################################
+
+set -o errexit
+
+prefix=/usr/local
+top_builddir=`pwd`
+
+MAKE='make'
+CC='gcc'
+CFLAGS='-Wall -Werror -std=gnu99 -pedantic -O2 -fstack-protector -fPIE -fPIC -D_FORTIFY_SOURCE=2'
+LDFLAGS='-fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
+AR='ar'
+LN_S='ln -s'
+RM='rm -f'
+INSTALL='install'
+
+function exit_conf()
+{
+  rm -f qztest* qzlib*
+  rm -f a.out
+  exit
+}
+
+# phrase command line arguments
+for argument in "$@"; do
+  if [[ $argument =~ '=' ]]
+  then
+    qz_opt=`expr "$argument" : '\([^=]*\)'`
+    qz_val=`expr "$argument" : '[^=]*=\(.*\)'`
+  else
+    qz_opt=$argument
+    unset qz_val
+  fi
+
+  case "$qz_opt" in
+    -h | --help)
+cat <<\_QZEOF
+
+Usage: $0 [OPTION]... [VAR=VALUE]...
+
+Optional Features:
+  --enable-debug          turn on qatzip debug
+  --with-ICP_ROOT[=ARG]   Used to link Cpa library
+
+Usage: $0 [OPTION]... [VAR=VALUE]...
+  Installation directories:
+  --prefix=PREFIX         install architecture-independent files in PREFIX
+  --bindir=DIR            user executables [PREFIX/bin]
+  --sharedlib-dir=DIR     system admin executables [EPREFIX/lib64]
+  --staticlib-dir=DIR     system admin executables [EPREFIX/lib64]
+  --includedir=DIR        C header files [PREFIX/include]
+  --mandir=DIR            man documentation [DATAROOTDIR/man]
+
+Some influential environment variables:
+  CFLAGS      C compiler flags
+  LDFLAGS     linker flags, e.g. -L<lib dir> if you have libraries in a
+              nonstandard directory <lib dir>
+  LIBS        libraries to pass to the linker, e.g. -l<library>
+
+  System types:
+  --build=BUILD  build flags
+
+_QZEOF
+exit 0 ;;
+
+    CFLAGS):
+        CFLAGS=$qz_val; shift;;
+    LDFLAGS):
+        LDFLAGS=$qz_val; shift;;
+    --build) :
+        build=$qz_val; shift;;
+    --prefix):
+        prefix=$qz_val; shift;;
+    --bindir):
+        bindir=$qz_val; shift;;
+    --sharedlib-dir):
+        sharedlib_dir=$qz_val; shift;;
+    --staticlib-dir):
+        staticlib_dir=$qz_val; shift;;
+    --includedir):
+        includedir=$qz_val; shift;;
+    --mandir):
+        mandir=$qz_val; shift;;
+    --enable-debug):
+        enable_debug=yes; shift;;
+    --with-ICP_ROOT):
+        ICP_ROOT=$qz_val; shift;;
+    *)
+        echo "unrecognize option: $argument"
+        echo "--help for help"
+        exit 1;;
+  esac
+done
+
+# set install path
+bindir=${bindir:-$prefix/bin}
+staticlib_dir=${staticlib_dir:-$prefix/lib}
+sharedlib_dir=${sharedlib_dir:-$prefix/lib}
+includedir=${includedir:-$prefix/include}
+mandir=${mandir:-$prefix/share/man}
+
+# try to build 32 or 64 bit system binary
+if test 'x'$build = $build'x'; then :
+  CFLAGS+=" -m`getconf LONG_BIT`"
+fi
+
+if [ "$enable_debug" = "yes" ] ; then
+  CFLAGS+=" -g -DQATZIP_DEBUG"
+fi
+
+testfile=qztest$$
+function check_sys_header_files()
+{
+cat >$testfile.c <<_QZEOF
+#include <$1>
+_QZEOF
+
+  if ${CC} -c $testfile.c 2>/dev/null ; then :
+    echo "Checking for $1... OK"
+    return 0
+  else
+    echo "Checking for $1... Failed"
+    echo "QATzip need $1 to build."
+    return 1
+  fi
+}
+
+# checks for the QATzip header files
+header_array=("zlib.h" "pthread.h" "stdio.h"
+              "sys/time.h" "stdarg.h" "stdlib.h"
+              "sys/types.h" "sys/stat.h" "string.h"
+              "unistd.h" "memory.h" "stdint.h" "numa.h")
+for header in "${header_array[@]}"
+do
+  if ! check_sys_header_files $header; then
+    exit_conf
+  fi
+done
+
+# check for the zlib version
+zlib_path=`whereis zlib.h | awk '{print $2}'`
+zlib_v=`grep ^'#define ZLIB_VERSION' $zlib_path | \
+        awk '{print $3}'| sed 's/"//g'`
+if test -z $zlib_v; then
+  echo "Check for zlib version Failed"
+  echo $zlib_v
+  exit_conf
+fi
+
+MajorV=`echo $zlib_v | cut -d. -f1`
+MinorV=`echo $zlib_v | cut -d. -f2`
+if [[ $MajorV -lt 1 ]] ||
+   [[ $MajorV -eq 1 && $MinorV -lt 2 ]]
+then
+  echo "Checking for zlib version... Failed"
+  echo "zlib-V:$zlib_v need update"
+  exit_conf
+else
+  echo "Checking for zlib version-$zlib_v... OK"
+fi
+
+# check for ICP_ROOT
+if ! test -z ${ICP_ROOT}; then :
+  if test -d ${ICP_ROOT}/quickassist; then :
+    echo "Checking for ICP_ROOT:$ICP_ROOT... OK"
+  else
+    echo "Checking for ICP_ROOT... failed"
+    echo "cannot find quickassist directory"
+    exit_conf
+  fi
+else
+  echo "ICP_ROOT is not set, checking from system include"
+fi
+
+# check for the cpa header files
+# if ICP_ROOT is not set, check cpa header files from system include directory.
+# else checks from the ICP_ROOT directory.
+cpah_array=("$ICP_ROOT/quickassist/include/cpa.h"
+            "$ICP_ROOT/quickassist/include/dc/cpa_dc.h"
+            "$ICP_ROOT/quickassist/lookaside/access_layer/include/icp_sal_poll.h"
+            "$ICP_ROOT/quickassist/lookaside/access_layer/include/icp_sal_user.h"
+            "$ICP_ROOT/quickassist/utilities/libusdm_drv/qae_mem.h")
+cpah_sys_array=("cpa.h" "cpa_dc.h" "icp_sal_poll.h"
+                "icp_sal_user.h" "qae_mem.h")
+
+if test -z $ICP_ROOT; then
+  for header in "${cpah_sys_array[@]}"; do
+    if check_sys_header_files $header; then
+      :
+    else
+      exit_conf
+    fi
+  done
+else
+  for header in "${cpah_array[@]}"; do
+    if test -r $header; then
+       echo "Checking for $header... OK"
+    else
+       echo "Checking for $header... Failed"
+       exit_conf
+    fi
+  done
+  QAT_INCLUDE="-I$ICP_ROOT/quickassist/include -I$ICP_ROOT/quickassist/include/dc"
+  QAT_INCLUDE="$QAT_INCLUDE -I$ICP_ROOT/quickassist/lookaside/access_layer/include"
+  USDM_INCLUDE="-I$ICP_ROOT/quickassist/utilities/libusdm_drv"
+fi
+
+# checks for the library dependancy
+# pthread library
+cat >$testfile.c <<_QZEOF
+#include <pthread.h>
+int main(void){
+  return (int)pthread_self();
+}
+_QZEOF
+
+if ${CC} $testfile.c -lpthread 2>/dev/null ; then :
+  echo "Checking for pthread library... OK"
+else
+  echo "Checking for pthread library... Failed"
+  exit_conf
+fi
+
+# zlib library
+cat >$testfile.c <<_QZEOF
+#include <zlib.h>
+#include <stdio.h>
+int main(void){
+  printf("%s",zlibVersion());
+  return 0;
+}
+_QZEOF
+
+if ${CC} $testfile.c -lz 2>/dev/null ; then :
+  echo "Checking for zlib library... OK"
+else
+  echo "Checking for zlib library... Failed"
+  exit_conf
+fi
+
+# numa library
+cat >$testfile.c <<_QZEOF
+#include <numa.h>
+
+int main(void) {
+    if(numa_available() < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+_QZEOF
+
+
+if ${CC} $testfile.c -lnuma 2>/dev/null ; then :
+  echo "Checking for numa library... OK"
+else
+  echo "Checking for numa library... Failed"
+  exit_conf
+fi
+
+# set QAT link path
+if test -z $ICP_ROOT; then
+  unset QAT_LDFLAGS QAT_CFLAGS
+else
+  [[ ! -z "$ICP_BUILD_OUTPUT" ]] && QAT_LDFLAGS="-L$ICP_BUILD_OUTPUT -Wl,-R$ICP_BUILD_OUTPUT" || \
+                                    QAT_LDFLAGS="-L$ICP_ROOT/build -Wl,-R$ICP_ROOT/build"
+  LDFLAGS="$LDFLAGS $QAT_LDFLAGS"
+fi
+
+# usdm library
+# checks for the usdm library existence
+if test -z ${ICP_ROOT}
+then
+  :
+else
+  if [ -f "$ICP_ROOT/build/libusdm_drv_s.so" ] || \
+     [ -f "$ICP_BUILD_OUTPUT/libusdm_drv_s.so" ]; then
+    QAT_CFLAGS="$USDM_INCLUDE"
+  else
+    echo "QATzip requires libusdm_drv_s.so to build."
+    exit_conf
+  fi
+fi
+
+cat >$testfile.c <<_QZEOF
+int main(void){
+  unsigned char* ptr=qaeMemAllocNUMA(4,0,2);
+  return 0;
+}
+_QZEOF
+
+
+if ${CC} $testfile.c -lusdm_drv_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+then :
+  echo "Checking for usdm library... OK"
+else
+  echo "Checking for usdm library... Failed"
+  exit_conf
+fi
+
+# qat library
+# checks for the qat library existence
+if test -z ${ICP_ROOT}
+then
+  :
+else
+  if [ -f "$ICP_ROOT/build/libqat_s.so" ] || \
+     [ -f "$ICP_BUILD_OUTPUT/libqat_s.so" ]; then
+    :
+  else
+    echo "QATzip requires libqat_s.so to build."
+    exit_conf
+  fi
+fi
+cat >$testfile.c <<_QZEOF
+#include <cpa.h>
+#include <cpa_dc.h>
+#include <icp_sal_poll.h>
+#include <icp_sal_user.h>
+
+int main(void){
+  const char* tag="QATZIP";
+  return icp_sal_userStartMultiProcess(tag,0);
+}
+_QZEOF
+
+[[ ! -z $ICP_ROOT ]] && QAT_CFLAGS+=" $QAT_INCLUDE";
+if ${CC} $testfile.c -lqat_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+then :
+  echo "Checking for qat library... OK"
+else
+  echo "Checking for qat library... Failed"
+  exit_conf
+fi
+
+# checks for the library functions
+cat >$testfile.c <<_QZEOF
+#include <stdarg.h>
+#include <stdio.h>
+
+void print_err(const char *format, ...){
+  va_list args;
+  va_start (args,format);
+  vfprintf(stderr,format, args);
+  va_end(args);}
+
+int main(void) {
+   print_err("%s", "hello qatzip\n");return 0;
+}
+_QZEOF
+if ${CC} $testfile.c 2>/dev/null; then :
+  echo "Checking for vfprintf function... OK"
+else
+  echo "Checking for vfprintf function... Failed"
+  exit_conf
+fi
+
+# check for standard file API
+cat >$testfile.c <<_QZEOF
+#include <stdio.h>
+int main(void) {
+  FILE* null = fopen("/dev/null", "r");
+  fclose(null);
+}
+_QZEOF
+if ${CC} $testfile.c 2>/dev/null; then :
+  echo "Checking for stand file API... OK"
+else
+  echo "Checking for stand file API... Failed"
+  exit_conf
+fi
+
+# check for strtoul API
+cat >$testfile.c <<_QZEOF
+#include <stdlib.h>
+int main(void) {
+  const char* ptr = "123";
+  return strtoul(ptr,NULL,0);
+}
+_QZEOF
+if ${CC} $testfile.c 2>/dev/null; then :
+  echo "Checking for strtoul API... OK"
+else
+  echo "Checking for strtoul API... Failed"
+  exit_conf
+fi
+
+# check for atexit API
+cat >$testfile.c <<_QZEOF
+#include <stdlib.h>
+void *hello(void){
+  ;
+}
+int main(void) {
+  return atexit(&hello);
+}
+_QZEOF
+if ${CC} $testfile.c 2>/dev/null; then :
+  echo "Checking for atexit API... OK"
+else
+  echo "Checking for atexit API... Failed"
+  exit_conf
+fi
+
+# check for getopt_long API
+cat >$testfile.c <<_QZEOF
+#include <unistd.h>
+
+int main(int argc, char *argv[]) {
+  const char *ptr="hello";
+  return getopt_long(argc, argv, ptr);
+}
+_QZEOF
+if ${CC} $testfile.c 2>/dev/null; then :
+  echo "Checking for getopt_long API... OK"
+else
+  echo "Checking for getopt_long API... Failed"
+  exit_conf
+fi
+
+# check for gettimeofday API
+cat >$testfile.c <<_QZEOF
+#include <sys/time.h>
+int main(void) {
+  struct timeval s, e;
+  return gettimeofday(&s, &e);
+}
+_QZEOF
+if ${CC} $testfile.c 2>/dev/null; then :
+  echo "Checking for gettimeofday API... OK"
+else
+  echo "Checking for gettimeofday API... Failed"
+  exit_conf
+fi
+
+libfile=qzlib$$
+cat >$libfile.c <<_QZEOF
+#include <stdio.h>
+void hello(void) {
+  printf("hello qatzip\n");
+}
+_QZEOF
+
+# check for build static library
+if ${CC} -c $libfile.c 2>/dev/null && \
+   ${AR} r $libfile.a $libfile.o 2>/dev/null; then :
+  echo "Checking for build static library... OK"
+else
+  echo "Checking for build static library... Failed"
+  exit_conf
+fi
+
+# check for build shared library
+if ${CC} -fPIC -c $libfile.c 2>/dev/null && \
+   ${CC} -shared $libfile.o -o $libfile.so 2>/dev/null; then :
+  echo "Checking for build shared library... OK"
+else
+  echo "Checking for build shared library... Failed"
+  exit_conf
+fi
+
+# Update Makefile
+line=`grep "^#.*POSSIBILITY" Makefile.init -n|cut -d: -f1`
+sed  < Makefile.init ''$((line+=3))'a \
+ICP_ROOT='"$ICP_ROOT"'\
+bindir='"$bindir"'\
+staticlib_dir='"$staticlib_dir"'\
+sharedlib_dir='"$sharedlib_dir"'\
+includedir='"$includedir"'\
+mandir='"$mandir"'\
+top_builddir='"$top_builddir"'\
+\
+MAKE='"$MAKE"'\
+CC='"$CC"'\
+CFLAGS='"$CFLAGS"'\
+LDFLAGS='"$LDFLAGS"'\
+AR='"$AR"'\
+LN_S='"$LN_S"'\
+RM='"$RM"'\
+INSTALL='"$INSTALL"'\
+'> Makefile
+
+exit_conf
