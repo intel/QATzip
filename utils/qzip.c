@@ -58,8 +58,6 @@ static char const *const g_version_str = "v0.2.3";
 #include <pthread.h>
 #include <qatzipP.h>
 
-/* Estimate maximum data expansion after decompression */
-#define DECOMP_BUFSZ_EXPANSION 5
 
 /* Return codes from qzip */
 #define OK      0
@@ -82,6 +80,9 @@ static int g_decompress = 0;        /* g_decompress (-d) */
 static int g_keep = 0;              /* keep (don't delete) input files */
 static QzSession_T g_sess;
 static QzSessionParams_T g_params_th = {(QzHuffmanHdr_T)0,};
+
+/* Estimate maximum data expansion after decompression */
+static const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
 static char const g_short_opts[] = "A:H:L:C:dhkV";
@@ -212,7 +213,8 @@ static int doProcessBuffer(QzSession_T *sess,
         } else {
             ret = qzDecompress(sess, src, src_len, dst, &dst_len);
 
-            if (QZ_DATA_ERROR == ret) {
+            if (QZ_DATA_ERROR == ret ||
+                (QZ_BUF_ERROR == ret && 0 == *src_len)) {
                 done = 1;
             }
         }
@@ -260,6 +262,10 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     FILE *src_file = NULL;
     FILE *dst_file = NULL;
     unsigned int bytes_read = 0, bytes_processed = 0;
+    unsigned int ratio_idx = 0;
+    const unsigned int ratio_limit =
+        sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
+    unsigned int read_more = 0;
     const off_t max_file_size = UINT_MAX;
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
     assert(NULL != time_list_head);
@@ -281,11 +287,12 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     }
 
     src_file_size = GET_LOWER_32BITS(src_file_stat.st_size);
+    assert(src_file_size != 0);
     src_buffer_size = (src_file_size > SRC_BUFF_LEN) ? SRC_BUFF_LEN : src_file_size;
     if (is_compress) {
         dst_buffer_size = qzMaxCompressedLength(src_buffer_size);
     } else { /* decompress */
-        dst_buffer_size = src_buffer_size * DECOMP_BUFSZ_EXPANSION;
+        dst_buffer_size = src_buffer_size * g_bufsz_expansion_ratio[ratio_idx++];
     }
 
     src_buffer = malloc(src_buffer_size);
@@ -294,29 +301,60 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     assert(dst_buffer != NULL);
     src_file = fopen(src_file_name, "r");
     assert(src_file != NULL);
-
     dst_file = fopen(dst_file_name, "w");
     assert(dst_file != NULL);
 
     file_remaining = src_file_size;
+    read_more = 1;
     while (file_remaining) {
-        bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
-        QZ_PRINT("Reading input file %s (%u Bytes)\n", src_file_name, bytes_read);
+        if (read_more) {
+            bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
+            QZ_PRINT("Reading input file %s (%u Bytes)\n", src_file_name, bytes_read);
+        } else {
+            bytes_read = file_remaining;
+        }
 
         ret = doProcessBuffer(sess, src_buffer, &bytes_read, dst_buffer,
                               dst_buffer_size, time_list_head, dst_file,
                               &dst_file_size, is_compress);
 
-        if (QZ_DATA_ERROR == ret) {
+        if (QZ_DATA_ERROR == ret || QZ_BUF_ERROR == ret) {
             bytes_processed += bytes_read;
-            if (0 == bytes_read ||
-                -1 == fseek(src_file, bytes_processed, SEEK_SET)) {
+            if (0 != bytes_read) {
+                if (-1 == fseek(src_file, bytes_processed, SEEK_SET)) {
+                    ret = ERROR;
+                    goto exit;
+                }
+                read_more = 1;
+            } else if (QZ_BUF_ERROR == ret) {
+                //dest buffer not long enough
+                if (ratio_limit == ratio_idx) {
+                    QZ_ERROR("Could not expand more destination buffer\n");
+                    ret = ERROR;
+                    goto exit;
+                }
+
+                free(dst_buffer);
+                dst_buffer_size = src_buffer_size * g_bufsz_expansion_ratio[ratio_idx++];
+                dst_buffer = malloc(dst_buffer_size);
+                if (NULL == dst_buffer) {
+                    QZ_ERROR("Fail to allocate destination buffer with size %u\n", dst_buffer_size);
+                    ret = ERROR;
+                    goto exit;
+                }
+
+                read_more = 0;
+            } else {
+                // corrupt data
                 ret = ERROR;
                 goto exit;
             }
         } else if (QZ_OK != ret) {
+            QZ_ERROR("Process file error: %d\n", ret);
             ret = ERROR;
             goto exit;
+        } else {
+            read_more = 1;
         }
 
         file_remaining -= bytes_read;

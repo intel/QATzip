@@ -42,6 +42,7 @@ test_main="${BASEDIR}/../test "
 test_bt="${BASEDIR}/../bt "
 test_file_path="/opt/compressdata"
 huge_file_name="calgary.2G"
+highly_compressible_file_name="big-index.html"
 
 # 1. Trivial file compression
 echo "Preforming file compression and decompression..."
@@ -104,26 +105,27 @@ function testOn3MBRandomDataFile()
     return $rc;
 }
 
-function hugeFileTest()
+function inputFileTest()
 {
-    if [ ! -f "$test_file_path/$huge_file_name" ]
+    local test_file_name=$1
+    if [ ! -f "$test_file_path/$test_file_name" ]
     then
-        echo "$test_file_path/$huge_file_name does not exit!"
+        echo "$test_file_path/$test_file_name does not exit!"
         return 1
     fi
 
-    cp -f $test_file_path/$huge_file_name ./
-    orig_checksum=`md5sum $huge_file_name`
-    if $test_qzip $huge_file_name && \
-        $test_qzip -d "$huge_file_name.gz"
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name`
+    if $test_qzip $test_file_name && \
+        $test_qzip -d "$test_file_name.gz"
     then
-        echo "(De)Compress $huge_file_name OK";
+        echo "(De)Compress $test_file_name OK";
         rc=0
     else
-        echo "(De)Compress $huge_file_name Failed";
+        echo "(De)Compress $test_file_name Failed";
         rc=1
     fi
-    new_checksum=`md5sum $huge_file_name`
+    new_checksum=`md5sum $test_file_name`
 
     if [[ $new_checksum != $orig_checksum ]]
     then
@@ -191,6 +193,7 @@ function resume_hw_comp_when_insufficent_HP()
 
 
 # 2. Very basic misc functional tests
+
 echo "Preforming misc functional tests..."
 if $test_main -m 1 -t 3 -l 8 && \
     # ignore test2 output (too verbose) \
@@ -198,7 +201,8 @@ if $test_main -m 1 -t 3 -l 8 && \
    $test_main -m 3 -t 3 -l 8 && \
    $test_main -m 4 -t 3 -l 8 && \
    testOn3MBRandomDataFile && \
-   hugeFileTest && \
+   inputFileTest $highly_compressible_file_name \
+   inputFileTest $huge_file_name \
    switch_to_sw_failover_in_insufficent_HP && \
    resume_hw_comp_when_insufficent_HP && \
    $test_main -m 5 -t 3 -l 8 -F $format_option && \
