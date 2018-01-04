@@ -191,7 +191,6 @@ typedef enum QzDirection_E {
 #define QZ_NOSW_LOW_MEM         (-104)
 /**<not using SW: not enough pinned memory */
 
-
 #define QZ_MAX_ALGORITHMS  ((int)255)
 #define QZ_DEFLATE         ((unsigned char)8)
 #define QZ_SNAPPY          ((unsigned char)'S')

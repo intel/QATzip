@@ -189,6 +189,13 @@ typedef struct QzGzF_S {
     uint32_t i_size;
 } QzGzF_T;
 
+typedef struct QzMem_S {
+    int flag;
+    unsigned char *addr;
+    int sz;
+    int numa;
+} QzMem_T;
+
 void dumpAllCounters(void);
 int qzSetupHW(QzSession_T *sess, int i);
 unsigned long qzGzipHeaderSz(void);
@@ -198,6 +205,7 @@ int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr);
 void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res);
 void qzGzipFooterExt(const unsigned char *const ptr, QzGzF_T *ftr);
 int isStdGzipHeader(const unsigned char *const ptr);
+int qzGetMaxHugePages(void);
 
 int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                  unsigned int *src_len, unsigned char *dest,

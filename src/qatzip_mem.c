@@ -34,37 +34,65 @@
  ***************************************************************************/
 #include <stdlib.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "cpa.h"
 #include "cpa_dc.h"
 #include "qatzip.h"
 #include "qae_mem.h"
 #include "qz_utils.h"
+#include "qatzipP.h"
 
-#define MAX_MEM_ENTRIES ((int)1000)
-#define PAGE_MASK       ((unsigned long)(0x1fffff))
+#define PAGE_MASK          ((unsigned long)(0x1fffff))
+#define MAX_HUGEPAGE_FILE  "/sys/module/usdm_drv/parameters/max_huge_pages"
 
-typedef struct QzMem_S {
-    int flag;
-    unsigned char *addr;
-    int sz;
-    int numa;
-} QzMem_T;
-
-static QzMem_T g_qz_mem[MAX_MEM_ENTRIES];
+QzMem_T *g_qz_mem = NULL;
+size_t g_mem_entries = 0;
 static int g_init1 = 0, g_init2 = 0;
 static pthread_mutex_t g_qz_mem_lock;
 static __thread unsigned char *g_a;
+
+int qzGetMaxHugePages(void)
+{
+    char max_hp_str[10] = {0};
+    char *stop = NULL;
+    int hp_params_fd;
+
+    hp_params_fd = open(MAX_HUGEPAGE_FILE, O_RDONLY);
+    if (hp_params_fd < 0) {
+        QZ_ERROR("Open %s failed\n", MAX_HUGEPAGE_FILE);
+        return QZ_LOW_MEM;
+    }
+
+    if (read(hp_params_fd, max_hp_str, sizeof(max_hp_str)) < 0) {
+        QZ_ERROR("Read max_huge_pages from %s failed\n", MAX_HUGEPAGE_FILE);
+        goto error;
+    }
+
+    g_mem_entries = strtoul(max_hp_str, &stop, 0);
+    if (*stop != '\n') {
+        QZ_ERROR("convert from %s to size_t failed\n", max_hp_str);
+        goto error;
+    }
+
+    close(hp_params_fd);
+    return QZ_OK;
+
+error:
+    close(hp_params_fd);
+    return QZ_LOW_MEM;
+}
 
 int qzMemFindAddr(unsigned char *a)
 {
     int i, rc = 0;
     unsigned long al, b;
-
     al = (unsigned long)a;
     b = (al - (al & PAGE_MASK));
 
-    for (i = 0; i < MAX_MEM_ENTRIES; i++) {
+    for (i = 0; i < g_mem_entries; i++) {
         if (g_qz_mem[i].addr == (unsigned char *)b) {
             QZ_DEBUG("Found 0x%lx at slot %d\n", b, i);
             rc = 1;
@@ -99,7 +127,7 @@ static void qzMemRegAddr(unsigned char *a)
     }
 
     /*find an empty slot and insert addr*/
-    for (i = 0; i < MAX_MEM_ENTRIES; i++) {
+    for (i = 0; i < g_mem_entries; i++) {
         if (g_qz_mem[i].addr == NULL) {
             g_qz_mem[i].addr = (unsigned char *)b;
             QZ_DEBUG("Inserting 0x%lx at slot %d\n", b, i);
@@ -119,10 +147,25 @@ void *qzMalloc(size_t sz, int numa, int pinned)
             return NULL;
         }
 
+
+        if (NULL == g_qz_mem) {
+            if (QZ_OK != qzGetMaxHugePages() || \
+                0 == g_mem_entries) {
+                (void)pthread_mutex_unlock(&g_qz_mem_lock);
+                return NULL;
+            }
+
+            g_qz_mem = (QzMem_T *)calloc(g_mem_entries, sizeof(QzMem_T));
+            if (NULL ==  g_qz_mem) {
+                (void)pthread_mutex_unlock(&g_qz_mem_lock);
+                return NULL;
+            }
+        }
+
         if (0 == g_init2) {
             g_init1 = 1;
             g_init2 = 1;
-            for (i = 0; i < MAX_MEM_ENTRIES; i++) {
+            for (i = 0; i < g_mem_entries; i++) {
                 g_qz_mem[i].flag = 0;
                 g_qz_mem[i].addr = NULL;
                 g_qz_mem[i].sz   = 0;

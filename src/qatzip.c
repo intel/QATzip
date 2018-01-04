@@ -350,9 +350,19 @@ static void stopQat(void)
     g_process.qz_init_called = 0;
 }
 
+static void freeQzMemEntries(void)
+{
+    extern QzMem_T *g_qz_mem;
+    if (NULL != g_qz_mem) {
+        free(g_qz_mem);
+        g_qz_mem = NULL;
+    }
+}
+
 static void exitFunc(void)
 {
     stopQat();
+    freeQzMemEntries();
 #ifdef QATZIP_DEBUG
     dumpThreadInfo();
 #endif
@@ -389,6 +399,8 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     unsigned int dev_id = 0;
     QzHardware_T *qat_hw = NULL;
     unsigned int instance_found = 0;
+    extern QzMem_T *g_qz_mem;
+    extern size_t g_mem_entries;
 
     if (sess == NULL) {
         return QZ_PARAMS;
@@ -527,6 +539,19 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
     clearDevices(qat_hw);
     free(qat_hw);
+
+    /* init qzMem entries*/
+    if (NULL == g_qz_mem) {
+        if (QZ_OK != qzGetMaxHugePages() || \
+            0 == g_mem_entries) {
+            BACKOUT;
+        }
+
+        g_qz_mem = (QzMem_T *)calloc(g_mem_entries, sizeof(QzMem_T));
+        if (NULL == g_qz_mem) {
+            BACKOUT;
+        }
+    }
 
     rc = atexit(exitFunc);
     if (QZ_OK != rc) {
@@ -1072,8 +1097,8 @@ static void *doCompressOut(void *in)
     QzSess_T *qz_sess = (QzSess_T *) sess->internal;
     long dest_avail_len = (long)(*qz_sess->dest_sz);
     int dest_pinned = qzMemFindAddr(qz_sess->next_dest);
-
     i = qz_sess->inst_hint;
+
     while ((qz_sess->last_submitted == 0) ||
            (qz_sess->processed < qz_sess->submitted)) {
 
@@ -1461,10 +1486,10 @@ static void *doDecompressIn(void *in)
     dest_pinned = qzMemFindAddr(dest_ptr);
     remaining = (long)(*qz_sess->src_sz);
     QZ_DEBUG("doCompressIn: Need to g_process %ld bytes\n", remaining);
-
     done = 1;
     src_avail_len = *(qz_sess->src_sz);
     dest_avail_len = *(qz_sess->dest_sz);
+
     while (done == 1) {
 
         QZ_DEBUG("src_avail_len is %ld, dest_avail_len is %ld\n",
