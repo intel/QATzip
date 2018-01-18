@@ -1129,8 +1129,10 @@ static void *doCompressOut(void *in)
                          getpid(), pthread_self());
 
                 if (CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status) {
-                    QZ_ERROR("Error(%d) in callback: %ld, %ld\n",
-                             g_process.qz_inst[i].stream[j].job_status, i, j);
+                    QZ_ERROR("Error(%d) in callback: %ld, %ld, ReqStatus: %d\n",
+                             g_process.qz_inst[i].stream[j].job_status, i, j,
+                             g_process.qz_inst[i].stream[j].res.status);
+
                     qz_sess->processed++;
                     sess->thd_sess_stat = QZ_FAIL;
                     g_process.qz_inst[i].stream[j].sink2++;
@@ -1712,8 +1714,9 @@ static void *doDecompressOut(void *in)
                          i, j, g_process.qz_inst[i].stream[j].seq);
 
                 if (CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status) {
-                    QZ_ERROR("Error(%d) in callback: %ld, %ld\n",
-                             g_process.qz_inst[i].stream[j].job_status, i, j);
+                    QZ_ERROR("Error(%d) in callback: %ld, %ld, ReqStatus: %d\n",
+                             g_process.qz_inst[i].stream[j].job_status, i, j,
+                             g_process.qz_inst[i].stream[j].res.status);
                     goto err_job_status;
                 }
 
