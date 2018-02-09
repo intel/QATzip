@@ -58,10 +58,10 @@ extern"C" {
 /**
  *****************************************************************************
  *
- *  This API provides access to underlying compression functions in QAT hardware
- *  The API supports an implementation that provides compression service in
- *  software if not all of the required resources are not available to execute
- *  the compression service in hardware.
+ *  This API provides access to underlying compression functions in QAT
+ *  hardware. The API supports an implementation that provides compression
+ *  service in software if not all of the required resources are not available
+ *  to execute the compression service in hardware.
  *
  *  The API supports threaded applications.
  *  Applications can create threads and each of these threads can invoke the
@@ -153,6 +153,48 @@ typedef enum QzDirection_E {
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      Streaming API input and output format
+ *
+ * @description
+ *      This enumerated list identifies the data format supported by
+ *    QATZip streaming API. A format can be raw deflate data block, deflate
+ *    block wrapped by GZip header and footer, or deflate data block wrapped
+ *    by GZip extension header and footer.
+ *
+ *****************************************************************************/
+typedef enum QzDataFormat_E {
+    QZ_DEFLATE_RAW = 0,
+    /**< Data is in raw deflate format */
+    QZ_DEFLATE_GZIP,
+    /**< Data is in deflate wrappped by GZip header and footer*/
+    QZ_DEFLATE_GZIP_EXT
+    /**< Data is in deflate warpped by GZip extension header and footer */
+} QzDataFormat_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Supported checksum type
+ *
+ * @description
+ *      This enumerated list identifies the checksum type for input/output
+ *    data. A format can be CRC32, CRC64, Adler or none.
+ *
+ *****************************************************************************/
+typedef enum QzCrcType_E {
+    QZ_CRC32 = 0,
+    /**< CRC32 checksum */
+    QZ_CRC64,
+    /**< CRC64 checksum */
+    QZ_ADLER,
+    /**< Adler checksum */
+    NONE
+    /**< No checksum */
+} QzCrcType_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *    QATZIP Session Status definitions and function return codes
  *
  * @description
@@ -214,10 +256,12 @@ typedef struct QzSessionParams_S {
     /**<Dynamic or Static Huffman headers */
     QzDirection_T  direction;
     /**<compress or decompress */
+    QzDataFormat_T data_fmt;
+    /**<defalte, deflate with GZip or deflate with GZip ext */
     unsigned int  comp_lvl;
     /**<Compression level 1..9 */
     unsigned char  comp_algorithm;
-    /** <Compress/decompression algorithms */
+    /**<Compress/decompression algorithms */
     unsigned int  poll_sleep;
     /**<nanosleep between poll [0..1000] 0 means no sleep */
     unsigned int  max_forks;
@@ -231,14 +275,49 @@ typedef struct QzSessionParams_S {
     unsigned int input_sz_thrshold;
     /**<default threshold of compression service's input size */
     /**<for sw failover, if the size of input request less */
-    /**<than the threshold, QATzip will route the request */
+    /**<than the threshold, QATZip will route the request */
     /**<to software */
     unsigned int req_cnt_thrshold;
     /**set between 1 and 4, default 4*/
 } QzSessionParams_T;
 
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *    QATZIP Stream data storage
+ *
+ * @description
+ *      This structure contains metadata needed for stream operation
+ *
+ *****************************************************************************/
+typedef struct QzStream_S {
+    unsigned int  in_sz;
+    /**<Set by application, reset by QATZip to indicate consumed data */
+    unsigned int  out_sz;
+    /**<Set by application, reset by QATZip to indicate processed data */
+    unsigned char *in ;
+    /**<Input data pointer set by application */
+    unsigned char *out ;
+    /**<Output data pointer set by application */
+    unsigned int  pending_in;
+    /**<Unprocessed bytes held in QATZip */
+    unsigned int  pending_out;
+    /**<Processed bytes held in QATZip */
+    QzCrcType_T  crc_type;
+    /**<Checksum type in Adler, CRC32, CRC64 or none */
+    unsigned int  crc_32;
+    /**<Checksum value */
+    unsigned long long  crc_64;
+    /**<Checksum value for 64bit CRC*/
+    unsigned long long  reserved;
+    /**<CRC64 polynomial */
+    void *opaque;
+    /**<Internal storage managed by QATZip */
+} QzStream_T;
+
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
 #define QZ_DIRECTION_DEFAULT         QZ_DIR_BOTH
+#define QZ_DATA_FORMAT_DEFAULT       QZ_DEFLATE_GZIP_EXT
 #define QZ_COMP_LEVEL_DEFAULT        1
 #define QZ_COMP_ALGOL_DEFAULT        QZ_DEFLATE
 #define QZ_POLL_SLEEP_DEFAULT        10
@@ -305,7 +384,7 @@ typedef struct QzStatus_S {
     unsigned char algo_sw[QZ_MAX_ALGORITHMS];
     /**<support software algorithms */
     unsigned char algo_hw[QZ_MAX_ALGORITHMS];
-    /**<count of hw devices supporting algorithms */
+    /**<count of hardware devices supporting algorithms */
 } QzStatus_T;
 
 /**
@@ -335,7 +414,7 @@ typedef struct QzStatus_S {
  * @sideEffects
  *    This function will:
  *      1) start the user space driver if necessary
- *      2) allocate all hw instances available
+ *      2) allocate all hardware instances available
  * @blocking
  *      Yes
  * @reentrant
@@ -346,10 +425,10 @@ typedef struct QzStatus_S {
  * @param[in]       sess pointer to opaque instance and session data.
  * @param[in]       sw_backup 0 for no sw backup, 1 for sw backup
  *
- * @retval QZ_OK                   Function executed successfully. A hw
+ * @retval QZ_OK                   Function executed successfully. A hardware
  *                                 or sw instance has been allocated to
  *                                 the calling process/thread.
- * @retval QZ_DUPLICATE            This process/thread already has a hw
+ * @retval QZ_DUPLICATE            This process/thread already has a hardware
  *                                 instance
  * @retval QZ_PARAMS               *sess is NULL
  * @retval QZ_NOSW_NO_HW           No hardware and no sw session being
@@ -381,8 +460,8 @@ int qzInit(QzSession_T *sess,  unsigned char sw_backup);
  *
  * @description
  *      This function establishes a QAT session.  This involves associating
- *    a hardware instance to the session, allocating buffers.  If all of these
- *    activities can not be completed successfully, then this function
+ *    a hardware instance to the session, allocating buffers.  If all of
+ *    these activities can not be completed successfully, then this function
  *    will set up a software based session of param->sw_backup is set to 1.
  *
  *    Before this function is called, the hardware must have been
@@ -408,8 +487,9 @@ int qzInit(QzSession_T *sess,  unsigned char sw_backup);
  * @param[in]       params       Parameters for session
  *
  *
- * @retval QZ_OK                   Function executed successfully. A hw or sw
- *                                 based compression session has been created.
+ * @retval QZ_OK                   Function executed successfully. A hardware
+ *                                 or sw based compression session has been
+ *                                 created.
  * @retval QZ_PARAMS               *sess is NULL or member of params is invalid
  * @retval QZ_NOSW_NO_HW           No hardware and no sw session being
  *                                 established
@@ -439,10 +519,13 @@ int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
  *      compress a buffer
  *
  * @description
- *      This function will compress a buffer if either a hw based session
- *    or a software based session is available. If no session has been
- *    established - as indicated by the contents of *sess - then this app
- *    will attempt to set up a session using qzinit and qzSetupSession.
+ *      This function will compress a buffer if either a hardware based
+ *    session or a software based session is available. If no session has
+ *    been established - as indicated by the contents of *sess - then this
+ *    function will attempt to set up a session using qzInit and qzSetupSession.
+ *
+ *    The resulting compressed block of data will be composed of one or more
+ *    gzip blocks per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
  *    buffer.
@@ -502,13 +585,16 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      compress a buffer and return the CRC check sum
+ *      compress a buffer and return the CRC checksum
  *
  * @description
- *      This function will compress a buffer if either a hw based session
- *    or a software based session is available. If no session has been
- *    established - as indicated by the contents of *sess - then this app
- *    will attempt to set up a session using qzinit and qzSetupSession.
+ *      This function will compress a buffer if either a hardware based
+ *    session or a software based session is available. If no session has been
+ *    established - as indicated by the contents of *sess - then this function
+ *    will attempt to set up a session using qzInit and qzSetupSession.
+ *
+ *    The resulting compressed block of data will be composed of one or more
+ *    gzip blocks per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
  *    buffer and put CRC32 checksum for compressed input data in user provided
@@ -567,6 +653,154 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
                   unsigned int *src_len, unsigned char *dest, unsigned int *dest_len,
                   unsigned int last, unsigned long *crc);
 
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      compress data in stream and return checksum
+ *
+ * @description
+ *      This function will compress data in stream buffer if either a hardware
+ *    based session or a software based session is available. If no session
+ *    has been established - as indicated by the contents of *sess - then this
+ *    function will attempt to set up a session using qzInit and qzSetupSession.
+ *    The function will start to compress the data when receiving sufficient
+ *    number of bytes - as defined by hw_buf_sz in QzSessionParams_T - or
+ *    reaching the end of input data - as indicated by last parameter.
+ *
+ *    The resulting compressed block of data will be composed of one or more
+ *    gzip blocks per RFC 1952 or deflate blocks per RFC 1951.
+ *
+ *    This function will place completed compression blocks in the *out
+ *    of QzStream_T structure and put checksum for compressed input data
+ *    in crc32/crc64 of QzStream_T structure.
+ *
+ *    The caller must check the updated in_sz of QzStream_T.  This value will
+ *    be the number of consumed bytes on exit.  The calling API may have to
+ *    process the destination buffer and call again.
+ *
+ *    The parameter out_sz in QzStream_T will be set to the number of bytes
+ *    produced in the destination buffer.  This value may be zero if no data
+ *    was produced which may occur if the consumed data is retained internally.
+ *    A possible reason for this may be small amounts of data in the src
+ *    buffer.
+ *
+ *    The caller must check the updated pending_in of QzStream_T. This value
+ *    will be the number of unprocessed bytes held in QATZip. The calling API
+ *    may have to feed more input data or indicate reaching the end of input
+ *    and call again.
+ *
+ *    The caller must check the updated pending_out of QzStream_T. This value
+ *    will be the number of processed bytes held in QATZip. The calling API
+ *    may have to process the destination buffer and call again.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess     Session handle
+ * @param[in,out]   strm     Stream handle
+ * @param[in]       last     1 for 'No more data to be compressed'
+ *                           0 for 'More data to be compressed'
+ *
+ * @retval QZ_OK             Function executed successfully.
+ * @retval QZ_FAIL           Function did not succeed.
+ * @retval QZ_PARAMS         *sess is NULL or member of params is invalid
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      decompress data in stream and return checksum
+ *
+ * @description
+ *      This function will decompress data in stream buffer if either a hardware
+ *    based session or a software based session is available. If no session
+ *    has been established - as indicated by the contents of *sess - then this
+ *    function will attempt to set up a session using qzInit and qzSetupSession.
+ *    The function will start to decompress the data when receiving sufficient
+ *    number of bytes - as defined by hw_buf_sz in QzSessionParams_T - or
+ *    reaching the end of input data - as indicated by last parameter.
+ *
+ *    The input compressed block of data will be composed of one or more
+ *    gzip blocks per RFC 1952 or deflate blocks per RFC 1951.
+ *
+ *    This function will place completed uncompression blocks in the *out
+ *    of QzStream_T structure and put checksum for uncompressed data in
+ *    crc32/crc64 of QzStream_T structure.
+ *
+ *    The caller must check the updated in_sz of QzStream_T.  This value will
+ *    be the number of consumed bytes on exit.  The calling API may have to
+ *    process the destination buffer and call again.
+ *
+ *    The parameter out_sz in QzStream_T will be set to the number of bytes
+ *    produced in the destination buffer.  This value may be zero if no data
+ *    was produced which may occur if the consumed data is retained internally.
+ *    A possible reason for this may be small amounts of data in the src
+ *    buffer.
+ *
+ *    The caller must check the updated pending_in of QzStream_T. This value
+ *    will be the number of unprocessed bytes held in QATZip. The calling API
+ *    may have to feed more input data or indicate reaching the end of input
+ *    and call again.
+ *
+ *    The caller must check the updated pending_out of QzStream_T. This value
+ *    will be the number of processed bytes held in QATZip. The calling API
+ *    may have to process the destination buffer and call again.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess     Session handle
+ * @param[in,out]   strm     Stream handle
+ * @param[in]       last     1 for 'No more data to be compressed'
+ *                           0 for 'More data to be compressed'
+ *
+ * @retval QZ_OK             Function executed successfully.
+ * @retval QZ_FAIL           Function did not succeed.
+ * @retval QZ_PARAMS         *sess is NULL or member of params is invalid
+ * @retval QZ_NEED_MORE      *last is set but end of block is absent
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
 
 /**
  *****************************************************************************
@@ -574,13 +808,13 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
  *      decompress a buffer
  *
  * @description
- *      This function will decompress a buffer if either a hw based session
- *    or a software based session is available. If no session has been
- *    established - as indicated by the contents of *sess - then this app
- *    will attempt to set up a session using qzinit and qzSetupSession.
+ *      This function will decompress a buffer if either a hardware based
+ *    session or a software based session is available. If no session has been
+ *    established - as indicated by the contents of *sess - then this function
+ *    will attempt to set up a session using qzInit and qzSetupSession.
  *
- *      The resulting compressed block of data will be composed of one or more
- *      gzip blocks per RFC1952.
+ *    The input compressed block of data will be composed of one or more
+ *    gzip blocks per RFC1952.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -709,6 +943,48 @@ int qzClose(QzSession_T *sess);
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      terminates a QATZip stream
+ *
+ * @description
+ *      This function disconnect stream handle from session handle then reset
+ *      stream flag and release stream memory.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess  pointer to session data
+ *
+ * @retval QZ_OK          Function executed successfully.
+ * @retval QZ_FAIL        Function did not succeed.
+ * @retval QZ_PARAMS      *sess is NULL or member of params is invalid
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+int qzEndStream(QzSession_T *sess, QzStream_T *strm);
+
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      Get current QAT status
  *
  * @description
@@ -717,7 +993,8 @@ int qzClose(QzSession_T *sess);
  *  qat_hw_count         number of discovered QAT devices on PCU bus
  *  qat_service_stated   1 if qzInit has been successfully run, 0 otherwise
  *  qat_mem_drvr         1 if the QAT memory driver is installed, 0 otherwise
- *  qat_instance_attach  1 if session has attached to a hw instance, 0 otherwise
+ *  qat_instance_attach  1 if session has attached to a hardware instance,
+ *                       0 otherwise
  *  memory_alloced       amount of memory, in kilobytes, from kernel or huge
  *                       pages allocated  by this process/thread.
  *  using_huge_pages     1 if memory is being allocated from huge pages, 0 if
@@ -748,7 +1025,7 @@ int qzClose(QzSession_T *sess);
  *      Yes
  *
  * @param[in]  dcInstance  Instance handle derived from discovery functions
- * @retval QZ_OK           Function executed successfully. A hw based
+ * @retval QZ_OK           Function executed successfully. A hardware based
  *                         compression session has been created.
  * @retval QZ_PARAMS       *status is NULL
  *

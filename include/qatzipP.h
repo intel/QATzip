@@ -154,6 +154,12 @@ typedef struct QzSess_S {
     unsigned long *crc32;
 } QzSess_T;
 
+typedef struct QzStreamBuf_S {
+    unsigned int buf_len;
+    unsigned char *in_buf;
+    unsigned char *out_buf;
+} QzStreamBuf_T;
+
 typedef struct ThreadData_S {
     pid_t ppid;
     pid_t pid;

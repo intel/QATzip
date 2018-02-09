@@ -79,6 +79,7 @@ const char *g_dev_tag = "QATZIP";
 QzSessionParams_T g_sess_params_default = {
     .huffman_hdr       = QZ_HUFF_HDR_DEFAULT,
     .direction         = QZ_DIRECTION_DEFAULT,
+    .data_fmt          = QZ_DATA_FORMAT_DEFAULT,
     .comp_lvl          = QZ_COMP_LEVEL_DEFAULT,
     .comp_algorithm    = QZ_COMP_ALGOL_DEFAULT,
     .poll_sleep        = QZ_POLL_SLEEP_DEFAULT,
