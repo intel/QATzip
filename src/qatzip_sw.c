@@ -86,6 +86,19 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     const unsigned int chunk_sz = qz_sess->sess_params.hw_buff_sz;
     int comp_level = (qz_sess->sess_params.comp_lvl == Z_BEST_COMPRESSION) ? \
                      Z_BEST_COMPRESSION : Z_DEFAULT_COMPRESSION;
+    QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
+    int windows_bits = 0;
+
+    switch (data_fmt) {
+    case QZ_DEFLATE_RAW:
+        windows_bits = -MAX_WBITS;
+        break;
+    case QZ_DEFLATE_GZIP:
+    case QZ_DEFLATE_GZIP_EXT:
+    default:
+        windows_bits = MAX_WBITS + GZIP_WRAPPER;
+        break;
+    }
 
     stream.zalloc = (alloc_func)0;
     stream.zfree = (free_func)0;
@@ -98,15 +111,18 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
         if (Z_OK != deflateInit2(&stream,
                                  comp_level,
                                  Z_DEFLATED,
-                                 MAX_WBITS + GZIP_WRAPPER,
+                                 windows_bits,
                                  MAX_MEM_LEVEL,
                                  Z_DEFAULT_STRATEGY)) {
             return QZ_FAIL;
         }
 
-        gen_qatzip_hdr(&hdr);
-        if (Z_OK != deflateSetHeader(&stream, &hdr)) {
-            return QZ_FAIL;
+        if (QZ_DEFLATE_GZIP != data_fmt &&
+            QZ_DEFLATE_RAW != data_fmt) {
+            gen_qatzip_hdr(&hdr);
+            if (Z_OK != deflateSetHeader(&stream, &hdr)) {
+                return QZ_FAIL;
+            }
         }
 
         send_sz = left_input_sz > chunk_sz ? chunk_sz : left_input_sz;
@@ -124,9 +140,10 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
 
         left_output_sz -= GET_LOWER_32BITS(stream.total_out);
         res.consumed = (Cpa32U) GET_LOWER_32BITS(stream.total_in);
-        res.produced = (Cpa32U) GET_LOWER_32BITS((stream.total_out - qzGzipHeaderSz() -
-                       qzGzipFooterSz()));
-        qzGzipHeaderGen(dest + cur_hdr_pos, &res);
+        res.produced = (Cpa32U) GET_LOWER_32BITS((stream.total_out -
+                       outputHeaderSz(data_fmt) -
+                       outputFooterSz(data_fmt)));
+        outputHeaderGen(dest + cur_hdr_pos, &res, data_fmt);
         cur_hdr_pos += GET_LOWER_32BITS(stream.total_out);
 
         total_out += GET_LOWER_32BITS(stream.total_out);

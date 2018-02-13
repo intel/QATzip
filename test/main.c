@@ -1625,7 +1625,7 @@ int qzDecompressFailedAtUnknownGzipHeader(void)
 
     /*wrap bad block*/
     hdr = (QzGzH_T *)comp_src;
-    hdr->id1 = 0; /* id1 !=0x1f */
+    hdr->std_hdr.id1 = 0; /* id1 !=0x1f */
 
     /*do decompress Data*/
     rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
@@ -2240,7 +2240,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:P:i:l:e:s:n:Bvh";
+    const char *optstring = "m:t:A:C:D:F:L:T:P:i:l:e:s:n:B:O:vh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -2276,6 +2276,18 @@ int main(int argc, char *argv[])
                 g_params_th.comp_algorithm = QZ_SNAPPY;
             } else if (strcmp(optarg, "lz4") == 0) {
                 g_params_th.comp_algorithm = QZ_LZ4;
+            } else {
+                QZ_ERROR("Error service arg: %s\n", optarg);
+                return -1;
+            }
+            break;
+        case 'O':
+            if (strcmp(optarg, "deflate") == 0) {
+                g_params_th.data_fmt = QZ_DEFLATE_RAW;
+            } else if (strcmp(optarg, "gzip") == 0) {
+                g_params_th.data_fmt = QZ_DEFLATE_GZIP;
+            } else if (strcmp(optarg, "gzipext") == 0) {
+                g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;

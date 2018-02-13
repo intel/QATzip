@@ -48,14 +48,61 @@
 
 #pragma pack(push, 1)
 
+inline unsigned long stdGzipHeaderSz(void)
+{
+    return sizeof(StdGzH_T);
+}
+
 inline unsigned long qzGzipHeaderSz(void)
 {
     return sizeof(QzGzH_T);
 }
 
-inline unsigned long qzGzipFooterSz(void)
+inline unsigned long stdGzipFooterSz(void)
 {
-    return sizeof(QzGzF_T);
+    return sizeof(StdGzF_T);
+}
+
+inline unsigned long outputFooterSz(QzDataFormat_T data_fmt)
+{
+    return stdGzipFooterSz();
+}
+
+unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
+{
+    unsigned long size = 0;
+
+    switch (data_fmt) {
+    case QZ_DEFLATE_RAW:
+        break;
+    case QZ_DEFLATE_GZIP:
+        size = stdGzipHeaderSz();
+        break;
+    case QZ_DEFLATE_GZIP_EXT:
+    default:
+        size = qzGzipHeaderSz();
+        break;
+    }
+
+    return size;
+}
+
+void stdGzipHeaderGen(unsigned char *ptr)
+{
+    assert(ptr != NULL);
+    StdGzH_T *hdr;
+
+    hdr = (StdGzH_T *)ptr;
+    hdr->id1      = 0x1f;
+    hdr->id2      = 0x8b;
+    hdr->cm       = QZ_DEFLATE;
+    hdr->flag     = 0x00; /*No extra BIT*/
+    hdr->mtime[0] = (char)0;
+    hdr->mtime[1] = (char)0;
+    hdr->mtime[2] = (char)0;
+    hdr->mtime[3] = (char)0;
+    hdr->xfl      = 0;
+    hdr->os       = 255;
 }
 
 void qzGzipHeaderExtraFieldGen(unsigned char *ptr, CpaDcRqResults *res)
@@ -77,27 +124,44 @@ void qzGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
     QzGzH_T *hdr;
 
     hdr = (QzGzH_T *)ptr;
-    hdr->id1      = 0x1f;
-    hdr->id2      = 0x8b;
-    hdr->cm       = QZ_DEFLATE;
-    hdr->flag     = 0x04; /*Fextra BIT SET*/
-    hdr->mtime[0] = (char)0;
-    hdr->mtime[1] = (char)0;
-    hdr->mtime[2] = (char)0;
-    hdr->mtime[3] = (char)0;
-    hdr->xfl      = 0;
-    hdr->os       = 255;
+    hdr->std_hdr.id1      = 0x1f;
+    hdr->std_hdr.id2      = 0x8b;
+    hdr->std_hdr.cm       = QZ_DEFLATE;
+    hdr->std_hdr.flag     = 0x04; /*Fextra BIT SET*/
+    hdr->std_hdr.mtime[0] = (char)0;
+    hdr->std_hdr.mtime[1] = (char)0;
+    hdr->std_hdr.mtime[2] = (char)0;
+    hdr->std_hdr.mtime[3] = (char)0;
+    hdr->std_hdr.xfl      = 0;
+    hdr->std_hdr.os       = 255;
     hdr->x_len     = (uint16_t)sizeof(hdr->extra);
     qzGzipHeaderExtraFieldGen((unsigned char *)&hdr->extra, res);
+}
+
+void outputHeaderGen(unsigned char *ptr,
+                     CpaDcRqResults *res,
+                     QzDataFormat_T data_fmt)
+{
+    switch (data_fmt) {
+    case QZ_DEFLATE_RAW:
+        break;
+    case QZ_DEFLATE_GZIP:
+        stdGzipHeaderGen(ptr);
+        break;
+    case QZ_DEFLATE_GZIP_EXT:
+    default:
+        qzGzipHeaderGen(ptr, res);
+        break;
+    }
 }
 
 int isStdGzipHeader(const unsigned char *const ptr)
 {
     QzGzH_T *h = (QzGzH_T *)ptr;
 
-    return (h->id1 == 0x1f       && \
-            h->id2 == 0x8b       && \
-            h->cm  == QZ_DEFLATE && \
+    return (h->std_hdr.id1 == 0x1f       && \
+            h->std_hdr.id2 == 0x8b       && \
+            h->std_hdr.cm  == QZ_DEFLATE && \
             h->extra.st1 != 'Q'  && \
             h->extra.st2 != 'Z');
 }
@@ -107,20 +171,21 @@ int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr)
     QzGzH_T *h;
 
     h = (QzGzH_T *)ptr;
-    if (h->id1          != 0x1f             || \
-        h->id2          != 0x8b             || \
-        h->extra.st1    != 'Q'              || \
-        h->extra.st2    != 'Z'              || \
-        h->cm           != QZ_DEFLATE       || \
-        h->flag         != 0x04             || \
-        h->xfl          != 0                || \
-        h->os           != 255              || \
-        h->x_len        != sizeof(h->extra) || \
-        h->extra.x2_len != sizeof(h->extra.qz_e)) {
+    if (h->std_hdr.id1          != 0x1f             || \
+        h->std_hdr.id2          != 0x8b             || \
+        h->extra.st1            != 'Q'              || \
+        h->extra.st2            != 'Z'              || \
+        h->std_hdr.cm           != QZ_DEFLATE       || \
+        h->std_hdr.flag         != 0x04             || \
+        h->std_hdr.xfl          != 0                || \
+        h->std_hdr.os           != 255              || \
+        h->x_len                != sizeof(h->extra) || \
+        h->extra.x2_len         != sizeof(h->extra.qz_e)) {
         QZ_ERROR("id1: %x, id2: %x, st1: %c, st2: %c, cm: %d, flag: %d,"
                  "xfl: %d, os: %d, x_len: %d, x2_len: %d\n",
-                 h->id1, h->id2, h->extra.st1, h->extra.st2, h->cm, h->flag,
-                 h->xfl, h->os, h->x_len, h->extra.x2_len);
+                 h->std_hdr.id1, h->std_hdr.id2, h->extra.st1, h->extra.st2,
+                 h->std_hdr.cm, h->std_hdr.flag, h->std_hdr.xfl, h->std_hdr.os,
+                 h->x_len, h->extra.x2_len);
         return QZ_FAIL;
     }
 
@@ -128,18 +193,25 @@ int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr)
     return QZ_OK;
 }
 
-void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res)
+void stdGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res)
 {
     assert(ptr != NULL);
     assert(res != NULL);
-    QzGzF_T *ftr;
+    StdGzF_T *ftr;
 
-    ftr = (QzGzF_T *)ptr;
+    ftr = (StdGzF_T *)ptr;
     ftr->crc32 = res->checksum;
     ftr->i_size = res->consumed;
 }
 
-void qzGzipFooterExt(const unsigned char *const ptr, QzGzF_T *ftr)
+inline void outputFooterGen(unsigned char *ptr,
+                            CpaDcRqResults *res,
+                            QzDataFormat_T data_fmt)
+{
+    stdGzipFooterGen(ptr, res);
+}
+
+void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr)
 {
     QZ_MEMCPY(ftr, ptr, sizeof(*ftr), sizeof(*ftr));
 }

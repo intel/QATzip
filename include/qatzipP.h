@@ -178,7 +178,7 @@ typedef struct QzExtraField_S {
     QzExtraHeader_T qz_e;
 } QzExtraField_T;
 
-typedef struct QzGzH_S {
+typedef struct StdGzH_S {
     unsigned char id1;
     unsigned char id2;
     unsigned char cm;
@@ -186,14 +186,18 @@ typedef struct QzGzH_S {
     unsigned char mtime[4];
     unsigned char xfl;
     unsigned char os;
+} StdGzH_T;
+
+typedef struct QzGzH_S {
+    StdGzH_T std_hdr;
     uint16_t x_len;
     QzExtraField_T extra;
 } QzGzH_T;
 
-typedef struct QzGzF_S {
+typedef struct StdGzF_S {
     uint32_t crc32;
     uint32_t i_size;
-} QzGzF_T;
+} StdGzF_T;
 
 typedef struct QzMem_S {
     int flag;
@@ -204,12 +208,22 @@ typedef struct QzMem_S {
 
 void dumpAllCounters(void);
 int qzSetupHW(QzSession_T *sess, int i);
+unsigned long stdGzipHeaderSz(void);
 unsigned long qzGzipHeaderSz(void);
-unsigned long qzGzipFooterSz(void);
+unsigned long stdGzipFooterSz(void);
+unsigned long outputHeaderSz(QzDataFormat_T data_fmt);
+unsigned long outputFooterSz(QzDataFormat_T data_fmt);
+void stdGzipHeaderGen(unsigned char *ptr);
 void qzGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr);
-void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res);
-void qzGzipFooterExt(const unsigned char *const ptr, QzGzF_T *ftr);
+void outputHeaderGen(unsigned char *ptr,
+                     CpaDcRqResults *res,
+                     QzDataFormat_T data_fmt);
+void stdGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res);
+void outputFooterGen(unsigned char *ptr,
+                     CpaDcRqResults *res,
+                     QzDataFormat_T data_fmt);
+void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr);
 int isStdGzipHeader(const unsigned char *const ptr);
 int qzGetMaxHugePages(void);
 

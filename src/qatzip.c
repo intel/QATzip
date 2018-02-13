@@ -1099,6 +1099,7 @@ static void *doCompressOut(void *in)
     long dest_avail_len = (long)(*qz_sess->dest_sz);
     int dest_pinned = qzMemFindAddr(qz_sess->next_dest);
     i = qz_sess->inst_hint;
+    QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
 
     while ((qz_sess->last_submitted == 0) ||
            (qz_sess->processed < qz_sess->submitted)) {
@@ -1146,7 +1147,8 @@ static void *doCompressOut(void *in)
                 QZ_DEBUG("\tconsumed = %d, produced = %d, seq_in = %ld\n",
                          resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq);
 
-                dest_avail_len -= (qzGzipHeaderSz() + resl->produced + qzGzipFooterSz());
+                dest_avail_len -= (outputHeaderSz(data_fmt) + resl->produced + outputFooterSz(
+                                       data_fmt));
                 if (dest_avail_len < 0) {
                     QZ_DEBUG("doCompressOut: inadequate output buffer length: %ld\n",
                              (long)(*qz_sess->dest_sz));
@@ -1157,8 +1159,8 @@ static void *doCompressOut(void *in)
                     continue;
                 }
 
-                qzGzipHeaderGen(qz_sess->next_dest, resl);
-                qz_sess->next_dest += qzGzipHeaderSz();
+                outputHeaderGen(qz_sess->next_dest, resl, data_fmt);
+                qz_sess->next_dest += outputHeaderSz(data_fmt);
 
                 if (dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq)) {
                     g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
@@ -1170,11 +1172,12 @@ static void *doCompressOut(void *in)
                               resl->produced);
                 }
                 qz_sess->next_dest += resl->produced;
-                qzGzipFooterGen(qz_sess->next_dest, resl);
-                qz_sess->next_dest += qzGzipFooterSz();
+                outputFooterGen(qz_sess->next_dest, resl, data_fmt);
+                qz_sess->next_dest += outputFooterSz(data_fmt);
 
                 qz_sess->qz_in_len += resl->consumed;
-                qz_sess->qz_out_len += (qzGzipHeaderSz() + resl->produced + qzGzipFooterSz());
+                qz_sess->qz_out_len += (outputHeaderSz(data_fmt) + resl->produced +
+                                        outputFooterSz(data_fmt));
 
                 if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
                     g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
@@ -1304,6 +1307,15 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     }
 
     qz_sess = (QzSess_T *)(sess->internal);
+
+    QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
+    if (data_fmt != QZ_DEFLATE_RAW &&
+        data_fmt != QZ_DEFLATE_GZIP &&
+        data_fmt != QZ_DEFLATE_GZIP_EXT) {
+        QZ_ERROR("Unknown data formt: %d\n", data_fmt);
+        return QZ_PARAMS;
+    }
+
     if (NULL != crc) {
         *crc = 0;
     }
@@ -1477,10 +1489,10 @@ static void *doDecompressIn(void *in)
     unsigned char *dest_ptr;
     int src_pinned = 0;
     int dest_pinned = 0;
-    QzGzH_T hdr = {0};
+    QzGzH_T hdr = {{0}, 0};
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
-    QzGzF_T *qzFooter = NULL;
+    StdGzF_T *qzFooter = NULL;
 
     i = qz_sess->inst_hint;
     src_ptr = qz_sess->src;
@@ -1567,7 +1579,7 @@ static void *doDecompressIn(void *in)
             qz_sess->seq++;
             QZ_DEBUG("sending seq number %d %d %ld\n", i, j, qz_sess->seq);
 
-            qzFooter = (QzGzF_T *)(src_ptr + src_send_sz);
+            qzFooter = (StdGzF_T *)(src_ptr + src_send_sz);
             g_process.qz_inst[i].stream[j].gzip_footer_checksum = qzFooter->crc32;
             g_process.qz_inst[i].stream[j].gzip_footer_orgdatalen = qzFooter->i_size;
             qz_sess->submitted++;
@@ -1629,15 +1641,15 @@ static void *doDecompressIn(void *in)
             }
 
             g_process.qz_inst[i].num_retries = 0;
-            src_avail_len -= (qzGzipHeaderSz() + src_send_sz + qzGzipFooterSz());
+            src_avail_len -= (qzGzipHeaderSz() + src_send_sz + stdGzipFooterSz());
             dest_avail_len -= dest_receive_sz;
 
             if (dest_pinned) {
                 dest_ptr += dest_receive_sz;
             }
 
-            src_ptr += (src_send_sz + qzGzipFooterSz());
-            remaining -= (src_send_sz + qzGzipFooterSz());
+            src_ptr += (src_send_sz + stdGzipFooterSz());
+            remaining -= (src_send_sz + stdGzipFooterSz());
             break;
 
         default:
@@ -1750,7 +1762,7 @@ static void *doDecompressOut(void *in)
                 }
 
                 qz_sess->next_dest += resl->produced;
-                qz_sess->qz_in_len += (qzGzipHeaderSz() + resl->consumed + qzGzipFooterSz());
+                qz_sess->qz_in_len += (qzGzipHeaderSz() + resl->consumed + stdGzipFooterSz());
                 qz_sess->qz_out_len += resl->produced;
 
                 QZ_DEBUG("qz_sess->next_dest = %p\n", qz_sess->next_dest);
@@ -1823,6 +1835,15 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     }
 
     qz_sess = (QzSess_T *)(sess->internal);
+
+    QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
+    if (data_fmt != QZ_DEFLATE_RAW &&
+        data_fmt != QZ_DEFLATE_GZIP &&
+        data_fmt != QZ_DEFLATE_GZIP_EXT) {
+        QZ_ERROR("Unknown data formt: %d\n", data_fmt);
+        return QZ_PARAMS;
+    }
+
     if (hdr->extra.qz_e.src_sz < qz_sess->sess_params.input_sz_thrshold ||
         g_process.qz_init_status == QZ_NO_HW                            ||
         sess->hw_session_stat == QZ_NO_HW                               ||
@@ -2022,7 +2043,7 @@ int qzGetDefaults(QzSessionParams_T *defaults)
 unsigned int qzMaxCompressedLength(unsigned int src_sz)
 {
     unsigned int dest_sz = 0;
-    unsigned int qz_header_footer_sz = qzGzipHeaderSz() + qzGzipFooterSz();
+    unsigned int qz_header_footer_sz = qzGzipHeaderSz() + stdGzipFooterSz();
 
     unsigned int chunk_cnt = src_sz / QZ_HW_BUFF_SZ;
     unsigned int max_chunk_sz = ((9 * QZ_HW_BUFF_SZ + 7) / 8) + QZ_SKID_PAD_SZ +

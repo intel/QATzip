@@ -41,8 +41,10 @@ test_qzip="${BASEDIR}/../../utils/qzip "
 test_main="${BASEDIR}/../test "
 test_bt="${BASEDIR}/../bt "
 test_file_path="/opt/compressdata"
+sample_file_name="calgary"
 huge_file_name="calgary.2G"
 highly_compressible_file_name="big-index.html"
+accept_format="deflate|gzip|gzipext"
 
 # 1. Trivial file compression
 echo "Preforming file compression and decompression..."
@@ -136,6 +138,64 @@ function inputFileTest()
     return $rc
 }
 
+function outputFormatTest()
+{
+    local test_file_name=$1
+    local output_format=$2
+    local com_level=$3
+    local test_option=""
+
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    if [[ -n $output_format && ! "$output_format" =~ ^($accept_format)$ ]]
+    then
+        echo "Unknown format $output_format,"
+        echo "Please use $accept_format."
+        return 1
+    fi
+
+    if [[ -n $comp_level && ! "$comp_level" =~ ^[1-9]$ ]]
+    then
+        echo "Invaild compression level $comp_level."
+        return 1
+    fi
+
+    if [[ -n $output_format ]]
+    then
+        test_option="-O $output_format"
+    fi
+
+    if [[ -n $comp_level ]]
+    then
+        test_option+="-L $comp_level"
+    fi
+
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name`
+    if $test_qzip $test_option $test_file_name && \
+        gunzip -d "$test_file_name.gz"
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name Failed";
+        rc=1
+    fi
+    new_checksum=`md5sum $test_file_name`
+
+    if [[ $new_checksum != $orig_checksum ]]
+    then
+        echo "Checksum mismatch, huge file test failed."
+        rc=1
+    fi
+
+    return $rc
+}
+
 #insufficent huge page memory, switch to sw
 function switch_to_sw_failover_in_insufficent_HP()
 {
@@ -194,15 +254,18 @@ function resume_hw_comp_when_insufficent_HP()
 
 # 2. Very basic misc functional tests
 
-echo "Preforming misc functional tests..."
+echo "Performing misc functional tests..."
 if $test_main -m 1 -t 3 -l 8 && \
     # ignore test2 output (too verbose) \
    $test_main -m 2 -t 3 -l 8 > /dev/null && \
    $test_main -m 3 -t 3 -l 8 && \
    $test_main -m 4 -t 3 -l 8 && \
    testOn3MBRandomDataFile && \
-   inputFileTest $highly_compressible_file_name \
-   inputFileTest $huge_file_name \
+   inputFileTest $highly_compressible_file_name &&\
+   inputFileTest $huge_file_name &&\
+   outputFormatTest $sample_file_name &&\
+   outputFormatTest $sample_file_name gzip &&\
+   outputFormatTest $sample_file_name gzip 9 &&\
    switch_to_sw_failover_in_insufficent_HP && \
    resume_hw_comp_when_insufficent_HP && \
    $test_main -m 5 -t 3 -l 8 -F $format_option && \
@@ -219,7 +282,7 @@ fi
 
 # 3. Basic tests
 
-echo "Preforming basic tests..."
+echo "Performing basic tests..."
 if $test_bt -c 0 -S 200000 && \
    $test_bt -c 1 -f -S 200000 && \
    $test_bt -c 1 -S 200000 && \
