@@ -65,6 +65,11 @@ extern"C" {
 
 #define QAT_MAX_DEVICES     32
 
+#define QZ_SETUP_SESSION_FAIL(rc) (QZ_FAIL == rc       || \
+                                   QZ_PARAMS == rc     || \
+                                   QZ_NOSW_NO_HW == rc || \
+                                   QZ_NOSW_LOW_MEM == rc)
+
 typedef struct QzCpaStream_S {
     signed long seq;
     signed long src1;
@@ -158,6 +163,7 @@ typedef struct QzStreamBuf_S {
     unsigned int buf_len;
     unsigned char *in_buf;
     unsigned char *out_buf;
+    unsigned int out_offset;
 } QzStreamBuf_T;
 
 typedef struct ThreadData_S {

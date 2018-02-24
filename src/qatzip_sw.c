@@ -81,13 +81,26 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     unsigned int send_sz;
     unsigned int cur_hdr_pos = 0;
     unsigned int total_in = 0, total_out = 0;
-    QzSess_T *qz_sess = (QzSess_T *) sess->internal;
-    qz_sess->force_sw = 1;
-    const unsigned int chunk_sz = qz_sess->sess_params.hw_buff_sz;
-    int comp_level = (qz_sess->sess_params.comp_lvl == Z_BEST_COMPRESSION) ? \
-                     Z_BEST_COMPRESSION : Z_DEFAULT_COMPRESSION;
-    QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
+    QzSess_T *qz_sess = NULL;
     int windows_bits = 0;
+    int comp_level = Z_DEFAULT_COMPRESSION;
+    QzDataFormat_T data_fmt = QZ_DATA_FORMAT_DEFAULT;
+    unsigned int chunk_sz = QZ_HW_BUFF_SZ;
+
+    /*check if setupSession called*/
+    if (NULL == sess->internal) {
+        ret = qzSetupSession(sess, NULL);
+        if (QZ_SETUP_SESSION_FAIL(ret)) {
+            return ret;
+        }
+    }
+
+    qz_sess = (QzSess_T *) sess->internal;
+    qz_sess->force_sw = 1;
+    comp_level = (qz_sess->sess_params.comp_lvl == Z_BEST_COMPRESSION) ? \
+                 Z_BEST_COMPRESSION : Z_DEFAULT_COMPRESSION;
+    data_fmt = qz_sess->sess_params.data_fmt;
+    chunk_sz = qz_sess->sess_params.hw_buff_sz;
 
     switch (data_fmt) {
     case QZ_DEFLATE_RAW:
@@ -106,6 +119,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
 #ifdef QATZIP_DEBUG
     insertThread((unsigned int)pthread_self(), COMPRESSION, SW);
 #endif
+
     while (left_input_sz) {
         /*Gzip header*/
         if (Z_OK != deflateInit2(&stream,
@@ -150,8 +164,18 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
         total_in += GET_LOWER_32BITS(stream.total_in);
         *src_len = total_in;
         *dest_len = total_out;
+
         if (NULL != qz_sess->crc32) {
-            *(qz_sess->crc32) = stream.adler;
+            if (QZ_DEFLATE_RAW == data_fmt) {
+                *qz_sess->crc32 = crc32(*qz_sess->crc32, src, *src_len);
+            } else {
+                if (0 == *qz_sess->crc32) {
+                    *qz_sess->crc32 = stream.adler;
+                } else {
+                    *qz_sess->crc32 =
+                        crc32_combine(*qz_sess->crc32, stream.adler, *src_len);
+                }
+            }
         }
 
         if (Z_OK != deflateEnd(&stream)) {

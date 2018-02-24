@@ -99,11 +99,6 @@ typedef enum {
     BOTH
 } ServiceType_T;
 
-typedef enum {
-    COMMON_MEM = 0,
-    PINNED_MEM
-} PinMem_T;
-
 typedef struct CPUCore_S {
     int seq;
     int used;
@@ -1535,6 +1530,94 @@ done:
     return rc;
 }
 
+void *qzCompressStreamAndDecompress(void *arg)
+{
+    int rc = -1;
+    QzSession_T comp_sess = {0}, decomp_sess = {0};
+    QzStream_T comp_strm = {0};
+    QzSessionParams_T comp_params = {0};
+    uint8_t *orig_src, *comp_src, *decomp_src;
+    size_t orig_sz, comp_sz, decomp_sz;
+    unsigned int slice_sz = 0, done = 0;
+    unsigned int consumed = 0, produced = 0;
+    unsigned int input_left = 0, last = 0;
+    TestArg_T *test_arg = (TestArg_T *) arg;
+
+    orig_sz = comp_sz = decomp_sz = test_arg->src_sz;
+    orig_src = malloc(orig_sz);
+    comp_src = malloc(comp_sz);
+    decomp_src = malloc(orig_sz);
+
+    if (qzGetDefaults(&comp_params) != QZ_OK) {
+        QZ_ERROR("Err: get params fail with incorrect compress params.\n");
+        goto exit;
+    }
+    slice_sz = comp_params.hw_buff_sz / 4;
+
+    if (NULL == orig_src ||
+        NULL == comp_src ||
+        NULL == decomp_src) {
+        free(orig_src);
+        free(comp_src);
+        free(decomp_src);
+        QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
+        return NULL;
+    }
+
+    genRandomData(orig_src, orig_sz);
+
+    while (!done) {
+        input_left      = orig_sz - consumed;
+        comp_strm.in    = orig_src + consumed;
+        comp_strm.out   = comp_src + produced;
+        comp_strm.in_sz = (input_left > slice_sz) ? slice_sz : input_left;
+        comp_strm.out_sz =  comp_sz - produced;
+        last = (orig_sz == (consumed + comp_strm.in_sz)) ? 1 : 0;
+
+        rc = qzCompressStream(&comp_sess, &comp_strm, last);
+        if (rc != QZ_OK) {
+            QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+            goto exit;
+        }
+
+        consumed += comp_strm.in_sz;
+        produced += comp_strm.out_sz;
+
+        if (1 == last && 0 == comp_strm.pending_in && 0 == comp_strm.pending_out) {
+            done = 1;
+        }
+    }
+    qzEndStream(&comp_sess, &comp_strm);
+    comp_sz = produced;
+
+    rc = qzDecompress(&decomp_sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
+                      (uint32_t *)(&decomp_sz));
+    if (rc != QZ_OK) {
+        QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+        goto exit;
+    }
+
+    QZ_DEBUG("verify data..\n");
+    if (memcmp(orig_src, decomp_src, orig_sz)) {
+        QZ_ERROR("ERROR: Decompression FAILED with size: %d \n!", orig_sz);
+        dumpInputData(orig_sz, orig_src);
+        dumpInputData(orig_sz, decomp_src);
+        goto exit;
+    }
+
+    QZ_PRINT("Compress Stream and Decompress function test: PASS\n");
+
+exit:
+    qzFree(orig_src);
+    qzFree(comp_src);
+    qzFree(decomp_src);
+    qzEndStream(&comp_sess, &comp_strm);
+    (void)qzTeardownSession(&comp_sess);
+    (void)qzTeardownSession(&decomp_sess);
+    qzClose(&comp_sess);
+    qzClose(&decomp_sess);
+    return NULL;
+}
 
 void *qzCompressDecompressSwQZMixed(void *arg)
 {
@@ -2464,6 +2547,9 @@ int main(int argc, char *argv[])
         qzThdOps = qzCompressDecompressSwQZMixed;
         break;
     case 9:
+        qzThdOps = qzCompressStreamAndDecompress;
+        break;
+    case 10:
         return qzFuncTests();
     default:
         goto done;
@@ -2562,6 +2648,7 @@ int main(int argc, char *argv[])
     if (input_file_name != NULL) {
         qzFree(input_buf);
     }
+
 done:
     qzClose(&g_session1);
 

@@ -71,11 +71,6 @@ const char *g_dev_tag = "QATZIP";
                                    QZ_NOSW_NO_HW == rc || \
                                    QZ_FAIL == rc)
 
-#define QZ_SETUP_SESSION_FAIL(rc) (QZ_FAIL == rc       || \
-                                   QZ_PARAMS == rc     || \
-                                   QZ_NOSW_NO_HW == rc || \
-                                   QZ_NOSW_LOW_MEM == rc)
-
 QzSessionParams_T g_sess_params_default = {
     .huffman_hdr       = QZ_HUFF_HDR_DEFAULT,
     .direction         = QZ_DIRECTION_DEFAULT,
@@ -1316,9 +1311,6 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
         return QZ_PARAMS;
     }
 
-    if (NULL != crc) {
-        *crc = 0;
-    }
     qz_sess->crc32 = crc;
     if (*src_len < qz_sess->sess_params.input_sz_thrshold ||
         g_process.qz_init_status == QZ_NO_HW              ||
@@ -2057,4 +2049,208 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz)
     QZ_DEBUG("src_sz is %u, dest_sz is %u\n", src_sz, (unsigned int)dest_sz);
 
     return dest_sz;
+}
+
+static int initStream(QzSession_T *sess, QzStream_T *strm)
+{
+    int rc = QZ_FAIL;
+    QzSess_T *qz_sess = NULL;
+    QzStreamBuf_T *stream_buf = NULL;
+
+    if (NULL != strm->opaque) {
+        return QZ_DUPLICATE;
+    }
+
+    /*check if setupSession called*/
+    if (NULL == sess->internal) {
+        rc = qzSetupSession(sess, NULL);
+        if (QZ_SETUP_SESSION_FAIL(rc)) {
+            return rc;
+        }
+    }
+    qz_sess = (QzSess_T *)(sess->internal);
+
+    strm->opaque = malloc(sizeof(QzStreamBuf_T));
+    stream_buf = (QzStreamBuf_T *) strm->opaque;
+    if (NULL == stream_buf) {
+        QZ_ERROR("Fail to allocate memory for QzStreamBuf");
+        return QZ_FAIL;
+    }
+
+    stream_buf->out_offset = 0;
+    stream_buf->buf_len = DEST_SZ(qz_sess->sess_params.hw_buff_sz);
+    stream_buf->in_buf = qzMalloc(stream_buf->buf_len, 0, PINNED_MEM);
+    stream_buf->out_buf = qzMalloc(stream_buf->buf_len, 0, PINNED_MEM);
+    if (NULL == stream_buf->in_buf ||
+        NULL == stream_buf->out_buf) {
+        QZ_ERROR("Fail to allocate memory for QzStreamBuf");
+        return QZ_FAIL;
+    }
+
+    strm->pending_in = 0;
+    strm->pending_out = 0;
+    strm->crc_32 = 0;
+    strm->crc_64 = 0;
+    return QZ_OK;
+}
+
+static unsigned int copyStreamInput(QzStream_T *strm, unsigned char *in)
+{
+    unsigned int cpy_cnt = 0;
+    unsigned int avail_in = 0;
+    QzStreamBuf_T *stream_buf = strm->opaque;
+
+    avail_in = stream_buf->buf_len - strm->pending_in;
+    cpy_cnt = (strm->in_sz > avail_in) ? avail_in : strm->in_sz;
+    QZ_MEMCPY(stream_buf->in_buf + strm->pending_in, in, cpy_cnt, cpy_cnt);
+
+    strm->pending_in += cpy_cnt;
+    strm->in_sz -= cpy_cnt;
+    return cpy_cnt;
+}
+
+static unsigned int copyStreamOutput(QzStream_T *strm, unsigned char *out)
+{
+    unsigned int cpy_cnt = 0;
+    unsigned int avail_out = 0;
+    QzStreamBuf_T *stream_buf = strm->opaque;
+
+    avail_out = strm->out_sz;
+    cpy_cnt = (strm->pending_out > avail_out) ? avail_out : strm->pending_out;
+    QZ_MEMCPY(out, stream_buf->out_buf + stream_buf->out_offset, cpy_cnt, cpy_cnt);
+
+    strm->out_sz -= cpy_cnt;
+    strm->pending_out -= cpy_cnt;
+    stream_buf->out_offset += cpy_cnt;
+
+    if (strm->pending_out == 0) {
+        stream_buf->out_offset = 0;
+    }
+
+    return cpy_cnt;
+}
+
+
+int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
+{
+    int rc = QZ_FAIL;
+    unsigned long crc = 0;
+    unsigned int input_len = 0;
+    unsigned int output_len = 0;
+    unsigned int copied_input = 0;
+    unsigned int copied_output = 0;
+    unsigned int consumed = 0;
+    unsigned int produced = 0;
+    QzStreamBuf_T *stream_buf = NULL;
+
+    if (NULL == sess     || \
+        NULL == strm     || \
+        (last != 0 && last != 1)) {
+        rc = QZ_PARAMS;
+        goto done;
+    }
+
+    if (NULL == strm->opaque) {
+        rc = initStream(sess, strm);
+        if (QZ_FAIL == rc) {
+            goto done;
+        }
+    }
+    stream_buf = (QzStreamBuf_T *) strm->opaque;
+
+    while (strm->pending_out > 0) {
+        copied_output = copyStreamOutput(strm, strm->out + produced);
+        produced += copied_output;
+        if (0 == copied_output) {
+            rc = QZ_OK;
+            goto done;
+        }
+    }
+
+    while (0 == strm->pending_out) {
+        if (0 == strm->pending_in && 0 == strm->in_sz) {
+            rc = QZ_OK;
+            goto done;
+        }
+
+        copied_input = copyStreamInput(strm, strm->in + consumed);
+        consumed += copied_input;
+
+        if (strm->pending_in < stream_buf->buf_len &&
+            last != 1) {
+            rc = QZ_OK;
+            goto done;
+        }
+
+        input_len = strm->pending_in;
+        output_len = stream_buf->buf_len;
+        rc = qzCompressCrc(sess, stream_buf->in_buf, &input_len,
+                           stream_buf->out_buf, &output_len, last, &crc);
+
+        assert(input_len == strm->pending_in);
+        strm->pending_in = 0;
+        strm->pending_out = output_len;
+        copied_output = copyStreamOutput(strm, strm->out + produced);
+        produced += copied_output;
+
+        if (QZ_OK != rc) {
+            rc = QZ_FAIL;
+            goto done;
+        }
+    }
+
+done:
+    if (QZ_OK == rc) {
+        switch (strm->crc_type) {
+        case NONE:
+            break;
+        case QZ_CRC64:
+            strm->crc_64 = crc;
+            break;
+        case QZ_ADLER:
+        case QZ_CRC32:
+        default:
+            strm->crc_32 = GET_LOWER_32BITS(crc);
+            break;
+        }
+    }
+
+    if (NULL != strm) {
+        strm->in_sz = consumed;
+        strm->out_sz = produced;
+    }
+
+    return rc;
+}
+
+int qzEndStream(QzSession_T *sess, QzStream_T *strm)
+{
+    int rc = QZ_FAIL;
+    QzStreamBuf_T *stream_buf = NULL;
+
+    if (NULL == sess || \
+        NULL == strm) {
+        rc = QZ_PARAMS;
+        goto exit;
+    }
+
+    if (NULL == strm->opaque) {
+        rc = QZ_OK;
+        goto done;
+    }
+
+    stream_buf = (QzStreamBuf_T *)strm->opaque;
+    qzFree(stream_buf->out_buf);
+    qzFree(stream_buf->in_buf);
+    free(stream_buf);
+    strm->opaque = NULL;
+    rc = QZ_OK;
+
+done:
+    strm->pending_in = 0;
+    strm->pending_out = 0;
+    strm->in_sz = 0;
+    strm->out_sz = 0;
+exit:
+    return rc;
 }

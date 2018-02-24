@@ -133,6 +133,24 @@ typedef enum QzHuffmanHdr_E {
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      Supported memory types
+ *
+ * @description
+ *      This enumerated list identifies memory types supported
+ *    by QATZip.
+ *
+ *****************************************************************************/
+typedef enum {
+    COMMON_MEM = 0,
+    /**< Allocate non-continous memory */
+    PINNED_MEM
+    /**< Allocate continous memory */
+} PinMem_T;
+
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      Compress or decompress setting
  *
  * @description
