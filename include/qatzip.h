@@ -185,8 +185,9 @@ typedef enum QzDataFormat_E {
     /**< Data is in raw deflate format */
     QZ_DEFLATE_GZIP,
     /**< Data is in deflate wrappped by GZip header and footer*/
-    QZ_DEFLATE_GZIP_EXT
+    QZ_DEFLATE_GZIP_EXT,
     /**< Data is in deflate warpped by GZip extension header and footer */
+    QZ_FMT_NUM
 } QzDataFormat_T;
 
 /**

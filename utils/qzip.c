@@ -85,7 +85,7 @@ static QzSessionParams_T g_params_th = {(QzHuffmanHdr_T)0,};
 static const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-static char const g_short_opts[] = "A:H:L:C:O:dhkV";
+static char const g_short_opts[] = "A:H:L:C:dhkV";
 static const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -94,7 +94,6 @@ static const struct option g_long_opts[] = {
     {"keep",       0, 0, 'k'}, /* keep (don't delete) input files */
     {"version",    0, 0, 'V'}, /* display version number */
     {"algorithm",  1, 0, 'A'}, /* set algorithm type */
-    {"output",     1, 0, 'O'}, /* set output format */
     {"huffmanhdr", 1, 0, 'H'}, /* set huffman header type */
     {"level",      1, 0, 'L'}, /* set compression level */
     {"chunksz",    1, 0, 'C'}, /* set chunk size */
@@ -118,7 +117,6 @@ static void help(void)
         "Mandatory arguments to long options are mandatory for short options too.",
         "",
         "  -A, --algorithm   set algorithm type",
-        "  -O, --output      set output format",
         "  -d, --decompress  decompress",
         "  -h, --help        give this help",
         "  -H, --huffmanhdr  set huffman header type",
@@ -567,18 +565,6 @@ int main(int argc, char **argv)
                 g_params_th.comp_algorithm = QZ_SNAPPY;
             } else if (strcmp(optarg, "lz4") == 0) {
                 g_params_th.comp_algorithm = QZ_LZ4;
-            } else {
-                QZ_ERROR("Error service arg: %s\n", optarg);
-                return -1;
-            }
-            break;
-        case 'O':
-            if (strcmp(optarg, "deflate") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_RAW;
-            } else if (strcmp(optarg, "gzip") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_GZIP;
-            } else if (strcmp(optarg, "gzipext") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;

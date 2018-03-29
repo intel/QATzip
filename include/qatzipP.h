@@ -225,8 +225,9 @@ int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr);
 void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      QzDataFormat_T data_fmt);
-void stdGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res);
-void outputFooterGen(unsigned char *ptr,
+void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res);
+void stdGzipFooterGen(QzSess_T *qz_sess, CpaDcRqResults *res);
+void outputFooterGen(QzSess_T *qz_sess,
                      CpaDcRqResults *res,
                      QzDataFormat_T data_fmt);
 void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr);

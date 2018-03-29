@@ -1572,7 +1572,7 @@ void *qzCompressStreamAndDecompress(void *arg)
         comp_strm.out   = comp_src + produced;
         comp_strm.in_sz = (input_left > slice_sz) ? slice_sz : input_left;
         comp_strm.out_sz =  comp_sz - produced;
-        last = (orig_sz == (consumed + comp_strm.in_sz)) ? 1 : 0;
+        last = (((consumed + comp_strm.in_sz) == orig_sz) ? 1 : 0);
 
         rc = qzCompressStream(&comp_sess, &comp_strm, last);
         if (rc != QZ_OK) {
@@ -1587,6 +1587,7 @@ void *qzCompressStreamAndDecompress(void *arg)
             done = 1;
         }
     }
+
     qzEndStream(&comp_sess, &comp_strm);
     comp_sz = produced;
 
@@ -2292,6 +2293,7 @@ int qzFuncTests(void)
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - 9\n"                                         \
+    "    -O data_fmt           deflate | gzip | gzipext\n"                      \
     "    -T huffmanType        static | dynamic\n"                              \
     "    -P poll_sleep         0 means disable thread polling\n"                \
     "    -n NUMA node          enable CPU affinity, node can be set to 0,1 \n"  \

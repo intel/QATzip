@@ -65,7 +65,19 @@ inline unsigned long stdGzipFooterSz(void)
 
 inline unsigned long outputFooterSz(QzDataFormat_T data_fmt)
 {
-    return stdGzipFooterSz();
+    unsigned long size = 0;
+    switch (data_fmt) {
+    case QZ_DEFLATE_RAW:
+        size = 0;
+        break;
+    case QZ_DEFLATE_GZIP:
+    case QZ_DEFLATE_GZIP_EXT:
+    default:
+        size = stdGzipFooterSz();
+        break;
+    }
+
+    return size;
 }
 
 unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
@@ -142,6 +154,8 @@ void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      QzDataFormat_T data_fmt)
 {
+    QZ_DEBUG("Generate header\n");
+
     switch (data_fmt) {
     case QZ_DEFLATE_RAW:
         break;
@@ -193,10 +207,24 @@ int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr)
     return QZ_OK;
 }
 
-void stdGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res)
+
+void stdGzipFooterGen(QzSess_T *qz_sess, CpaDcRqResults *res)
 {
-    assert(ptr != NULL);
-    assert(res != NULL);
+    assert(NULL != qz_sess);
+    assert(NULL != qz_sess->crc32);
+    unsigned char *ptr = qz_sess->next_dest;
+    assert(NULL != ptr);
+    assert(NULL != res);
+    StdGzF_T *ftr = (StdGzF_T *)ptr;
+
+    ftr->crc32 = GET_LOWER_32BITS(*qz_sess->crc32);
+    ftr->i_size = GET_LOWER_32BITS(qz_sess->qz_in_len);
+}
+
+void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res)
+{
+    assert(NULL != ptr);
+    assert(NULL != res);
     StdGzF_T *ftr;
 
     ftr = (StdGzF_T *)ptr;
@@ -204,11 +232,24 @@ void stdGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res)
     ftr->i_size = res->consumed;
 }
 
-inline void outputFooterGen(unsigned char *ptr,
+inline void outputFooterGen(QzSess_T *qz_sess,
                             CpaDcRqResults *res,
                             QzDataFormat_T data_fmt)
 {
-    stdGzipFooterGen(ptr, res);
+    QZ_DEBUG("Generate footer\n");
+
+    unsigned char *ptr = qz_sess->next_dest;
+    switch (data_fmt) {
+    case QZ_DEFLATE_RAW:
+        break;
+    case QZ_DEFLATE_GZIP:
+        stdGzipFooterGen(qz_sess, res);
+        break;
+    case QZ_DEFLATE_GZIP_EXT:
+    default:
+        qzGzipFooterGen(ptr, res);
+        break;
+    }
 }
 
 void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr)
