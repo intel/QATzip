@@ -1541,12 +1541,15 @@ void *qzCompressStreamAndDecompress(void *arg)
     unsigned int slice_sz = 0, done = 0;
     unsigned int consumed = 0, produced = 0;
     unsigned int input_left = 0, last = 0;
+    unsigned int decomp_out_sz = 0;
+    int org_in_sz;
+
     TestArg_T *test_arg = (TestArg_T *) arg;
 
     orig_sz = comp_sz = decomp_sz = test_arg->src_sz;
     orig_src = malloc(orig_sz);
     comp_src = malloc(comp_sz);
-    decomp_src = malloc(orig_sz);
+    decomp_src = calloc(orig_sz, 1);
 
     if (qzGetDefaults(&comp_params) != QZ_OK) {
         QZ_ERROR("Err: get params fail with incorrect compress params.\n");
@@ -1563,6 +1566,8 @@ void *qzCompressStreamAndDecompress(void *arg)
         QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
         return NULL;
     }
+    comp_params.data_fmt = test_arg->params->data_fmt;
+    QZ_DEBUG("*** Data Format: %d ***\n", comp_params.data_fmt);
 
     genRandomData(orig_src, orig_sz);
 
@@ -1587,24 +1592,225 @@ void *qzCompressStreamAndDecompress(void *arg)
             done = 1;
         }
     }
-
+    decomp_out_sz = produced;
     qzEndStream(&comp_sess, &comp_strm);
+
+    QZ_DEBUG("qzCompressStream consumed: %d produced: %d\n", consumed, produced);
+    dumpInputData(produced, comp_src);
+
     comp_sz = produced;
 
     rc = qzDecompress(&decomp_sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
                       (uint32_t *)(&decomp_sz));
     if (rc != QZ_OK) {
         QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+        dumpInputData(produced, comp_src);
         goto exit;
     }
 
-    QZ_DEBUG("verify data..\n");
     if (memcmp(orig_src, decomp_src, orig_sz)) {
         QZ_ERROR("ERROR: Decompression FAILED with size: %d \n!", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpInputData(orig_sz, decomp_src);
         goto exit;
     }
+    QZ_DEBUG("qzDecompress Test PASS\n");
+
+    QZ_DEBUG("*** Decompress Stream Test 1 ***\n");
+    comp_sz = produced;
+    done = 0;
+    consumed = 0;
+    produced = 0;
+    memset(decomp_src, 0, orig_sz);
+
+    while (!done) {
+        input_left      = comp_sz - consumed;
+        comp_strm.in    = comp_src + consumed;
+        comp_strm.out   = decomp_src + produced;
+        comp_strm.in_sz = (input_left > slice_sz) ? slice_sz : input_left;
+        comp_strm.out_sz =  decomp_sz - produced;
+        last = (comp_sz == (consumed + comp_strm.in_sz)) ? 1 : 0;
+        org_in_sz = comp_strm.in_sz;
+
+        rc = qzDecompressStream(&comp_sess, &comp_strm, last);
+        if (rc != QZ_OK) {
+            QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+            goto exit;
+        }
+
+        consumed += comp_strm.in_sz;
+        produced += comp_strm.out_sz;
+
+        QZ_DEBUG("consumed: %d produced: %d input_left: %d last: %d, pending_in: %d, pending_out: %d\n",
+                 consumed, produced, input_left, last, comp_strm.pending_in,
+                 comp_strm.pending_out);
+        if (1 == last && 0 == comp_strm.pending_in && 0 == comp_strm.pending_out &&
+            org_in_sz == comp_strm.in_sz) {
+            done = 1;
+        }
+    }
+
+    QZ_DEBUG("Total consumed: %d produced: %d\n", consumed, produced);
+    QZ_DEBUG("verify data of size %d ...\n", orig_sz);
+    if (produced != orig_sz || consumed != decomp_out_sz ||
+        memcmp(orig_src, decomp_src, orig_sz)) {
+        QZ_ERROR("ERROR: Memory compare FAILED with size: %d \n!", orig_sz);
+        dumpInputData(orig_sz, orig_src);
+        dumpInputData(orig_sz, decomp_src);
+        goto exit;
+    }
+    QZ_DEBUG("*** Decompress Stream Test 1 PASS ***\n");
+
+    if (comp_params.data_fmt != QZ_DEFLATE_GZIP_EXT) {
+        goto test_2_end;
+    }
+    QZ_DEBUG("*** Decompress Stream Test 2 ***\n");
+    done = 0;
+    consumed = 0;
+    produced = 0;
+    memset(decomp_src, 0, orig_sz);
+    QzGzH_T hdr;
+    int offset = 0;
+
+    while (!done) {
+        if (QZ_OK != qzGzipHeaderExt(comp_src + offset, &hdr)) {
+            QZ_ERROR("ERROR: extracting header failed\n");
+            goto exit;
+        }
+        input_left      = comp_sz - consumed;
+        comp_strm.in    = comp_src + consumed;
+        comp_strm.out   = decomp_src + produced;
+        comp_strm.in_sz = sizeof(QzGzH_T) + hdr.extra.qz_e.dest_sz + sizeof(StdGzF_T);
+        comp_strm.out_sz =  decomp_sz - produced;
+        last = 1;
+        offset += comp_strm.in_sz;
+
+        rc = qzDecompressStream(&comp_sess, &comp_strm, last);
+        if (rc != QZ_OK) {
+            QZ_ERROR("ERROR: Memcmp with return value: %d\n", rc);
+            goto exit;
+        }
+
+        consumed += comp_strm.in_sz;
+        produced += comp_strm.out_sz;
+
+        if (offset == comp_sz) {
+            done = 1;
+        }
+    }
+
+    QZ_DEBUG("Total consumed: %d produced: %d\n", consumed, produced);
+    QZ_DEBUG("verify data of size %d ...\n", orig_sz);
+    if (produced != orig_sz || consumed != decomp_out_sz ||
+        memcmp(orig_src, decomp_src, orig_sz)) {
+        QZ_ERROR("ERROR: Decompression FAILED with size: %d \n!", orig_sz);
+        dumpInputData(orig_sz, orig_src);
+        dumpInputData(orig_sz, decomp_src);
+
+        goto exit;
+    }
+    QZ_DEBUG("*** Decompress Stream Test 2 PASS ***\n");
+test_2_end:
+
+    if (comp_params.data_fmt == QZ_DEFLATE_GZIP_EXT) {
+        goto test_3_end;
+    }
+    QZ_DEBUG("*** Decompress Stream Test 3 ***\n");
+    done = 0;
+    consumed = 0;
+    produced = 0;
+    memset(decomp_src, 0, orig_sz);
+
+    while (!done) {
+        input_left      = comp_sz - consumed;
+        comp_strm.in    = comp_src + consumed;
+        comp_strm.out   = decomp_src + produced;
+        comp_strm.in_sz = (input_left > 256) ? 256 : input_left;
+        comp_strm.out_sz =  decomp_sz - produced;
+        last = 1;
+        org_in_sz = comp_strm.in_sz;
+
+        rc = qzDecompressStream(&comp_sess, &comp_strm, last);
+        if (rc != QZ_OK) {
+            QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+            goto exit;
+        }
+
+        consumed += comp_strm.in_sz;
+        produced += comp_strm.out_sz;
+
+        QZ_DEBUG("consumed: %d produced: %d input_left: %d last: %d, pending_in: %d, pending_out: %d "
+                 "org_in_sz: %d in_sz: %d\n",
+                 consumed, produced, input_left, last, comp_strm.pending_in,
+                 comp_strm.pending_out,
+                 org_in_sz, comp_strm.in_sz);
+
+        if (1 == last && 0 == comp_strm.pending_in && 0 == comp_strm.pending_out &&
+            org_in_sz == comp_strm.in_sz && produced == orig_sz &&
+            comp_sz - consumed == 0) {
+            done = 1;
+        }
+    }
+
+    QZ_DEBUG("Total consumed: %d produced: %d\n", consumed, produced);
+    QZ_DEBUG("verify data of size %d ...\n", orig_sz);
+    if (produced != orig_sz || consumed != decomp_out_sz ||
+        memcmp(orig_src, decomp_src, orig_sz)) {
+        QZ_ERROR("ERROR: Memory compare FAILED with size: %d \n!", orig_sz);
+        dumpInputData(orig_sz, orig_src);
+        dumpInputData(orig_sz, decomp_src);
+        goto exit;
+    }
+    QZ_DEBUG("*** Decompress Stream Test 3 PASS***\n");
+test_3_end:
+
+    QZ_DEBUG("*** Decompress Stream Test 4 ***\n");
+    done = 0;
+    consumed = 0;
+    produced = 0;
+    memset(decomp_src, 0, orig_sz);
+
+    while (!done) {
+        input_left      = comp_sz - consumed;
+        comp_strm.in    = comp_src + consumed;
+        comp_strm.out   = decomp_src + produced;
+        comp_strm.in_sz = (input_left > slice_sz) ? slice_sz : input_left;
+        comp_strm.out_sz =  decomp_sz - produced;
+        last = (comp_sz == (consumed + comp_strm.in_sz)) ? 1 : 0;
+        org_in_sz = comp_strm.in_sz;
+
+        rc = qzDecompressStream(&comp_sess, &comp_strm, last);
+        if (rc != QZ_OK) {
+            QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+            goto exit;
+        }
+
+        consumed += comp_strm.in_sz;
+        produced += comp_strm.out_sz;
+
+        QZ_DEBUG("consumed: %d produced: %d input_left: %d last: %d, pending_in: %d, pending_out: %d "
+                 "org_in_sz: %d in_sz: %d\n",
+                 consumed, produced, input_left, last, comp_strm.pending_in,
+                 comp_strm.pending_out,
+                 org_in_sz, comp_strm.in_sz);
+
+        if (1 == last && 0 == comp_strm.pending_in && 0 == comp_strm.pending_out &&
+            org_in_sz == comp_strm.in_sz && produced == orig_sz &&
+            comp_sz - consumed == 0) {
+            done = 1;
+        }
+    }
+
+    QZ_DEBUG("Total consumed: %d produced: %d\n", consumed, produced);
+    QZ_DEBUG("verify data of size %d ...\n", orig_sz);
+    if (produced != orig_sz || consumed != decomp_out_sz ||
+        memcmp(orig_src, decomp_src, orig_sz)) {
+        QZ_ERROR("ERROR: Memory compare FAILED with size: %d \n!", orig_sz);
+        dumpInputData(orig_sz, orig_src);
+        dumpInputData(orig_sz, decomp_src);
+        goto exit;
+    }
+    QZ_DEBUG("*** Decompress Stream Test 4 PASS***\n");
 
     QZ_PRINT("Compress Stream and Decompress function test: PASS\n");
 

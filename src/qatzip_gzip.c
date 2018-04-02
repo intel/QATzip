@@ -195,7 +195,7 @@ int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr)
         h->std_hdr.os           != 255              || \
         h->x_len                != sizeof(h->extra) || \
         h->extra.x2_len         != sizeof(h->extra.qz_e)) {
-        QZ_ERROR("id1: %x, id2: %x, st1: %c, st2: %c, cm: %d, flag: %d,"
+        QZ_DEBUG("id1: %x, id2: %x, st1: %c, st2: %c, cm: %d, flag: %d,"
                  "xfl: %d, os: %d, x_len: %d, x2_len: %d\n",
                  h->std_hdr.id1, h->std_hdr.id2, h->extra.st1, h->extra.st2,
                  h->std_hdr.cm, h->std_hdr.flag, h->std_hdr.xfl, h->std_hdr.os,

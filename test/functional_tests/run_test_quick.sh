@@ -211,6 +211,9 @@ if $test_main -m 1 -t 3 -l 8 && \
    $test_main -m 7 -t 1 -l 8 && \
    $test_main -m 8 && \
    $test_main -m 9 && \
+   $test_main -m 9 -O deflate && \
+   $test_main -m 9 -O gzip && \
+   $test_main -m 9 -O gzipext && \
    $test_main -m 10
 then
     echo "Functional tests OK"

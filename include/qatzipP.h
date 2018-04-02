@@ -153,6 +153,8 @@ typedef struct QzSess_S {
     unsigned char *next_dest;
 
     int force_sw;
+    int inflate_init;
+    void *strm;
     z_stream *inflate_strm;
     unsigned long qz_in_len;
     unsigned long qz_out_len;

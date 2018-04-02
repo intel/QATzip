@@ -193,10 +193,17 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
 {
     z_stream *stream = NULL;
     int ret = QZ_OK;
+    int zlib_ret = Z_OK;
+    QzDataFormat_T data_fmt;
+    int windows_bits = 0;
+    unsigned int total_in;
+    unsigned int total_out;
 
     QzSess_T *qz_sess = (QzSess_T *) sess->internal;
     qz_sess->force_sw = 1;
     stream = qz_sess->inflate_strm;
+    data_fmt = qz_sess->sess_params.data_fmt;
+
     if (NULL == stream) {
         stream = malloc(sizeof(z_stream));
         if (NULL == stream) {
@@ -214,33 +221,69 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     stream->next_out  = (Bytef *)dest;
     stream->avail_out = *compressed_buffer_len;
 
-    /*gunzip*/
-    ret = inflateInit2(stream, MAX_WBITS + GZIP_WRAPPER);
-    if (Z_OK != ret) {
-        ret = QZ_FAIL;
-        goto done;
+    QZ_DEBUG("decomp_sw data_fmt: %d\n", data_fmt);
+    switch (data_fmt) {
+    case QZ_DEFLATE_RAW:
+        windows_bits = -MAX_WBITS;
+        break;
+    case QZ_DEFLATE_GZIP:
+    case QZ_DEFLATE_GZIP_EXT:
+    default:
+        windows_bits = MAX_WBITS + GZIP_WRAPPER;
+        break;
     }
 
-    ret = inflate(stream, Z_FINISH);
+    if (qz_sess->strm == NULL || !qz_sess->inflate_init) {
+        ret = inflateInit2(stream, windows_bits);
+        if (Z_OK != ret) {
+            ret = QZ_FAIL;
+            goto done;
+        }
+        QZ_DEBUG("\n****** inflate init done with win_bits: %d *****\n", windows_bits);
+        qz_sess->inflate_init = 1;
+        stream->total_in = 0;
+        total_in = 0;
+        stream->total_out = 0;
+        total_out = 0;
+    } else {
+        total_in = GET_LOWER_32BITS(stream->total_in);
+        total_out = GET_LOWER_32BITS(stream->total_out);
+    }
+
+
+    ret = inflate(stream, Z_SYNC_FLUSH);
+    zlib_ret = ret;
     if ((ret == Z_OK) || (ret == Z_STREAM_END)) {
         ret = QZ_OK;
     } else if (Z_DATA_ERROR == ret) {
+        QZ_DEBUG("ERR: inflate failed with Z_DATA_ERROR\n");
         ret = QZ_DATA_ERROR;
         goto done;
     } else {
-        QZ_ERROR("ERR: inflate failed with error code %d\n", ret);
+        QZ_DEBUG("ERR: inflate failed with error code %d\n", ret);
         ret = QZ_FAIL;
         goto done;
     }
 
-    *compressed_buffer_len = GET_LOWER_32BITS(stream->total_out);
-    *uncompressed_buf_len = GET_LOWER_32BITS(stream->total_in);
+    *compressed_buffer_len = GET_LOWER_32BITS(stream->total_out - total_out);
+    *uncompressed_buf_len = GET_LOWER_32BITS(stream->total_in - total_in);
 
 done:
-    if (NULL != stream) {
+    QZ_DEBUG("Exit qzSWDecompress total_in: %u total_out: %u "
+             "avail_in: %u avail_out: %u msg: %s "
+             "src_len: %u dest_len: %u\n",
+             stream->total_in, stream->total_out,
+             stream->avail_in, stream->avail_out,
+             stream->msg,
+             *uncompressed_buf_len,
+             *compressed_buffer_len);
+    if (qz_sess->strm == NULL || zlib_ret == Z_STREAM_END) {
         if (Z_OK != inflateEnd(stream)) {
+            QZ_DEBUG("inflateEnd failed.\n");
             ret = QZ_FAIL;
         }
+        qz_sess->inflate_init = 0;
+        QZ_DEBUG("\n****** inflate end done *****\n");
     }
 
     return ret;
@@ -260,7 +303,10 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
 #ifdef QATZIP_DEBUG
     insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
 #endif
-    while (total_in < input_len) {
+    QZ_DEBUG("Start qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
+             *uncompressed_buf_len, *compressed_buffer_len);
+
+    while (total_in < input_len && total_out < output_len) {
         ret = qzSWDecompress(sess,
                              src + total_in,
                              &cur_input_len,
@@ -279,5 +325,7 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
     }
 
 out:
+    QZ_DEBUG("Exit qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
+             *uncompressed_buf_len, *compressed_buffer_len);
     return ret;
 }
