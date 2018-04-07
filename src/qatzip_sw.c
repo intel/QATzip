@@ -106,7 +106,6 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     case QZ_DEFLATE_RAW:
         windows_bits = -MAX_WBITS;
         break;
-    case QZ_DEFLATE_GZIP:
     case QZ_DEFLATE_GZIP_EXT:
     default:
         windows_bits = MAX_WBITS + GZIP_WRAPPER;
@@ -131,8 +130,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
             return QZ_FAIL;
         }
 
-        if (QZ_DEFLATE_GZIP != data_fmt &&
-            QZ_DEFLATE_RAW != data_fmt) {
+        if (QZ_DEFLATE_RAW != data_fmt) {
             gen_qatzip_hdr(&hdr);
             if (Z_OK != deflateSetHeader(&stream, &hdr)) {
                 return QZ_FAIL;

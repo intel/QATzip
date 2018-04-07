@@ -159,6 +159,7 @@ typedef struct QzSess_S {
     unsigned long qz_in_len;
     unsigned long qz_out_len;
     unsigned long *crc32;
+    unsigned int last;
 } QzSess_T;
 
 typedef struct QzStreamBuf_S {
@@ -216,19 +217,16 @@ typedef struct QzMem_S {
 
 void dumpAllCounters(void);
 int qzSetupHW(QzSession_T *sess, int i);
-unsigned long stdGzipHeaderSz(void);
 unsigned long qzGzipHeaderSz(void);
 unsigned long stdGzipFooterSz(void);
 unsigned long outputHeaderSz(QzDataFormat_T data_fmt);
 unsigned long outputFooterSz(QzDataFormat_T data_fmt);
-void stdGzipHeaderGen(unsigned char *ptr);
 void qzGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr);
 void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      QzDataFormat_T data_fmt);
 void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res);
-void stdGzipFooterGen(QzSess_T *qz_sess, CpaDcRqResults *res);
 void outputFooterGen(QzSess_T *qz_sess,
                      CpaDcRqResults *res,
                      QzDataFormat_T data_fmt);

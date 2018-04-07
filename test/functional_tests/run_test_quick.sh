@@ -137,6 +137,51 @@ function inputFileTest()
     return $rc
 }
 
+#Compress with streaming API and valide with gunzip
+function streamingCompressFileTest()
+{
+    local test_file_name=$1
+    local fmt_list="gzipext"
+    local rc=0
+
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    for fmt_opt in $fmt_list
+    do
+        rm -f $test_file_name $test_file_name.gz
+
+        cp -f $test_file_path/$test_file_name ./
+        orig_checksum=`md5sum $test_file_name`
+        if $test_main -m 11 -O $fmt_opt -i $test_file_name && \
+            gzip -df "$test_file_name.gz"
+        then
+            echo "(De)Compress $test_file_name OK";
+            rc=0
+        else
+            echo "(De)Compress $test_file_name Failed";
+            rc=1
+        fi
+        new_checksum=`md5sum $test_file_name`
+
+        if [[ $new_checksum != $orig_checksum ]]
+        then
+            echo "Checksum mismatch, huge file test failed."
+            rc=1
+        fi
+
+        if [ $rc -eq 1 ]
+        then
+            break 1;
+        fi
+    done
+
+    return $rc
+}
+
 #insufficent huge page memory, switch to sw
 function switch_to_sw_failover_in_insufficent_HP()
 {
@@ -210,11 +255,11 @@ if $test_main -m 1 -t 3 -l 8 && \
    $test_main -m 6 && \
    $test_main -m 7 -t 1 -l 8 && \
    $test_main -m 8 && \
-   $test_main -m 9 && \
    $test_main -m 9 -O deflate && \
-   $test_main -m 9 -O gzip && \
    $test_main -m 9 -O gzipext && \
-   $test_main -m 10
+   $test_main -m 10 -l 1000  -t 1 && \
+   streamingCompressFileTest $sample_file_name && \
+   $test_main -m 12
 then
     echo "Functional tests OK"
 else

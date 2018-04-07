@@ -48,11 +48,6 @@
 
 #pragma pack(push, 1)
 
-inline unsigned long stdGzipHeaderSz(void)
-{
-    return sizeof(StdGzH_T);
-}
-
 inline unsigned long qzGzipHeaderSz(void)
 {
     return sizeof(QzGzH_T);
@@ -70,7 +65,6 @@ inline unsigned long outputFooterSz(QzDataFormat_T data_fmt)
     case QZ_DEFLATE_RAW:
         size = 0;
         break;
-    case QZ_DEFLATE_GZIP:
     case QZ_DEFLATE_GZIP_EXT:
     default:
         size = stdGzipFooterSz();
@@ -87,9 +81,6 @@ unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
     switch (data_fmt) {
     case QZ_DEFLATE_RAW:
         break;
-    case QZ_DEFLATE_GZIP:
-        size = stdGzipHeaderSz();
-        break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
         size = qzGzipHeaderSz();
@@ -97,24 +88,6 @@ unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
     }
 
     return size;
-}
-
-void stdGzipHeaderGen(unsigned char *ptr)
-{
-    assert(ptr != NULL);
-    StdGzH_T *hdr;
-
-    hdr = (StdGzH_T *)ptr;
-    hdr->id1      = 0x1f;
-    hdr->id2      = 0x8b;
-    hdr->cm       = QZ_DEFLATE;
-    hdr->flag     = 0x00; /*No extra BIT*/
-    hdr->mtime[0] = (char)0;
-    hdr->mtime[1] = (char)0;
-    hdr->mtime[2] = (char)0;
-    hdr->mtime[3] = (char)0;
-    hdr->xfl      = 0;
-    hdr->os       = 255;
 }
 
 void qzGzipHeaderExtraFieldGen(unsigned char *ptr, CpaDcRqResults *res)
@@ -158,9 +131,6 @@ void outputHeaderGen(unsigned char *ptr,
 
     switch (data_fmt) {
     case QZ_DEFLATE_RAW:
-        break;
-    case QZ_DEFLATE_GZIP:
-        stdGzipHeaderGen(ptr);
         break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
@@ -207,20 +177,6 @@ int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr)
     return QZ_OK;
 }
 
-
-void stdGzipFooterGen(QzSess_T *qz_sess, CpaDcRqResults *res)
-{
-    assert(NULL != qz_sess);
-    assert(NULL != qz_sess->crc32);
-    unsigned char *ptr = qz_sess->next_dest;
-    assert(NULL != ptr);
-    assert(NULL != res);
-    StdGzF_T *ftr = (StdGzF_T *)ptr;
-
-    ftr->crc32 = GET_LOWER_32BITS(*qz_sess->crc32);
-    ftr->i_size = GET_LOWER_32BITS(qz_sess->qz_in_len);
-}
-
 void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res)
 {
     assert(NULL != ptr);
@@ -241,9 +197,6 @@ inline void outputFooterGen(QzSess_T *qz_sess,
     unsigned char *ptr = qz_sess->next_dest;
     switch (data_fmt) {
     case QZ_DEFLATE_RAW:
-        break;
-    case QZ_DEFLATE_GZIP:
-        stdGzipFooterGen(qz_sess, res);
         break;
     case QZ_DEFLATE_GZIP_EXT:
     default:

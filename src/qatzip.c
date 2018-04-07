@@ -71,6 +71,7 @@ const char *g_dev_tag = "QATZIP";
                                    QZ_NOSW_NO_HW == rc || \
                                    QZ_FAIL == rc)
 
+#define IS_DEFLATE(fmt)  (QZ_DEFLATE_RAW == (fmt))
 #define IS_DEFLATE_OR_GZIP(fmt) \
         (QZ_DEFLATE_RAW == (fmt) || QZ_DEFLATE_GZIP == (fmt))
 
@@ -85,6 +86,7 @@ QzSessionParams_T g_sess_params_default = {
     .max_forks         = QZ_MAX_FORK_DEFAULT,
     .sw_backup         = QZ_SW_BACKUP_DEFAULT,
     .hw_buff_sz        = QZ_HW_BUFF_SZ,
+    .strm_buff_sz      = QZ_STRM_BUFF_SZ_DEFAULT,
     .input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
     .req_cnt_thrshold  = QZ_REQ_THRESHOLD_DEFAULT
 };
@@ -162,17 +164,15 @@ exit:
 
 static void clearDevices(QzHardware_T *qat_hw)
 {
-    if (NULL == qat_hw) {
+    if (NULL == qat_hw || 0 == qat_hw->dev_num) {
         return;
     }
 
-    if (qat_hw->dev_num) {
-        for (int i = 0; i < qat_hw->max_dev_id; i++) {
-            QzInstanceList_T *inst = getInstance(i, qat_hw);
-            while (inst) {
-                free(inst);
-                inst = getInstance(i, qat_hw);
-            }
+    for (int i = 0; i < qat_hw->max_dev_id; i++) {
+        QzInstanceList_T *inst = getInstance(i, qat_hw);
+        while (inst) {
+            free(inst);
+            inst = getInstance(i, qat_hw);
         }
     }
 }
@@ -310,6 +310,8 @@ static int qz_sessParamsCheck(QzSessionParams_T *params)
         params->sw_backup > 1                                 ||
         params->hw_buff_sz < QZ_HW_BUFF_MIN_SZ                ||
         params->hw_buff_sz > QZ_HW_BUFF_MAX_SZ                ||
+        params->strm_buff_sz < QZ_STRM_BUFF_MIN_SZ            ||
+        params->strm_buff_sz > QZ_STRM_BUFF_MAX_SZ            ||
         (params->hw_buff_sz & (params->hw_buff_sz - 1))       ||
         params->input_sz_thrshold < QZ_COMP_THRESHOLD_MINIMUM ||
         params->input_sz_thrshold > QZ_HW_BUFF_MAX_SZ         ||
@@ -946,8 +948,6 @@ int qzSetupHW(QzSession_T *sess, int i)
 done_sess:
     return rc;
 }
-#define IS_DEFLATE_OR_GZIP(fmt) \
-        (QZ_DEFLATE_RAW == (fmt) || QZ_DEFLATE_GZIP == (fmt))
 
 /* The internal function to send the comrpession request
  * to the QAT hardware
@@ -976,7 +976,7 @@ static void *doCompressIn(void *in)
     remaining = *(qz_sess->src_sz);
     src_sz = qz_sess->sess_params.hw_buff_sz;
     data_fmt = qz_sess->sess_params.data_fmt;
-    flush = IS_DEFLATE_OR_GZIP(data_fmt) ? CPA_DC_FLUSH_FULL : CPA_DC_FLUSH_FINAL;
+    flush = IS_DEFLATE(data_fmt) ? CPA_DC_FLUSH_FULL : CPA_DC_FLUSH_FINAL;
     QZ_DEBUG("doCompressIn: Need to g_process %ld bytes\n", remaining);
 
     done = 1;
@@ -995,7 +995,9 @@ static void *doCompressIn(void *in)
 
         g_process.qz_inst[i].stream[j].src1++; /*this buffer is in use*/
         src_send_sz = (remaining < src_sz) ? remaining : src_sz;
-        if (IS_DEFLATE_OR_GZIP(data_fmt) && remaining <= src_sz) {
+        if (IS_DEFLATE(data_fmt) &&
+            1 == qz_sess->last &&
+            remaining <= src_sz) {
             flush = CPA_DC_FLUSH_FINAL;
         }
         g_process.qz_inst[i].stream[j].seq = qz_sess->seq; /*this buffer is in use*/
@@ -1168,12 +1170,9 @@ static void *doCompressOut(void *in)
                     continue;
                 }
 
-                if ((IS_DEFLATE_OR_GZIP(data_fmt) && 0 == qz_sess->processed) ||
-                    QZ_DEFLATE_GZIP_EXT == data_fmt) {
-                    outputHeaderGen(qz_sess->next_dest, resl, data_fmt);
-                    qz_sess->next_dest += outputHeaderSz(data_fmt);
-                    qz_sess->qz_out_len += outputHeaderSz(data_fmt);
-                }
+                outputHeaderGen(qz_sess->next_dest, resl, data_fmt);
+                qz_sess->next_dest += outputHeaderSz(data_fmt);
+                qz_sess->qz_out_len += outputHeaderSz(data_fmt);
 
                 if (dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq)) {
                     g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
@@ -1197,13 +1196,9 @@ static void *doCompressOut(void *in)
                 }
 
                 qz_sess->qz_out_len += resl->produced;
-                if ((IS_DEFLATE_OR_GZIP(data_fmt) &&
-                     (qz_sess->processed + 1) == qz_sess->submitted) ||
-                    QZ_DEFLATE_GZIP_EXT == data_fmt) {
-                    outputFooterGen(qz_sess, resl, data_fmt);
-                    qz_sess->next_dest += outputFooterSz(data_fmt);
-                    qz_sess->qz_out_len += outputFooterSz(data_fmt);
-                }
+                outputFooterGen(qz_sess, resl, data_fmt);
+                qz_sess->next_dest += outputFooterSz(data_fmt);
+                qz_sess->qz_out_len += outputFooterSz(data_fmt);
 
                 if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
                     g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
@@ -1311,7 +1306,6 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     unsigned int out_len;
     QzSess_T *qz_sess;
     int rc;
-    unsigned long temp_crc = 0;
 
     if (NULL == sess     || \
         NULL == src      || \
@@ -1345,14 +1339,13 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
 
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
     if (data_fmt != QZ_DEFLATE_RAW &&
-        data_fmt != QZ_DEFLATE_GZIP &&
         data_fmt != QZ_DEFLATE_GZIP_EXT) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
         return QZ_PARAMS;
     }
     QZ_DEBUG("qzCompressCrc data_fmt: %d\n", data_fmt);
 
-    qz_sess->crc32 = (NULL == crc) ? &temp_crc : crc;
+    qz_sess->crc32 = crc;
 
     if (*src_len < qz_sess->sess_params.input_sz_thrshold ||
         g_process.qz_init_status == QZ_NO_HW              ||
@@ -1418,6 +1411,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     qz_sess->src_sz = src_len;
     qz_sess->dest_sz = dest_len;
     qz_sess->next_dest = (unsigned char *)dest;
+    qz_sess->last = last;
 
     reqcnt = *src_len / qz_sess->sess_params.hw_buff_sz;
     if (*src_len % qz_sess->sess_params.hw_buff_sz) {
@@ -1533,7 +1527,7 @@ static void *doDecompressIn(void *in)
     src_pinned = qzMemFindAddr(src_ptr);
     dest_pinned = qzMemFindAddr(dest_ptr);
     remaining = (long)(*qz_sess->src_sz);
-    QZ_DEBUG("doCompressIn: Need to g_process %ld bytes\n", remaining);
+    QZ_DEBUG("doDecompressIn: Need to g_process %ld bytes\n", remaining);
     done = 1;
     src_avail_len = *(qz_sess->src_sz);
     dest_avail_len = *(qz_sess->dest_sz);
@@ -2125,7 +2119,7 @@ static int initStream(QzSession_T *sess, QzStream_T *strm)
     }
 
     stream_buf->out_offset = 0;
-    stream_buf->buf_len = DEST_SZ(qz_sess->sess_params.hw_buff_sz);
+    stream_buf->buf_len = qz_sess->sess_params.strm_buff_sz;
     stream_buf->in_buf = qzMalloc(stream_buf->buf_len, 0, PINNED_MEM);
     stream_buf->out_buf = qzMalloc(stream_buf->buf_len, 0, PINNED_MEM);
     if (NULL == stream_buf->in_buf ||
@@ -2133,6 +2127,7 @@ static int initStream(QzSession_T *sess, QzStream_T *strm)
         QZ_ERROR("Fail to allocate memory for QzStreamBuf");
         return QZ_FAIL;
     }
+    QZ_DEBUG("Allocate stream buf %u\n", stream_buf->buf_len);
 
     strm->pending_in = 0;
     strm->pending_out = 0;
@@ -2150,6 +2145,8 @@ static unsigned int copyStreamInput(QzStream_T *strm, unsigned char *in)
     avail_in = stream_buf->buf_len - strm->pending_in;
     cpy_cnt = (strm->in_sz > avail_in) ? avail_in : strm->in_sz;
     QZ_MEMCPY(stream_buf->in_buf + strm->pending_in, in, cpy_cnt, cpy_cnt);
+    QZ_DEBUG("Copy to input from %p, to %p, count %u\n",
+             in, stream_buf->in_buf + strm->pending_in, cpy_cnt);
 
     strm->pending_in += cpy_cnt;
     strm->in_sz -= cpy_cnt;
@@ -2182,11 +2179,12 @@ static unsigned int copyStreamOutput(QzStream_T *strm, unsigned char *out)
 int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 {
     int rc = QZ_FAIL;
-    unsigned long crc = 0;
+    unsigned long *strm_crc = NULL;
     unsigned int input_len = 0;
     unsigned int output_len = 0;
-    unsigned int copied_input = 0;
     unsigned int copied_output = 0;
+    unsigned int copied_input = 0;
+    unsigned int orig_pending_in = 0;
     unsigned int consumed = 0;
     unsigned int produced = 0;
     QzStreamBuf_T *stream_buf = NULL;
@@ -2207,6 +2205,17 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         }
     }
 
+    switch (strm->crc_type) {
+    case QZ_CRC64:
+        strm_crc = (unsigned long *)&strm->crc_32;
+        break;
+    case QZ_CRC32:
+    case QZ_ADLER:
+    default:
+        strm_crc = (unsigned long *)&strm->crc_64;
+        break;
+    }
+
     /*check if setupSession called*/
     if (NULL == sess->internal) {
         rc = qzSetupSession(sess, NULL);
@@ -2217,9 +2226,8 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     qz_sess = (QzSess_T *)(sess->internal);
     data_fmt = qz_sess->sess_params.data_fmt;
     if (data_fmt != QZ_DEFLATE_RAW &&
-        data_fmt != QZ_DEFLATE_GZIP &&
         data_fmt != QZ_DEFLATE_GZIP_EXT) {
-        QZ_ERROR("Unknown data formt: %d\n", data_fmt);
+        QZ_ERROR("Invalid data formt: %d\n", data_fmt);
         return QZ_PARAMS;
     }
 
@@ -2239,8 +2247,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
             goto done;
         }
 
-        copied_input = copyStreamInput(strm, strm->in + consumed);
-        consumed += copied_input;
+        copied_input += copyStreamInput(strm, strm->in + consumed);
 
         if (strm->pending_in < stream_buf->buf_len &&
             last != 1) {
@@ -2248,20 +2255,29 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
             goto done;
         }
 
+        orig_pending_in += strm->pending_in - copied_input;
+        copied_input = 0;
         input_len = strm->pending_in;
         output_len = stream_buf->buf_len;
 
         rc = qzCompressCrc(sess, stream_buf->in_buf, &input_len,
-                           stream_buf->out_buf, &output_len, last, &crc);
+                           stream_buf->out_buf, &output_len, last, strm_crc);
 
-        assert(input_len == strm->pending_in);
         strm->pending_in = 0;
         strm->pending_out = output_len;
         copied_output = copyStreamOutput(strm, strm->out + produced);
+        consumed += input_len;
         produced += copied_output;
 
-        if (QZ_DEFLATE_RAW != data_fmt) {
-            crc = 0;
+        if (QZ_BUF_ERROR == rc) {
+            if (0 == input_len) {
+                QZ_ERROR("ERROR in copy stream output, stream buf size = %u\n",
+                         stream_buf->buf_len);
+                rc = QZ_FAIL;
+            } else {
+                rc = QZ_OK;
+            }
+            goto done;
         }
 
         if (QZ_OK != rc) {
@@ -2271,23 +2287,8 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
 
 done:
-    if (QZ_OK == rc) {
-        switch (strm->crc_type) {
-        case NONE:
-            break;
-        case QZ_CRC64:
-            strm->crc_64 = crc;
-            break;
-        case QZ_ADLER:
-        case QZ_CRC32:
-        default:
-            strm->crc_32 = GET_LOWER_32BITS(crc);
-            break;
-        }
-    }
-
     if (NULL != strm) {
-        strm->in_sz = consumed;
+        strm->in_sz = copied_input + (consumed - orig_pending_in);
         strm->out_sz = produced;
     }
 

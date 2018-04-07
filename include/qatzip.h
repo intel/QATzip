@@ -291,6 +291,9 @@ typedef struct QzSessionParams_S {
     unsigned int hw_buff_sz;
     /**<default buffer size, Must be a power of 2*/
     /**< 4K,8K,16K,32K,64K,128K */
+    unsigned int strm_buff_sz;
+    /**<stream buffer size between [1K .. 2M - 5K] */
+    /**<default strm_buf_sz equals to hw_buff_sz */
     unsigned int input_sz_thrshold;
     /**<default threshold of compression service's input size */
     /**<for sw failover, if the size of input request less */
@@ -345,6 +348,9 @@ typedef struct QzStream_S {
 #define QZ_HW_BUFF_SZ                (64*1024)
 #define QZ_HW_BUFF_MIN_SZ            (1*1024)
 #define QZ_HW_BUFF_MAX_SZ            (512*1024)
+#define QZ_STRM_BUFF_SZ_DEFAULT      QZ_HW_BUFF_SZ
+#define QZ_STRM_BUFF_MIN_SZ          (1*1024)
+#define QZ_STRM_BUFF_MAX_SZ          (2*1024*1024 - 5*1024)
 #define QZ_COMP_THRESHOLD_DEFAULT    1024
 #define QZ_COMP_THRESHOLD_MINIMUM    128
 #define QZ_REQ_THRESHOLD_MINIMUM     1
