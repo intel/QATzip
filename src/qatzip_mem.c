@@ -204,4 +204,6 @@ void qzFree(void *m)
     } else {
         free(m);
     }
+
+    m = NULL;
 }
