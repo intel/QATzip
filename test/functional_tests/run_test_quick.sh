@@ -155,7 +155,7 @@ function streamingCompressFileTest()
         rm -f $test_file_name $test_file_name.gz
 
         cp -f $test_file_path/$test_file_name ./
-        orig_checksum=`md5sum $test_file_name`
+        orig_checksum=`md5sum $test_file_name | awk '{print $1}'`
         if $test_main -m 11 -O $fmt_opt -i $test_file_name && \
             gzip -df "$test_file_name.gz"
         then
@@ -165,7 +165,7 @@ function streamingCompressFileTest()
             echo "(De)Compress $test_file_name Failed";
             rc=1
         fi
-        new_checksum=`md5sum $test_file_name`
+        new_checksum=`md5sum $test_file_name | awk '{print $1}'`
 
         if [[ $new_checksum != $orig_checksum ]]
         then
@@ -178,6 +178,48 @@ function streamingCompressFileTest()
             break 1;
         fi
     done
+
+    return $rc
+}
+
+#Decompress with streaming API and valide with gunzip
+function streamingDecompressFileTest()
+{
+    local test_file_name=$1
+    local rc=0
+    local suffix="decomp"
+
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    rm -f $test_file_name $test_file_name.gz $test_file_name.gz.$suffix
+
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name | awk '{print $1}'`
+    gzip "$test_file_name"
+    if $test_main -m 12 -O gzip -i $test_file_name.gz
+    then
+        echo "Decompress $test_file_name.gz OK";
+        rc=0
+    else
+        echo "Decompress $test_file_name.gz Failed";
+        rc=1
+    fi
+    new_checksum=`md5sum $test_file_name.gz.$suffix | awk '{print $1}'`
+
+    if [[ $new_checksum != $orig_checksum ]]
+    then
+        echo "Checksum mismatch, huge file test failed."
+        rc=1
+    fi
+
+    if [ $rc -eq 1 ]
+    then
+        break 1;
+    fi
 
     return $rc
 }
@@ -241,6 +283,7 @@ function resume_hw_comp_when_insufficent_HP()
 # 2. Very basic misc functional tests
 
 echo "Performing misc functional tests..."
+
 if $test_main -m 1 -t 3 -l 8 && \
     # ignore test2 output (too verbose) \
    $test_main -m 2 -t 3 -l 8 > /dev/null && \
@@ -259,7 +302,8 @@ if $test_main -m 1 -t 3 -l 8 && \
    $test_main -m 9 -O gzipext && \
    $test_main -m 10 -l 1000  -t 1 && \
    streamingCompressFileTest $sample_file_name && \
-   $test_main -m 12
+   streamingDecompressFileTest $sample_file_name && \
+   $test_main -m 13
 then
     echo "Functional tests OK"
 else

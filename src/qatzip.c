@@ -893,7 +893,10 @@ int qzSetupHW(QzSession_T *sess, int i)
         /*setup and start DC session*/
         QZ_DEBUG("setup and start DC session %d\n", i);
 
-        qz_sess->session_setup_data.huffType = CPA_DC_HT_STATIC;
+        if (CPA_FALSE == g_process.qz_inst[i].instance_cap.dynamicHuffman) {
+            qz_sess->session_setup_data.huffType = CPA_DC_HT_STATIC;
+        }
+
         qz_sess->sess_status =
             cpaDcGetSessionSize(g_process.dc_inst_handle[i],
                                 &qz_sess->session_setup_data,
@@ -2224,7 +2227,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         NULL == strm     || \
         (last != 0 && last != 1)) {
         rc = QZ_PARAMS;
-        goto done;
+        goto end;
     }
 
     if (NULL == strm->opaque) {
@@ -2288,6 +2291,11 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         output_len = stream_buf->buf_len;
         copied_input -= strm->pending_in;
         strm_last = (0 == strm->in_sz && last) ? 1 : 0;
+        QZ_DEBUG("Before Call qzCompressCrc input_len %u output_len %u "
+                 "stream->pending_in %u stream->pending_out %u "
+                 "stream->in_sz %d stream->out_sz %d\n",
+                 input_len, output_len, strm->pending_in, strm->pending_out,
+                 strm->in_sz, strm->out_sz);
 
         rc = qzCompressCrc(sess, stream_buf->in_buf, &input_len,
                            stream_buf->out_buf, &output_len, strm_last, strm_crc);
@@ -2297,6 +2305,12 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         copied_output = copyStreamOutput(strm, strm->out + produced);
         consumed += input_len;
         produced += copied_output;
+
+        QZ_DEBUG("After Call qzCompressCrc input_len %u output_len %u "
+                 "stream->pending_in %u stream->pending_out %u "
+                 "stream->in_sz %d stream->out_sz %d\n",
+                 input_len, output_len, strm->pending_in, strm->pending_out,
+                 strm->in_sz, strm->out_sz);
 
         if (QZ_BUF_ERROR == rc) {
             if (0 == input_len) {
@@ -2316,11 +2330,14 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
 
 done:
-    if (NULL != strm) {
-        strm->in_sz = copied_input + consumed;
-        strm->out_sz = produced;
-    }
-
+    strm->in_sz = copied_input + consumed;
+    strm->out_sz = produced;
+    QZ_DEBUG("Exit Compress Stream input_len %u output_len %u "
+             "stream->pending_in %u stream->pending_out %u "
+             "stream->in_sz %d stream->out_sz %d\n",
+             input_len, output_len, strm->pending_in, strm->pending_out,
+             strm->in_sz, strm->out_sz);
+end:
     return rc;
 }
 
@@ -2331,9 +2348,9 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     unsigned int input_len = 0;
     unsigned int output_len = 0;
     unsigned int copied_output = 0;
+    unsigned int copied_input = 0;
     unsigned int consumed = 0;
     unsigned int produced = 0;
-    unsigned int copy_input_offset = 0;
     QzStreamBuf_T *stream_buf = NULL;
 
     if (NULL == sess     || \
@@ -2370,8 +2387,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
             goto done;
         }
 
-        copy_input_offset = consumed + strm->pending_in;
-        copyStreamInput(strm, strm->in + copy_input_offset);
+        copied_input += copyStreamInput(strm, strm->in + consumed);
 
         if (strm->pending_in < stream_buf->buf_len &&
             last != 1) {
@@ -2382,6 +2398,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
         input_len = strm->pending_in;
         output_len = stream_buf->buf_len;
+        copied_input -= strm->pending_in;
         QZ_DEBUG("Before Call qzDecompress input_len %u output_len %u "
                  "stream->pending_in %u stream->pending_out %u "
                  "stream->in_sz %d stream->out_sz %d\n",
@@ -2420,7 +2437,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
 
 done:
-    strm->in_sz = input_len;
+    strm->in_sz = copied_input + consumed;
     strm->out_sz = produced;
     QZ_DEBUG("Exit Decompress Stream input_len %u output_len %u "
              "stream->pending_in %u stream->pending_out %u "
