@@ -301,6 +301,8 @@ typedef struct QzSessionParams_S {
     /**<to software */
     unsigned int req_cnt_thrshold;
     /**set between 1 and 4, default 4*/
+    unsigned int enable_cnv;
+    /** 1 Compress And Verify enabled, 0 Disable Compress and Verify */
 } QzSessionParams_T;
 
 /**
@@ -356,6 +358,7 @@ typedef struct QzStream_S {
 #define QZ_REQ_THRESHOLD_MINIMUM     1
 #define QZ_REQ_THRESHOLD_MAXINUM     4
 #define QZ_REQ_THRESHOLD_DEFAULT     4
+#define QZ_REQ_CNV_DEFAULT           1
 /**
  *****************************************************************************
  * @ingroup qatZip

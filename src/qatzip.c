@@ -82,7 +82,8 @@ QzSessionParams_T g_sess_params_default = {
     .hw_buff_sz        = QZ_HW_BUFF_SZ,
     .strm_buff_sz      = QZ_STRM_BUFF_SZ_DEFAULT,
     .input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
-    .req_cnt_thrshold  = QZ_REQ_THRESHOLD_DEFAULT
+    .req_cnt_thrshold  = QZ_REQ_THRESHOLD_DEFAULT,
+    .enable_cnv        = QZ_REQ_CNV_DEFAULT
 };
 
 processData_T g_process = {
@@ -310,7 +311,8 @@ static int qz_sessParamsCheck(QzSessionParams_T *params)
         params->input_sz_thrshold < QZ_COMP_THRESHOLD_MINIMUM ||
         params->input_sz_thrshold > QZ_HW_BUFF_MAX_SZ         ||
         params->req_cnt_thrshold < QZ_REQ_THRESHOLD_MINIMUM   ||
-        params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXINUM) {
+        params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXINUM   ||
+        params->enable_cnv > 1) {
         return FAILURE;
     }
 
@@ -951,7 +953,19 @@ static void *doCompressIn(void *in)
     QzDataFormat_T data_fmt;
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
-    CpaDcFlush flush;
+    unsigned int enable_cnv = qz_sess->sess_params.enable_cnv;
+    CpaDcOpData opData;
+
+    opData.inputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
+    opData.outputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
+    if (enable_cnv) {
+        QZ_DEBUG("Enable CnV\n");
+        opData.compressAndVerify = CPA_TRUE;
+    } else {
+        QZ_DEBUG("Disable CnV\n");
+        opData.compressAndVerify = CPA_FALSE;
+    }
+    opData.flushFlag = CPA_DC_FLUSH_FINAL;
 
     i = qz_sess->inst_hint;
     src_ptr = qz_sess->src;
@@ -961,7 +975,8 @@ static void *doCompressIn(void *in)
     remaining = *(qz_sess->src_sz);
     src_sz = qz_sess->sess_params.hw_buff_sz;
     data_fmt = qz_sess->sess_params.data_fmt;
-    flush = IS_DEFLATE(data_fmt) ? CPA_DC_FLUSH_FULL : CPA_DC_FLUSH_FINAL;
+    opData.flushFlag = IS_DEFLATE(data_fmt) ? CPA_DC_FLUSH_FULL :
+                       CPA_DC_FLUSH_FINAL;
     QZ_DEBUG("doCompressIn: Need to g_process %ld bytes\n", remaining);
 
     done = 1;
@@ -983,11 +998,12 @@ static void *doCompressIn(void *in)
         if (IS_DEFLATE(data_fmt) &&
             1 == qz_sess->last &&
             remaining <= src_sz) {
-            flush = CPA_DC_FLUSH_FINAL;
+            opData.flushFlag = CPA_DC_FLUSH_FINAL;
         }
         g_process.qz_inst[i].stream[j].seq = qz_sess->seq; /*this buffer is in use*/
         qz_sess->seq++;
-        QZ_DEBUG("sending seq number %d %d %ld, flush %d\n", i, j, qz_sess->seq, flush);
+        QZ_DEBUG("sending seq number %d %d %ld, opData.flushFlag %d\n", i, j,
+                 qz_sess->seq, opData.flushFlag);
         qz_sess->submitted++;
         /*send to compression engine here*/
         g_process.qz_inst[i].stream[j].src2++; /*this buffer is in use*/
@@ -1022,16 +1038,16 @@ static void *doCompressIn(void *in)
 
         do {
             tag = (i << 16) | j;
-            QZ_DEBUG("Comp Sending %u bytes ,flush = %d, i = %ld j = %d seq = %ld tag = %ld\n",
-                     g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes, flush,
+            QZ_DEBUG("Comp Sending %u bytes ,opData.flushFlag = %d, i = %ld j = %d seq = %ld tag = %ld\n",
+                     g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes, opData.flushFlag,
                      i, j, g_process.qz_inst[i].stream[j].seq, tag);
-            rc = cpaDcCompressData(g_process.dc_inst_handle[i],
-                                   g_process.qz_inst[i].cpaSess,
-                                   g_process.qz_inst[i].src_buffers[j],
-                                   g_process.qz_inst[i].dest_buffers[j],
-                                   &g_process.qz_inst[i].stream[j].res,
-                                   flush,
-                                   (void *)(tag));
+            rc = cpaDcCompressData2(g_process.dc_inst_handle[i],
+                                    g_process.qz_inst[i].cpaSess,
+                                    g_process.qz_inst[i].src_buffers[j],
+                                    g_process.qz_inst[i].dest_buffers[j],
+                                    &opData,
+                                    &g_process.qz_inst[i].stream[j].res,
+                                    (void *)(tag));
             if (CPA_STATUS_RETRY == rc) {
                 g_process.qz_inst[i].num_retries++;
                 usleep(qz_sess->sess_params.poll_sleep);
@@ -1135,7 +1151,9 @@ static void *doCompressOut(void *in)
                          i, j, g_process.qz_inst[i].stream[j].seq,
                          getpid(), pthread_self());
 
-                if (CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status) {
+                resl = &g_process.qz_inst[i].stream[j].res;
+                if (CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status &&
+                    CPA_DC_VERIFY_ERROR != resl->status) {
                     QZ_ERROR("Error(%d) in callback: %ld, %ld, ReqStatus: %d\n",
                              g_process.qz_inst[i].stream[j].job_status, i, j,
                              g_process.qz_inst[i].stream[j].res.status);
@@ -1148,68 +1166,176 @@ static void *doCompressOut(void *in)
 
                 assert(g_process.qz_inst[i].stream[j].seq == qz_sess->seq_in);
                 qz_sess->seq_in++;
-                resl = &g_process.qz_inst[i].stream[j].res;
                 QZ_DEBUG("\tconsumed = %d, produced = %d, seq_in = %ld\n",
                          resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq);
 
-                dest_avail_len -= (outputHeaderSz(data_fmt) + resl->produced + outputFooterSz(
-                                       data_fmt));
-                if (dest_avail_len < 0) {
-                    QZ_DEBUG("doCompressOut: inadequate output buffer length: %ld\n",
-                             (long)(*qz_sess->dest_sz));
-                    sess->thd_sess_stat = QZ_BUF_ERROR;
-                    g_process.qz_inst[i].stream[j].sink2++;
-                    qz_sess->processed++;
-                    qz_sess->stop_submitting = 1;
-                    continue;
-                }
+                if (CPA_DC_VERIFY_ERROR == resl->status) {
+                    long src_len;
+                    int src_location;
+                    long block_count;
+                    int out_len;
+                    // detected a CnV error
+                    src_len = g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
 
-                outputHeaderGen(qz_sess->next_dest, resl, data_fmt);
-                qz_sess->next_dest += outputHeaderSz(data_fmt);
-                qz_sess->qz_out_len += outputHeaderSz(data_fmt);
-
-                if (dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq)) {
-                    g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
-                        g_process.qz_inst[i].stream[j].orig_dest;
-                    g_process.qz_inst[i].stream[j].dest_pinned = 0;
-                } else {
-                    QZ_MEMCPY(qz_sess->next_dest,
-                              g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData,
-                              resl->produced,
-                              resl->produced);
-                }
-                qz_sess->next_dest += resl->produced;
-                qz_sess->qz_in_len += resl->consumed;
-
-                if (NULL != qz_sess->crc32) {
-                    if (0 == *(qz_sess->crc32)) {
-                        *(qz_sess->crc32) = resl->checksum;
-                        QZ_DEBUG("crc32 1st blk is 0x%lX \n", *(qz_sess->crc32));
-                    } else {
-                        QZ_DEBUG("crc32 input 0x%lX, ", *(qz_sess->crc32));
-                        *(qz_sess->crc32) =
-                            crc32_combine(*(qz_sess->crc32), resl->checksum, resl->consumed);
-                        QZ_DEBUG("Result 0x%lX, checksum 0x%X, consumed %u, produced %u\n",
-                                 *(qz_sess->crc32), resl->checksum, resl->consumed, resl->produced);
+                    {
+                        // Create the stored block(s) for
+                        // length of uncompressed soure data
+                        //
+                        src_location = 0;
+                        // stored block must have a length <= 65535 bytes
+                        // so the number of blocks to create must be determined
+                        block_count = src_len / STORED_BLK_MAX_LEN;
+                        if ((block_count * STORED_BLK_MAX_LEN) < src_len) {
+                            block_count++;
+                        }
+                        QZ_DEBUG("CnV error detected.Creating %ld stored blocks for a total len of %ld\n",
+                                 block_count, src_len);
+                        //
+                        // Need to check if there is enough space in the
+                        // destination buffer.  stored byte imposes a 5 byte header
+                        //
+                        out_len = (outputHeaderSz(data_fmt) + (block_count * STORED_BLK_HDR_SZ) +
+                                   src_len + outputFooterSz(data_fmt));
+                        dest_avail_len -= out_len;
+                        if (dest_avail_len < 0) {
+                            QZ_ERROR("do_compress_out: inadequate output buffer length for stored block: %ld\n",
+                                     (long)(*qz_sess->dest_sz));
+                            sess->thd_sess_stat = QZ_BUF_ERROR;
+                            g_process.qz_inst[i].stream[j].sink2++;
+                            qz_sess->processed++;
+                            goto err_exit;
+                        }
+                        resl->produced = (block_count * STORED_BLK_HDR_SZ) +
+                                         src_len; // size of stored block
+                        resl->consumed = src_len;  // size of stored block
+                        qz_sess->qz_in_len += resl->consumed;
+                        qz_sess->qz_out_len += out_len;
+                        //
+                        // set up gzip header location in dest buffer
+                        // Since this is going to be a stored block,
+                        // we already know how big it will be
+                        //
+                        QZ_DEBUG("Setting produced to %d\n", resl->produced);
+                        outputHeaderGen(qz_sess->next_dest, resl, data_fmt);
+                        qz_sess->next_dest += outputHeaderSz(data_fmt);
+                        //
+                        // process each stored block
+                        //
+                        resl->checksum = 0;
+                        while (src_len > 0) {
+                            int this_block_len;
+                            this_block_len = src_len;
+                            if (this_block_len > STORED_BLK_MAX_LEN) {
+                                this_block_len = STORED_BLK_MAX_LEN;
+                            }
+                            src_len -= this_block_len;
+                            // create store block header here
+                            if (src_len == 0) {
+                                //set bfinal bit + block type
+                                *(unsigned char *)(qz_sess->next_dest) = 0x01;
+                                QZ_DEBUG("Creating the final block\n");
+                            } else {
+                                // clear bfinal bit + block type
+                                *(unsigned char *)(qz_sess->next_dest) = 0x00;
+                                QZ_DEBUG("Creating the block without final bit\n");
+                            }
+                            //
+                            //Add length and XOR of length
+                            //to stored block header
+                            //
+                            qz_sess->next_dest++;
+                            *(unsigned short *)(qz_sess->next_dest) = this_block_len;
+                            qz_sess->next_dest += 2;
+                            *(unsigned short *)(qz_sess->next_dest) = ~this_block_len;
+                            qz_sess->next_dest += 2;
+                            // copy the source data
+                            QZ_MEMCPY(qz_sess->next_dest,
+                                      &g_process.qz_inst[i].src_buffers[j]->pBuffers->pData[src_location],
+                                      this_block_len,
+                                      this_block_len);
+                            // update the crc
+                            resl->checksum = crc32(resl->checksum,
+                                                   &g_process.qz_inst[i].src_buffers[j]->pBuffers->pData[src_location],
+                                                   this_block_len);
+                            // jump to next source data location
+                            qz_sess->next_dest += this_block_len;
+                            src_location += this_block_len;
+                            QZ_DEBUG("src_len :%u this_block_len: %d this block checksum: %x\n",
+                                     src_len, this_block_len, resl->checksum);
+                        }
+                        QZ_DEBUG("\tgzip checksum = 0x%x\n", resl->checksum);
+                        QZ_DEBUG("\tlen = 0x%x\n", resl->produced);
+                        //Append footer
+                        outputFooterGen(qz_sess, resl, data_fmt);
+                        qz_sess->next_dest += stdGzipFooterSz();
+                        if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
+                            g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
+                                g_process.qz_inst[i].stream[j].orig_src;
+                        }
 
                     }
+                    g_process.qz_inst[i].stream[j].sink2++;
+                    qz_sess->processed++;
+                    break;
+                } else {
+                    dest_avail_len -= (outputHeaderSz(data_fmt) + resl->produced + outputFooterSz(
+                                           data_fmt));
+                    if (dest_avail_len < 0) {
+                        QZ_DEBUG("doCompressOut: inadequate output buffer length: %ld\n",
+                                 (long)(*qz_sess->dest_sz));
+                        sess->thd_sess_stat = QZ_BUF_ERROR;
+                        g_process.qz_inst[i].stream[j].sink2++;
+                        qz_sess->processed++;
+                        qz_sess->stop_submitting = 1;
+                        continue;
+                    }
+
+                    outputHeaderGen(qz_sess->next_dest, resl, data_fmt);
+                    qz_sess->next_dest += outputHeaderSz(data_fmt);
+                    qz_sess->qz_out_len += outputHeaderSz(data_fmt);
+
+                    if (dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq)) {
+                        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
+                            g_process.qz_inst[i].stream[j].orig_dest;
+                        g_process.qz_inst[i].stream[j].dest_pinned = 0;
+                    } else {
+                        QZ_MEMCPY(qz_sess->next_dest,
+                                  g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData,
+                                  resl->produced,
+                                  resl->produced);
+                    }
+                    qz_sess->next_dest += resl->produced;
+                    qz_sess->qz_in_len += resl->consumed;
+
+                    if (NULL != qz_sess->crc32) {
+                        if (0 == *(qz_sess->crc32)) {
+                            *(qz_sess->crc32) = resl->checksum;
+                            QZ_DEBUG("crc32 1st blk is 0x%lX \n", *(qz_sess->crc32));
+                        } else {
+                            QZ_DEBUG("crc32 input 0x%lX, ", *(qz_sess->crc32));
+                            *(qz_sess->crc32) =
+                                crc32_combine(*(qz_sess->crc32), resl->checksum, resl->consumed);
+                            QZ_DEBUG("Result 0x%lX, checksum 0x%X, consumed %u, produced %u\n",
+                                     *(qz_sess->crc32), resl->checksum, resl->consumed, resl->produced);
+                        }
+                    }
+
+                    qz_sess->qz_out_len += resl->produced;
+                    outputFooterGen(qz_sess, resl, data_fmt);
+                    qz_sess->next_dest += outputFooterSz(data_fmt);
+                    qz_sess->qz_out_len += outputFooterSz(data_fmt);
+
+                    if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
+                        g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
+                            g_process.qz_inst[i].stream[j].orig_src;
+                        g_process.qz_inst[i].stream[j].src_pinned = 0;
+                    }
+
+                    g_process.qz_inst[i].stream[j].sink2++;
+                    qz_sess->processed++;
+
+                    break;
                 }
-
-                qz_sess->qz_out_len += resl->produced;
-                outputFooterGen(qz_sess, resl, data_fmt);
-                qz_sess->next_dest += outputFooterSz(data_fmt);
-                qz_sess->qz_out_len += outputFooterSz(data_fmt);
-
-                if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
-                    g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
-                        g_process.qz_inst[i].stream[j].orig_src;
-                    g_process.qz_inst[i].stream[j].src_pinned = 0;
-                }
-
-                g_process.qz_inst[i].stream[j].sink2++;
-                qz_sess->processed++;
-
-                break;
             }
         }
 
@@ -1446,6 +1572,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     sess->total_in = qz_sess->qz_in_len;
     sess->total_out = qz_sess->qz_out_len;
     *src_len = GET_LOWER_32BITS(sess->total_in);
+    QZ_DEBUG("\n********* total_in = %lu total_out = %lu src_len = %u dest_len = %u\n",
+             sess->total_in, sess->total_out, *src_len, *dest_len);
     assert(*dest_len == sess->total_out);
 
     return sess->thd_sess_stat;
@@ -1807,6 +1935,12 @@ static void *doDecompressOut(void *in)
                 if (resl->checksum != g_process.qz_inst[i].stream[j].gzip_footer_checksum ||
                     resl->produced != g_process.qz_inst[i].stream[j].gzip_footer_orgdatalen) {
                     QZ_ERROR("Error in check footer, inst %ld, stream %ld\n", i, j);
+                    QZ_DEBUG("resp checksum: %x data checksum %x\n",
+                             resl->checksum,
+                             g_process.qz_inst[i].stream[j].gzip_footer_checksum);
+                    QZ_DEBUG("resp produced :%d data produced: %d\n",
+                             resl->produced,
+                             g_process.qz_inst[i].stream[j].gzip_footer_orgdatalen);
                     sess->thd_sess_stat = QZ_DATA_ERROR;
                     g_process.qz_inst[i].stream[j].sink2++;
                     qz_sess->processed++;

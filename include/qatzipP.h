@@ -64,6 +64,8 @@ extern"C" {
 #endif
 
 #define QAT_MAX_DEVICES     32
+#define STORED_BLK_MAX_LEN  65535
+#define STORED_BLK_HDR_SZ   5
 
 #define QZ_SETUP_SESSION_FAIL(rc) (QZ_FAIL == rc       || \
                                    QZ_PARAMS == rc     || \

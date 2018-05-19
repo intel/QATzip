@@ -44,6 +44,7 @@ test_file_path="/opt/compressdata"
 sample_file_name="calgary"
 huge_file_name="calgary.2G"
 highly_compressible_file_name="big-index.html"
+CnVnR_file_name="payload6"
 
 # 1. Trivial file compression
 echo "Preforming file compression and decompression..."
@@ -109,15 +110,21 @@ function testOn3MBRandomDataFile()
 function inputFileTest()
 {
     local test_file_name=$1
+    local comp_level=$2
     if [ ! -f "$test_file_path/$test_file_name" ]
     then
         echo "$test_file_path/$test_file_name does not exit!"
         return 1
     fi
 
+    if [ -z $comp_level ]
+    then
+            comp_level=1
+    fi
+
     cp -f $test_file_path/$test_file_name ./
     orig_checksum=`md5sum $test_file_name`
-    if $test_qzip $test_file_name && \
+    if $test_qzip -L $comp_level $test_file_name && \
         $test_qzip -d "$test_file_name.gz"
     then
         echo "(De)Compress $test_file_name OK";
@@ -282,8 +289,6 @@ function resume_hw_comp_when_insufficent_HP()
 
 # 2. Very basic misc functional tests
 
-echo "Performing misc functional tests..."
-
 if $test_main -m 1 -t 3 -l 8 && \
     # ignore test2 output (too verbose) \
    $test_main -m 2 -t 3 -l 8 > /dev/null && \
@@ -292,6 +297,7 @@ if $test_main -m 1 -t 3 -l 8 && \
    testOn3MBRandomDataFile && \
    inputFileTest $highly_compressible_file_name &&\
    inputFileTest $huge_file_name &&\
+   inputFileTest $CnVnR_file_name 4 &&\
    switch_to_sw_failover_in_insufficent_HP && \
    resume_hw_comp_when_insufficent_HP && \
    $test_main -m 5 -t 3 -l 8 -F $format_option && \
