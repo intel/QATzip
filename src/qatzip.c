@@ -1033,6 +1033,7 @@ static void *doCompressIn(void *in)
             g_process.qz_inst[i].stream[j].dest_pinned = 1;
         }
 
+        g_process.qz_inst[i].stream[j].res.checksum = 0;
         do {
             tag = (i << 16) | j;
             QZ_DEBUG("Comp Sending %u bytes ,opData.flushFlag = %d, i = %ld j = %d seq = %ld tag = %ld\n",
