@@ -111,6 +111,7 @@ function inputFileTest()
 {
     local test_file_name=$1
     local comp_level=$2
+    local req_cnt_thrshold=$3
     if [ ! -f "$test_file_path/$test_file_name" ]
     then
         echo "$test_file_path/$test_file_name does not exit!"
@@ -122,10 +123,15 @@ function inputFileTest()
             comp_level=1
     fi
 
+    if [ -z $req_cnt_thrshold ]
+    then
+            req_cnt_thrshold=16
+    fi
+
     cp -f $test_file_path/$test_file_name ./
     orig_checksum=`md5sum $test_file_name`
-    if $test_qzip -L $comp_level $test_file_name && \
-        $test_qzip -d "$test_file_name.gz"
+    if $test_qzip -L $comp_level -r $req_cnt_thrshold $test_file_name && \
+        $test_qzip -r $req_cnt_thrshold -d "$test_file_name.gz"
     then
         echo "(De)Compress $test_file_name OK";
         rc=0
@@ -294,9 +300,11 @@ if $test_main -m 1 -t 3 -l 8 && \
    $test_main -m 2 -t 3 -l 8 > /dev/null && \
    $test_main -m 3 -t 3 -l 8 && \
    $test_main -m 4 -t 3 -l 8 && \
+   $test_main -m 4 -t 3 -l 8 -r 32&& \
    testOn3MBRandomDataFile && \
    inputFileTest $highly_compressible_file_name &&\
    inputFileTest $huge_file_name &&\
+   inputFileTest $huge_file_name 1 32&&\
    inputFileTest $CnVnR_file_name 4 &&\
    switch_to_sw_failover_in_insufficent_HP && \
    resume_hw_comp_when_insufficent_HP && \

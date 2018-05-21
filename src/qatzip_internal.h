@@ -141,6 +141,7 @@ typedef struct QzSess_S {
     int submitted;
     int processed;
     int last_submitted;
+    int last_processed;
     int stop_submitting;
     signed long seq;
     signed long seq_in;

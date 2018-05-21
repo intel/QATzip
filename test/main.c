@@ -2849,7 +2849,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:P:i:l:e:s:B:O:vh";
+    const char *optstring = "m:t:A:C:D:F:L:T:P:i:l:e:s:r:B:O:vh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -2985,6 +2985,13 @@ int main(int argc, char *argv[])
                 disable_init_session = 1;
             } else {
                 QZ_ERROR("Error init qat session arg: %s\n", optarg);
+                return -1;
+            }
+            break;
+        case 'r':
+            g_params_th.req_cnt_thrshold = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            if (*stop != '\0' || errno) {
+                QZ_ERROR("Error req_cnt_thrshold arg: %s\n", optarg);
                 return -1;
             }
             break;

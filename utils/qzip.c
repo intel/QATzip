@@ -85,7 +85,7 @@ static QzSessionParams_T g_params_th = {(QzHuffmanHdr_T)0,};
 static const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-static char const g_short_opts[] = "A:H:L:C:dhkV";
+static char const g_short_opts[] = "A:H:L:C:r:dhkV";
 static const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -592,6 +592,13 @@ int main(int argc, char **argv)
             g_params_th.hw_buff_sz = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (*stop != '\0' || errno || g_params_th.hw_buff_sz > USDM_ALLOC_MAX_SZ / 2) {
                 printf("Error chunk size arg: %s\n", optarg);
+                return -1;
+            }
+            break;
+        case 'r':
+            g_params_th.req_cnt_thrshold = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            if (*stop != '\0' || errno || g_params_th.req_cnt_thrshold > NUM_BUFF) {
+                printf("Error request count threshold: %s\n", optarg);
                 return -1;
             }
             break;

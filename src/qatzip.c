@@ -262,17 +262,6 @@ static int getUnusedBuffer(unsigned long i, int j)
         }
     }
 
-    for (k = 0; k < max; k++) {
-        if ((g_process.qz_inst[i].stream[k].src1 ==
-             g_process.qz_inst[i].stream[k].src2) &&
-            (g_process.qz_inst[i].stream[k].src1 ==
-             g_process.qz_inst[i].stream[k].sink1) &&
-            (g_process.qz_inst[i].stream[k].src1 ==
-             g_process.qz_inst[i].stream[k].sink2)) {
-            return k;
-        }
-    }
-
     return -1;
 }
 
@@ -960,7 +949,7 @@ static void *doCompressIn(void *in)
 {
     unsigned long tag;
     int i, j;
-    int done = 0;
+    int done = 1;
     unsigned int remaining;
     unsigned int src_send_sz;
     unsigned char *src_ptr, *dest_ptr;
@@ -985,27 +974,25 @@ static void *doCompressIn(void *in)
     opData.flushFlag = CPA_DC_FLUSH_FINAL;
 
     i = qz_sess->inst_hint;
-    src_ptr = qz_sess->src;
+    src_ptr = qz_sess->src + qz_sess->qz_in_len;
     dest_ptr = qz_sess->next_dest;
     src_pinned = qzMemFindAddr(src_ptr);
     dest_pinned = qzMemFindAddr(dest_ptr);
-    remaining = *(qz_sess->src_sz);
+    remaining = *qz_sess->src_sz - qz_sess->qz_in_len;
     src_sz = qz_sess->sess_params.hw_buff_sz;
     data_fmt = qz_sess->sess_params.data_fmt;
     opData.flushFlag = IS_DEFLATE(data_fmt) ? CPA_DC_FLUSH_FULL :
                        CPA_DC_FLUSH_FINAL;
     QZ_DEBUG("doCompressIn: Need to g_process %ld bytes\n", remaining);
 
-    done = 1;
     while (done == 1) {
         j = -1;
         while (-1 == j) {
-            struct timespec my_time;
-            my_time.tv_sec = 0;
-            my_time.tv_nsec = 10;
             j = getUnusedBuffer(i, j);
-            if (-1 == j) {
-                nanosleep(&my_time, NULL);
+            if ((-1 == j) ||
+                ((0 == qz_sess->seq % qz_sess->sess_params.req_cnt_thrshold) &&
+                 (qz_sess->seq > qz_sess->seq_in))) {
+                return ((void *) NULL);
             }
         }
         QZ_DEBUG("getUnusedBuffer returned %d\n", j);
@@ -1018,9 +1005,9 @@ static void *doCompressIn(void *in)
             opData.flushFlag = CPA_DC_FLUSH_FINAL;
         }
         g_process.qz_inst[i].stream[j].seq = qz_sess->seq; /*this buffer is in use*/
-        qz_sess->seq++;
         QZ_DEBUG("sending seq number %d %d %ld, opData.flushFlag %d\n", i, j,
                  qz_sess->seq, opData.flushFlag);
+        qz_sess->seq++;
         qz_sess->submitted++;
         /*send to compression engine here*/
         g_process.qz_inst[i].stream[j].src2++; /*this buffer is in use*/
@@ -1134,13 +1121,12 @@ static void *doCompressOut(void *in)
     unsigned int sleep_cnt = 0;
     QzSession_T *sess = (QzSession_T *) in;
     QzSess_T *qz_sess = (QzSess_T *) sess->internal;
-    long dest_avail_len = (long)(*qz_sess->dest_sz);
+    long dest_avail_len = (long)(*qz_sess->dest_sz - qz_sess->qz_out_len);
     int dest_pinned = qzMemFindAddr(qz_sess->next_dest);
     i = qz_sess->inst_hint;
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
 
-    while ((qz_sess->last_submitted == 0) ||
-           (qz_sess->processed < qz_sess->submitted)) {
+    while (qz_sess->processed < qz_sess->submitted) {
 
         /*Poll for responses*/
         good = 0;
@@ -1304,8 +1290,8 @@ static void *doCompressOut(void *in)
                     dest_avail_len -= (outputHeaderSz(data_fmt) + resl->produced + outputFooterSz(
                                            data_fmt));
                     if (dest_avail_len < 0) {
-                        QZ_DEBUG("doCompressOut: inadequate output buffer length: %ld\n",
-                                 (long)(*qz_sess->dest_sz));
+                        QZ_DEBUG("doCompressOut: inadequate output buffer length: %ld, outlen: %ld\n",
+                                 (long)(*qz_sess->dest_sz), qz_sess->qz_out_len);
                         sess->thd_sess_stat = QZ_BUF_ERROR;
                         g_process.qz_inst[i].stream[j].sink2++;
                         qz_sess->processed++;
@@ -1367,9 +1353,16 @@ static void *doCompressOut(void *in)
             usleep(qz_sess->sess_params.poll_sleep);
             sleep_cnt++;
         }
+
     }
 
     QZ_DEBUG("Comp sleep_cnt: %u\n", sleep_cnt);
+    if (qz_sess->stop_submitting || qz_sess->last_submitted) {
+        qz_sess->last_processed = 1;
+    } else {
+        qz_sess->last_processed = 0;
+    }
+
     return NULL;
 
 err_exit:
@@ -1387,6 +1380,7 @@ err_exit:
             g_process.qz_inst[i].stream[j].src_pinned = 0;
         }
     }
+    qz_sess->last_processed = 1;
     return NULL;
 }
 
@@ -1560,6 +1554,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     qz_sess->submitted = 0;
     qz_sess->processed = 0;
     qz_sess->last_submitted = 0;
+    qz_sess->last_processed = 0;
     qz_sess->stop_submitting = 0;
     qz_sess->qz_in_len = 0;
     qz_sess->qz_out_len = 0;
@@ -1578,11 +1573,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
         reqcnt++;
     }
 
-    if (reqcnt > qz_sess->sess_params.req_cnt_thrshold) {
-        pthread_create(&(qz_sess->c_th_i), NULL, doCompressIn, (void *)sess);
-        doCompressOut((void *)sess);
-        pthread_join(qz_sess->c_th_i, NULL);
-    } else {
+    while (!qz_sess->last_processed) {
         doCompressIn((void *)sess);
         doCompressOut((void *)sess);
     }
@@ -1668,8 +1659,8 @@ static void *doDecompressIn(void *in)
     unsigned long i, tag;
     int rc;
     int j;
-    int done = 0;
-    unsigned long remaining;
+    int done = 1;
+    unsigned int remaining;
     unsigned int src_send_sz;
     unsigned int dest_receive_sz;
     long src_avail_len, dest_avail_len;
@@ -1684,15 +1675,14 @@ static void *doDecompressIn(void *in)
     StdGzF_T *qzFooter = NULL;
 
     i = qz_sess->inst_hint;
-    src_ptr = qz_sess->src;
+    src_ptr = qz_sess->src + qz_sess->qz_in_len;
     dest_ptr = qz_sess->next_dest;
     src_pinned = qzMemFindAddr(src_ptr);
     dest_pinned = qzMemFindAddr(dest_ptr);
-    remaining = (long)(*qz_sess->src_sz);
+    remaining = *qz_sess->src_sz - qz_sess->qz_in_len;
+    src_avail_len = remaining;
+    dest_avail_len = (long)(*qz_sess->dest_sz - qz_sess->qz_out_len);
     QZ_DEBUG("doDecompressIn: Need to g_process %ld bytes\n", remaining);
-    done = 1;
-    src_avail_len = *(qz_sess->src_sz);
-    dest_avail_len = *(qz_sess->dest_sz);
 
     while (done == 1) {
 
@@ -1739,12 +1729,11 @@ static void *doDecompressIn(void *in)
             /*QZip decompression*/
             j = -1;
             while (-1 == j) {
-                struct timespec my_time;
-                my_time.tv_sec = 0;
-                my_time.tv_nsec = 10;
                 j = getUnusedBuffer(i, j);
-                if (-1 == j) {
-                    nanosleep(&my_time, NULL);
+                if ((-1 == j) ||
+                    ((0 == qz_sess->seq % qz_sess->sess_params.req_cnt_thrshold) &&
+                     (qz_sess->seq > qz_sess->seq_in))) {
+                    return ((void *) NULL);
                 }
             }
 
@@ -1897,8 +1886,7 @@ static void *doDecompressOut(void *in)
     fflush(stdout);
     i = qz_sess->inst_hint;
 
-    while ((qz_sess->last_submitted == 0) ||
-           (qz_sess->processed < qz_sess->submitted)) {
+    while (qz_sess->processed < qz_sess->submitted) {
 
         /*Poll for responses*/
         good = 0;
@@ -1991,6 +1979,7 @@ static void *doDecompressOut(void *in)
     }
 
     QZ_DEBUG("Decomp sleep_cnt: %u\n", sleep_cnt);
+    qz_sess->last_processed = qz_sess->last_submitted ? 1 : 0;
     return NULL;
 
 err_exit:
@@ -2008,6 +1997,7 @@ err_exit:
     }
 err_check_footer:
     qz_sess->stop_submitting = 1;
+    qz_sess->last_processed = 1;
     swapDataBuffer(i, j);
     return ((void *)NULL);
 }
@@ -2113,6 +2103,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     qz_sess->submitted = 0;
     qz_sess->processed = 0;
     qz_sess->last_submitted = 0;
+    qz_sess->last_processed = 0;
     qz_sess->stop_submitting = 0;
     qz_sess->qz_in_len = 0;
     qz_sess->qz_out_len = 0;
@@ -2128,11 +2119,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
         reqcnt++;
     }
 
-    if (reqcnt > qz_sess->sess_params.req_cnt_thrshold) {
-        pthread_create(&(qz_sess->c_th_i), NULL, doDecompressIn, (void *)sess);
-        doDecompressOut((void *)sess);
-        pthread_join(qz_sess->c_th_i, NULL);
-    } else {
+    while (!qz_sess->last_processed) {
         doDecompressIn((void *)sess);
         doDecompressOut((void *)sess);
     }
