@@ -2,7 +2,7 @@
  *
  *   BSD LICENSE
  *
- *   Copyright(c) 2007-2017 Intel Corporation. All rights reserved.
+ *   Copyright(c) 2007-2018 Intel Corporation. All rights reserved.
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -34,11 +34,11 @@
  ***************************************************************************/
 
 static char const *const g_license_msg[] = {
-    "Copyright (C) 2017 Intel Corporation.",
+    "Copyright (C) 2018 Intel Corporation.",
     0
 };
 
-static char const *const g_version_str = "v0.2.3";
+static char const *const g_version_str = "v0.2.4";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,7 +56,7 @@ static char const *const g_version_str = "v0.2.3";
 #include <qatzip.h> /* new QATzip interface */
 #include <cpa_dc.h>
 #include <pthread.h>
-#include <qatzipP.h>
+#include <qatzip_internal.h>
 
 
 /* Return codes from qzip */

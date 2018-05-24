@@ -2,7 +2,7 @@
  *
  *   BSD LICENSE
  *
- *   Copyright(c) 2007-2017 Intel Corporation. All rights reserved.
+ *   Copyright(c) 2007-2018 Intel Corporation. All rights reserved.
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,7 @@
 #include "cpa.h"
 #include "cpa_dc.h"
 #include "qatzip.h"
-#include "qatzipP.h"
+#include "qatzip_internal.h"
 #include "qz_utils.h"
 
 #pragma pack(push, 1)

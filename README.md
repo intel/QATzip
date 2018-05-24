@@ -19,10 +19,10 @@
 
 ## Introduction
 
-QATZip is a user space library which builds on top of the Intel&reg; QuickAssist
+QATzip is a user space library which builds on top of the Intel&reg; QuickAssist
 Technology user space library, to provide extended accelerated compression and
 decompression services by offloading the actual compression and decompression
-request(s) to the Intel&reg; Chipset Series. QATZip produces data using the standard
+request(s) to the Intel&reg; Chipset Series. QATzip produces data using the standard
 gzip\* format (RFC1952) with extended headers. The data can be decompressed with a
 compliant gzip\* implementation. QATzip is design to take full advantage of the
 performance provided by Intel&reg; QuickAssist Technology.
@@ -56,6 +56,7 @@ This is useful if there is contention for traditional kernel memory.
 switch to software if there is insufficient system resources including acceleration
 instances or memory. This feature allows for a common software stack between server
 platforms that have acceleration devices and non-accelerated platforms.
+* Automatic recovery from hardware compression failure.
 
 ## Hardware Requirements
 
@@ -85,8 +86,6 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
 * QATzip level 9, we will use software zlib\* to compress as level 9.
 
 ## Limitations
-
-* Currently QATzip only supports static Huffman tree encoding. Dynamic encoding is disabled.
 
 * The partitioned internal chunk size of 16 KB is disabled, this chunk is used for QAT hardware DMA.
 
@@ -132,7 +131,7 @@ These instructions can be found on the 01.org website in the following section:
 
 ```bash
     cd $QATZIP_ROOT
-    ./configure
+    ./configure --with-ICP_ROOT=$ICP_ROOT
     make clean
     make all install
 ```

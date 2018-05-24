@@ -137,7 +137,7 @@ function inputFileTest()
 
     if [[ $new_checksum != $orig_checksum ]]
     then
-        echo "Checksum mismatch, huge file test failed."
+        echo "Checksum mismatch, input file test failed."
         rc=1
     fi
 
@@ -176,7 +176,7 @@ function streamingCompressFileTest()
 
         if [[ $new_checksum != $orig_checksum ]]
         then
-            echo "Checksum mismatch, huge file test failed."
+            echo "Checksum mismatch, streaming compress file test failed."
             rc=1
         fi
 
@@ -219,7 +219,7 @@ function streamingDecompressFileTest()
 
     if [[ $new_checksum != $orig_checksum ]]
     then
-        echo "Checksum mismatch, huge file test failed."
+        echo "Checksum mismatch, streaming decompress file test failed."
         rc=1
     fi
 

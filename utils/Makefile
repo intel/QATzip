@@ -32,12 +32,12 @@
 #
 ################################################################
 
-LIBADD += $(QATZIP_LIB_D)/$(QATZIP_LIB_STATIC)
+LIB_STATIC += $(QATZIP_LIB_D)/$(QATZIP_LIB_STATIC)
 
 all: qzip
 
 qzip: qzip.o
-	$(CC) $^ -o $@ $(LDFLAGS) $(LIBADD)
+	$(CC) $^ -o $@ $(LDFLAGS) $(LIB_STATIC) $(LIBADD)
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -c $< -o $@

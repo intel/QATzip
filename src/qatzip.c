@@ -2,7 +2,7 @@
  *
  *   BSD LICENSE
  *
- *   Copyright(c) 2007-2017 Intel Corporation. All rights reserved.
+ *   Copyright(c) 2007-2018 Intel Corporation. All rights reserved.
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,7 @@
 #include "icp_sal_user.h"
 #include "qae_mem.h"
 #include "qatzip.h"
-#include "qatzipP.h"
+#include "qatzip_internal.h"
 #include "qz_utils.h"
 
 /*
@@ -1288,8 +1288,14 @@ static void *doCompressOut(void *in)
                         if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
                             g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
                                 g_process.qz_inst[i].stream[j].orig_src;
+                            g_process.qz_inst[i].stream[j].src_pinned = 0;
                         }
 
+                        if (dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq)) {
+                            g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
+                                g_process.qz_inst[i].stream[j].orig_dest;
+                            g_process.qz_inst[i].stream[j].dest_pinned = 0;
+                        }
                     }
                     g_process.qz_inst[i].stream[j].sink2++;
                     qz_sess->processed++;
@@ -1940,7 +1946,7 @@ static void *doDecompressOut(void *in)
                 } else {
                     g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
                         g_process.qz_inst[i].stream[j].orig_dest;
-                    g_process.qz_inst[i].stream[j].dest_pinned = 1;
+                    g_process.qz_inst[i].stream[j].dest_pinned = 0;
                 }
 
                 if (1 == g_process.qz_inst[i].stream[j].src_pinned) {

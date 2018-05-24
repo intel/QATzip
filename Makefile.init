@@ -44,7 +44,8 @@ QAT_INCLUDE  ?= -I$(ICP_ROOT)/quickassist/include    \
 USDM_INCLUDE ?= -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv
 
 EXTRA_CFLAGS = $(QAT_INCLUDE) $(USDM_INCLUDE)   \
-               -I$(top_builddir)/include
+               -I$(top_builddir)/include \
+               -I$(top_builddir)/src
 
 LIBADD = -lqat_s -lusdm_drv_s -lz -lpthread
 
