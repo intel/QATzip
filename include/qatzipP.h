@@ -49,7 +49,6 @@ extern"C" {
 #define NUM_BUFF             (32)
 #define MAX_NUM_RETRY        ((int)500)
 #define MAX_BUFFERS          ((int)100)
-#define MAX_OPEN_RETRY       ((int)100)
 #define MAX_THREAD_TMR       ((int)100)
 
 #define GET_LOWER_32BITS(v)  ((v) & 0xFFFFFFFF)
@@ -124,12 +123,12 @@ typedef struct QzHardware_S {
 } QzHardware_T;
 
 typedef struct ProccesData_S {
-    unsigned char qz_init_called;
     char qz_init_status;
     unsigned char sw_backup;
     CpaInstanceHandle *dc_inst_handle;
     QzInstance_T *qz_inst;
     Cpa16U num_instances;
+    Cpa32U pcie_count;
 } processData_T;
 
 typedef struct QzSess_S {
@@ -249,4 +248,5 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
                             unsigned int *compressed_buffer_len);
 unsigned char getSwBackup(QzSession_T *sess);
 
+extern CpaStatus icp_adf_get_numDevices(Cpa32U *);
 #endif //_QATHIPP_H

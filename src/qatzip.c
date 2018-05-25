@@ -83,11 +83,13 @@ QzSessionParams_T g_sess_params_default = {
     .strm_buff_sz      = QZ_STRM_BUFF_SZ_DEFAULT,
     .input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
     .req_cnt_thrshold  = QZ_REQ_THRESHOLD_DEFAULT,
-    .enable_cnv        = QZ_REQ_CNV_DEFAULT
+    .enable_cnv        = QZ_REQ_CNV_DEFAULT,
+    .wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT
 };
 
 processData_T g_process = {
-    .qz_init_called = 0,
+    .qz_init_status = QZ_NONE,
+    .pcie_count = -1
 };
 pthread_mutex_t g_lock;
 
@@ -209,7 +211,7 @@ static int qzGrabInstance(int hint)
 {
     int i, rc;
 
-    if (0 == g_process.qz_init_called) {
+    if (QZ_NONE == g_process.qz_init_status) {
         return -1;
     }
 
@@ -324,7 +326,7 @@ static void stopQat(void)
     int i;
     CpaStatus status = CPA_STATUS_SUCCESS;
 
-    if (1 != g_process.qz_init_called) {
+    if (QZ_NONE == g_process.qz_init_status) {
         return;
     }
 
@@ -345,7 +347,7 @@ static void stopQat(void)
 
     (void)icp_sal_userStop();
     g_process.num_instances = (Cpa16U)0;
-    g_process.qz_init_called = 0;
+    g_process.qz_init_status = QZ_NONE;
 }
 
 static void freeQzMemEntries(void)
@@ -366,6 +368,17 @@ static void exitFunc(void)
 #endif
 }
 
+static unsigned int getWaitCnt(QzSession_T *sess)
+{
+    QzSess_T *qz_sess;
+
+    if (sess->internal != NULL) {
+        qz_sess = (QzSess_T *)sess->internal;
+        return qz_sess->sess_params.wait_cnt_thrshold;
+    } else {
+        return g_sess_params_default.wait_cnt_thrshold;
+    }
+}
 
 #define BACKOUT                                                    \
     stopQat();                                                     \
@@ -399,6 +412,8 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     unsigned int instance_found = 0;
     extern QzMem_T *g_qz_mem;
     extern size_t g_mem_entries;
+    static unsigned int waiting = 0;
+    static unsigned int wait_cnt = 0;
 
     if (sess == NULL) {
         return QZ_PARAMS;
@@ -408,18 +423,22 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         return QZ_PARAMS;
     }
 
-    __sync_synchronize();
-    if (1 == g_process.qz_init_called) {
-        /*hardware has already been inited*/
+    if (0 == g_process.pcie_count ||
+        QZ_OK == g_process.qz_init_status) {
         return QZ_DUPLICATE;
     }
+
+    if (waiting && wait_cnt > 0) {
+        wait_cnt--;
+        return QZ_DUPLICATE;
+    }
+    waiting = 0;
 
     if (0 != pthread_mutex_lock(&g_lock)) {
         return QZ_FAIL;
     }
 
-    if (1 == g_process.qz_init_called) {
-        /*hardware has already been inited*/
+    if (QZ_OK == g_process.qz_init_status) {
         if (0 != pthread_mutex_unlock(&g_lock)) {
             return QZ_FAIL;
         }
@@ -431,20 +450,22 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     init_timers();
     g_process.sw_backup = sw_backup;
 
-    i = g_thread.pid % 3;
-    do {
-        status = icp_sal_userStartMultiProcess(g_dev_tag, CPA_FALSE);
-
-        if (CPA_STATUS_SUCCESS != status) {
-            msleep(100);
-        } else {
-            break;
-        }
-    } while (i++ < MAX_OPEN_RETRY);
-
+    status = icp_adf_get_numDevices(&g_process.pcie_count);
     if (CPA_STATUS_SUCCESS != status) {
-        QZ_ERROR("Error in start multi g_process QATZIP status = %d\n", status);
-        QZ_ERROR("Error in start multi g_process%s\n", strerror(errno));
+        g_process.pcie_count = 0;
+    }
+
+    if (0 == g_process.pcie_count) {
+        QZ_ERROR("Error no hardware, switch to SW if permitted\n", status);
+        BACKOUT;
+    }
+
+    status = icp_sal_userStartMultiProcess(g_dev_tag, CPA_FALSE);
+    if (CPA_STATUS_SUCCESS != status) {
+        QZ_ERROR("Error userStarMultiProcess(%d), switch to SW if permitted\n",
+                 status);
+        waiting = 1;
+        wait_cnt = getWaitCnt(sess);
         BACKOUT;
     }
 
@@ -546,7 +567,6 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
 
     rc = g_process.qz_init_status = QZ_OK;
-    g_process.qz_init_called = 1;
 
 done:
     initDebugLock();
@@ -852,7 +872,9 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
     qz_sess->session_setup_data.deflateWindowSize = (Cpa32U)7;
     qz_sess->session_setup_data.checksum = CPA_DC_CRC32;
 
-    if (g_process.qz_init_status != QZ_OK) {
+    if (g_process.qz_init_status == QZ_NONE) {
+        sess->hw_session_stat = QZ_NONE;
+    } else if (g_process.qz_init_status != QZ_OK) {
         /*hw not present*/
         if (qz_sess->sess_params.sw_backup == 1) {
             sess->hw_session_stat = QZ_NO_HW;
@@ -1423,7 +1445,7 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
     }
 
     /*check if setupSession called*/
-    if (NULL == sess->internal) {
+    if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
             return rc;
@@ -1464,7 +1486,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     }
 
     /*check if setupSession called*/
-    if (NULL == sess->internal) {
+    if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
             return rc;
@@ -2019,7 +2041,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     }
 
     /*check if setupSession called*/
-    if (NULL == sess->internal) {
+    if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
             return rc;
@@ -2267,7 +2289,7 @@ static int initStream(QzSession_T *sess, QzStream_T *strm)
     }
 
     /*check if setupSession called*/
-    if (NULL == sess->internal) {
+    if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
             return rc;
@@ -2383,7 +2405,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
 
     /*check if setupSession called*/
-    if (NULL == sess->internal) {
+    if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
             return rc;

@@ -745,8 +745,10 @@ void *qzCompressDecompressWithFormatOption(void *arg)
 
     if (!((TestArg_T *)arg)->init_sess_disabled) {
         rc = qzSetupSession(&g_session_th[tid], ((TestArg_T *)arg)->params);
-        if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
-            pthread_exit("qzSetupSession failed");
+        if (rc != QZ_OK &&
+            rc != QZ_NO_INST_ATTACH &&
+            rc != QZ_NONE) {
+            pthread_exit((void *)"qzSetupSession failed");
         }
     }
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);
@@ -1161,7 +1163,9 @@ void *qzCompressAndDecompress(void *arg)
     //timeCheck(2, tid);
     if (!((TestArg_T *)arg)->init_sess_disabled) {
         rc = qzSetupSession(&g_session_th[tid], ((TestArg_T *)arg)->params);
-        if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+        if (rc != QZ_OK &&
+            rc != QZ_NO_INST_ATTACH &&
+            rc != QZ_NONE) {
             pthread_exit((void *)"qzSetupSession failed");
         }
     }

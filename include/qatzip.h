@@ -147,7 +147,6 @@ typedef enum {
     /**< Allocate continous memory */
 } PinMem_T;
 
-
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -243,6 +242,8 @@ typedef enum QzCrcType_E {
 /**<using SW: Could not attach to an instance */
 #define QZ_LOW_MEM              (14)
 /**<using SW: Not enough pinned memory */
+#define QZ_NONE                 (100)
+/**<device uninitialzied*/
 #define QZ_NOSW_NO_HW           (-101)
 /**<not using SW: No QAT HW detected */
 #define QZ_NOSW_NO_MDRV         (-102)
@@ -300,9 +301,12 @@ typedef struct QzSessionParams_S {
     /**<than the threshold, QATZip will route the request */
     /**<to software */
     unsigned int req_cnt_thrshold;
-    /**set between 1 and 4, default 4*/
+    /**<set between 1 and 4, default 4*/
     unsigned int enable_cnv;
-    /** 1 Compress And Verify enabled, 0 Disable Compress and Verify */
+    /**<1 Compress And Verify enabled, 0 Disable Compress and Verify */
+    unsigned int wait_cnt_thrshold;
+    /**<when previous try failed, wait for specific number of call */
+    /**<before retry device open. default threshold is 8 */
 } QzSessionParams_T;
 
 /**
@@ -359,6 +363,7 @@ typedef struct QzStream_S {
 #define QZ_REQ_THRESHOLD_MAXINUM     4
 #define QZ_REQ_THRESHOLD_DEFAULT     4
 #define QZ_REQ_CNV_DEFAULT           1
+#define QZ_WAIT_CNT_THRESHOLD_DEFAULT 8
 /**
  *****************************************************************************
  * @ingroup qatZip
