@@ -161,7 +161,7 @@ _QZEOF
 header_array=("zlib.h" "pthread.h" "stdio.h"
               "sys/time.h" "stdarg.h" "stdlib.h"
               "sys/types.h" "sys/stat.h" "string.h"
-              "unistd.h" "memory.h" "stdint.h" "numa.h")
+              "unistd.h" "memory.h" "stdint.h")
 for header in "${header_array[@]}"
 do
   if ! check_sys_header_files $header; then
@@ -267,27 +267,6 @@ if ${CC} $testfile.c -lz 2>/dev/null ; then :
   echo "Checking for zlib library... OK"
 else
   echo "Checking for zlib library... Failed"
-  exit_conf
-fi
-
-# numa library
-cat >$testfile.c <<_QZEOF
-#include <numa.h>
-
-int main(void) {
-    if(numa_available() < 0) {
-        return -1;
-    }
-
-    return 0;
-}
-_QZEOF
-
-
-if ${CC} $testfile.c -lnuma 2>/dev/null ; then :
-  echo "Checking for numa library... OK"
-else
-  echo "Checking for numa library... Failed"
   exit_conf
 fi
 

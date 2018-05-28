@@ -41,7 +41,6 @@
 #include <assert.h>
 #include <sys/time.h>
 #include <bits/types.h>
-#include <numa.h>
 
 #include "cpa.h"
 #include "cpa_dc.h"
@@ -664,14 +663,12 @@ static int getInstMem(int i, QzSessionParams_T *params)
     unsigned int inter_sz;
     unsigned int dest_sz;
     unsigned char sw_backup;
-    unsigned int node_id;
 
     rc = QZ_OK;
     src_sz = params->hw_buff_sz;
     inter_sz = INTER_SZ(src_sz);
     dest_sz = DEST_SZ(src_sz);
     sw_backup = params->sw_backup;
-    node_id = g_process.qz_inst[i].instance_info.nodeAffinity;
 
     QZ_DEBUG("getInstMem: Setting up memory for inst %d\n", i);
     status = cpaDcBufferListGetMetaSize(g_process.dc_inst_handle[i], 1,
@@ -681,8 +678,6 @@ static int getInstMem(int i, QzSessionParams_T *params)
     status = cpaDcGetNumIntermediateBuffers(g_process.dc_inst_handle[i],
                                             &(g_process.qz_inst[i].intermediate_cnt));
     QZ_INST_MEM_STATUS_CHECK(status);
-
-    numa_set_preferred(node_id);
 
     g_process.qz_inst[i].intermediate_buffers =
         malloc((size_t)(g_process.qz_inst[i].intermediate_cnt * sizeof(
