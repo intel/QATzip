@@ -368,7 +368,7 @@ exit:
     fclose(dst_file);
     free(src_buffer);
     free(dst_buffer);
-    if (!g_keep) {
+    if (!g_keep && OK == ret) {
         unlink(src_file_name);
     }
     if (ret) {
