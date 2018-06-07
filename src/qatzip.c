@@ -949,7 +949,7 @@ static void *doCompressIn(void *in)
 {
     unsigned long tag;
     int i, j;
-    int done = 1;
+    unsigned int done = 0;
     unsigned int remaining;
     unsigned int src_send_sz;
     unsigned char *src_ptr, *dest_ptr;
@@ -985,7 +985,7 @@ static void *doCompressIn(void *in)
                        CPA_DC_FLUSH_FINAL;
     QZ_DEBUG("doCompressIn: Need to g_process %ld bytes\n", remaining);
 
-    while (done == 1) {
+    while (!done) {
         j = -1;
         while (-1 == j) {
             j = getUnusedBuffer(i, j);
@@ -1080,7 +1080,7 @@ static void *doCompressIn(void *in)
         }
 
         if (0 == remaining) {
-            done = 2;
+            done = 1;
             qz_sess->last_submitted = 1;
         }
     }
@@ -1659,7 +1659,7 @@ static void *doDecompressIn(void *in)
     unsigned long i, tag;
     int rc;
     int j;
-    int done = 1;
+    unsigned int done = 0;
     unsigned int remaining;
     unsigned int src_send_sz;
     unsigned int dest_receive_sz;
@@ -1684,7 +1684,7 @@ static void *doDecompressIn(void *in)
     dest_avail_len = (long)(*qz_sess->dest_sz - qz_sess->qz_out_len);
     QZ_DEBUG("doDecompressIn: Need to g_process %ld bytes\n", remaining);
 
-    while (done == 1) {
+    while (!done) {
 
         QZ_DEBUG("src_avail_len is %ld, dest_avail_len is %ld\n",
                  src_avail_len, dest_avail_len);
@@ -1842,7 +1842,7 @@ static void *doDecompressIn(void *in)
 
         QZ_DEBUG("src_ptr is %p, remaining is %ld\n", src_ptr, remaining);
         if (0 == remaining) {
-            done = 2;
+            done = 1;
             qz_sess->last_submitted = 1;
         }
     }

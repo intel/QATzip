@@ -2821,6 +2821,7 @@ int qzFuncTests(void)
     "    -O data_fmt           deflate | gzip | gzipext\n"                      \
     "    -T huffmanType        static | dynamic\n"                              \
     "    -P poll_sleep         0 means disable thread polling\n"                \
+    "    -r req_cnt_thrshold   max inflight request num, default is 16\n"       \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)

@@ -42,13 +42,15 @@ test_main="${BASEDIR}/../test "
 test_bt="${BASEDIR}/../bt "
 test_file_path="/opt/compressdata"
 sample_file_name="calgary"
-huge_file_name="calgary.2G"
+big_file_name="calgary.2G"
+huge_file_name="calgary.4G"
 highly_compressible_file_name="big-index.html"
 CnVnR_file_name="payload6"
 
 # 1. Trivial file compression
 echo "Preforming file compression and decompression..."
 test_file=test.tmp
+out_file=test_out
 test_str="THIS IS TEST STRING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 format_option="qz:$((32*1024))/qz:$((64*1024))/qz:$((128*1024))/qz:$((64*1024))"
 format_option+="/qz:$((32*1024))/qz:$((256*1024))"
@@ -57,8 +59,8 @@ echo "format_option=$format_option"
 
 # 1.1 QAT Compression and Decompress
 echo $test_str > $test_file
-$test_qzip $test_file          #compress
-$test_qzip ${test_file}.gz -d  #decompress
+$test_qzip $test_file -o $out_file         #compress
+$test_qzip $out_file.gz -d -o $test_file   #decompress
 
 if [ "$test_str" == "$(cat $test_file)" ]; then
     echo "QAT file compression and decompression OK :)"
@@ -303,9 +305,10 @@ if $test_main -m 1 -t 3 -l 8 && \
    $test_main -m 4 -t 3 -l 8 -r 32&& \
    testOn3MBRandomDataFile && \
    inputFileTest $highly_compressible_file_name &&\
-   inputFileTest $huge_file_name &&\
-   inputFileTest $huge_file_name 1 32&&\
+   inputFileTest $big_file_name &&\
+   inputFileTest $big_file_name 1 32&&\
    inputFileTest $CnVnR_file_name 4 &&\
+   inputFileTest $huge_file_name &&\
    switch_to_sw_failover_in_insufficent_HP && \
    resume_hw_comp_when_insufficent_HP && \
    $test_main -m 5 -t 3 -l 8 -F $format_option && \

@@ -85,7 +85,7 @@ static QzSessionParams_T g_params_th = {(QzHuffmanHdr_T)0,};
 static const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-static char const g_short_opts[] = "A:H:L:C:r:dhkV";
+static char const g_short_opts[] = "A:H:L:C:r:o:dhkV";
 static const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -101,7 +101,8 @@ static const struct option g_long_opts[] = {
 };
 
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * 1024 * 1024 - 5 * 1024);
-static void processFile(QzSession_T *sess, const char *iname, int is_compress);
+static void processFile(QzSession_T *sess, const char *in_name,
+                        const char *out_name, int is_compress);
 
 static void tryHelp(void)
 {
@@ -124,6 +125,8 @@ static void help(void)
         "  -V, --version     display version number",
         "  -L, --level       set compression level",
         "  -C, --chunksz     set chunk size",
+        "  -r,               set max inflight request number",
+        "  -o,               set output file name",
         0
     };
     char const *const *p = help_msg;
@@ -182,7 +185,7 @@ static int doProcessBuffer(QzSession_T *sess,
                            unsigned char *src, unsigned int *src_len,
                            unsigned char *dst, unsigned int dst_len,
                            RunTimeList_T *time_list, FILE *dst_file,
-                           unsigned int *dst_file_size, int is_compress)
+                           off_t *dst_file_size, int is_compress)
 {
     int ret = QZ_FAIL;
     unsigned int done = 0;
@@ -254,9 +257,9 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
 {
     int ret = OK;
     struct stat src_file_stat;
-    unsigned int src_buffer_size = 0, src_file_size = 0;
-    unsigned int dst_buffer_size = 0, dst_file_size = 0;
-    unsigned int file_remaining = 0;
+    unsigned int src_buffer_size = 0;
+    unsigned int dst_buffer_size = 0;
+    off_t src_file_size = 0, dst_file_size = 0, file_remaining = 0;
     unsigned char *src_buffer = NULL;
     unsigned char *dst_buffer = NULL;
     FILE *src_file = NULL;
@@ -266,7 +269,6 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     const unsigned int ratio_limit =
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
     unsigned int read_more = 0;
-    const off_t max_file_size = UINT_MAX;
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
     assert(NULL != time_list_head);
     gettimeofday(&time_list_head->time_s, NULL);
@@ -278,15 +280,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         perror(src_file_name);
         exit(ERROR);
     }
-    if (src_file_stat.st_size > max_file_size) {
-        QZ_ERROR("Input file size %zu bytes is greater than the "
-                 "currently supported maximum %zu bytes (~%zuGiB)\n",
-                 src_file_stat.st_size, max_file_size,
-                 (max_file_size + 1) / (1024 * 1024 * 1024));
-        exit(ERROR);
-    }
 
-    src_file_size = GET_LOWER_32BITS(src_file_stat.st_size);
+    src_file_size = src_file_stat.st_size;
     assert(src_file_size != 0);
     src_buffer_size = (src_file_size > SRC_BUFF_LEN) ? SRC_BUFF_LEN : src_file_size;
     if (is_compress) {
@@ -306,7 +301,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
 
     file_remaining = src_file_size;
     read_more = 1;
-    while (file_remaining) {
+    while (file_remaining > 0) {
         if (read_more) {
             bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
             QZ_PRINT("Reading input file %s (%u Bytes)\n", src_file_name, bytes_read);
@@ -421,7 +416,8 @@ bool hasSuffix(const char *fname, int is_compress)
     }
 }
 
-int makeOutName(const char *in_name, char *out_name, int is_compress)
+int makeOutName(const char *in_name, const char *out_name,
+                char *oname, int is_compress)
 {
     if (is_compress) {
         if (hasSuffix(in_name, is_compress)) {
@@ -429,14 +425,16 @@ int makeOutName(const char *in_name, char *out_name, int is_compress)
             return -1;
         }
         /* add suffix */
-        snprintf(out_name, MAX_PATH_LEN, "%s%s", in_name, SUFFIX);
+        snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name, SUFFIX);
     } else {
         if (!hasSuffix(in_name, is_compress)) {
             return -1;
         }
         /* remove suffix */
-        snprintf(out_name, MAX_PATH_LEN, "%s", in_name);
-        out_name[strlen(in_name) - SFXLEN] = '\0';
+        snprintf(oname, MAX_PATH_LEN, "%s", out_name ? out_name : in_name);
+        if (NULL == out_name) {
+            oname[strlen(in_name) - SFXLEN] = '\0';
+        }
     }
 
     return 0;
@@ -458,13 +456,14 @@ void mkPath(char *path, const char *dirpath, char *file)
 }
 
 
-static void processDir(QzSession_T *sess, const char *iname, int is_compress)
+static void processDir(QzSession_T *sess, const char *in_name,
+                       const char *out_name, int is_compress)
 {
     DIR *dir;
     struct dirent *entry;
     char inpath[MAX_PATH_LEN];
 
-    dir = opendir(iname);
+    dir = opendir(in_name);
     assert(dir);
 
     while ((entry = readdir(dir))) {
@@ -476,33 +475,34 @@ static void processDir(QzSession_T *sess, const char *iname, int is_compress)
 
         /* Qualify the file with its parent directory to obtain a complete
          * path. */
-        mkPath(inpath, iname, entry->d_name);
+        mkPath(inpath, in_name, entry->d_name);
 
-        processFile(sess, inpath, is_compress);
+        processFile(sess, inpath, out_name, is_compress);
     }
 }
 
-static void processFile(QzSession_T *sess, const char *iname, int is_compress)
+static void processFile(QzSession_T *sess, const char *in_name,
+                        const char *out_name, int is_compress)
 {
     int ret;
     struct stat fstat;
 
-    ret = stat(iname, &fstat);
+    ret = stat(in_name, &fstat);
     if (ret) {
-        perror(iname);
+        perror(in_name);
         exit(-1);
     }
 
     if (S_ISDIR(fstat.st_mode)) {
-        processDir(sess, iname, is_compress);
+        processDir(sess, in_name, out_name, is_compress);
     } else {
         char oname[MAX_PATH_LEN];
         memset(oname, 0, MAX_PATH_LEN);
 
-        if (makeOutName(iname, oname, is_compress)) {
+        if (makeOutName(in_name, out_name, oname, is_compress)) {
             return;
         }
-        doProcessFile(sess, iname, oname, is_compress);
+        doProcessFile(sess, in_name, oname, is_compress);
     }
 }
 
@@ -530,6 +530,7 @@ int main(int argc, char **argv)
 {
     int file_count; /* number of files to process */
     g_program_name = qzipBaseName(argv[0]);
+    char *out_name = NULL;
 
     if (qzGetDefaults(&g_params_th) != QZ_OK)
         return -1;
@@ -580,9 +581,12 @@ int main(int argc, char **argv)
                 return -1;
             }
             break;
+        case 'o':
+            out_name = optarg;
+            break;
         case 'L':
             g_params_th.comp_lvl = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
-            if (*stop != '\0' || errno ||  \
+            if (*stop != '\0' || ERANGE == errno ||
                 g_params_th.comp_lvl > 9 || g_params_th.comp_lvl <= 0) {
                 QZ_ERROR("Error compLevel arg: %s\n", optarg);
                 return -1;
@@ -590,7 +594,8 @@ int main(int argc, char **argv)
             break;
         case 'C':
             g_params_th.hw_buff_sz = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
-            if (*stop != '\0' || errno || g_params_th.hw_buff_sz > USDM_ALLOC_MAX_SZ / 2) {
+            if (*stop != '\0' || ERANGE == errno ||
+                g_params_th.hw_buff_sz > USDM_ALLOC_MAX_SZ / 2) {
                 printf("Error chunk size arg: %s\n", optarg);
                 return -1;
             }
@@ -624,7 +629,7 @@ int main(int argc, char **argv)
     }
 
     while (optind < argc) {
-        processFile(&g_sess, argv[optind++], g_decompress == 0);
+        processFile(&g_sess, argv[optind++], out_name, g_decompress == 0);
     }
 
     if (qatzipClose(&g_sess)) {
