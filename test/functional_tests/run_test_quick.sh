@@ -152,6 +152,36 @@ function inputFileTest()
     return $rc
 }
 
+function qzipCompatibleTest()
+{
+    local test_file_name=$1
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name`
+    if gzip $test_file_name && $test_qzip -d "$test_file_name.gz"
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name Failed";
+        rc=1
+    fi
+    new_checksum=`md5sum $test_file_name`
+
+    if [[ $new_checksum != $orig_checksum ]]
+    then
+        echo "Checksum mismatch, qzip compatible test failed."
+        rc=1
+    fi
+
+    return $rc
+}
+
 #Compress with streaming API and valide with gunzip
 function streamingCompressFileTest()
 {
@@ -309,6 +339,7 @@ if $test_main -m 1 -t 3 -l 8 && \
    inputFileTest $big_file_name 1 32&&\
    inputFileTest $CnVnR_file_name 4 &&\
    inputFileTest $huge_file_name &&\
+   qzipCompatibleTest $big_file_name &&\
    switch_to_sw_failover_in_insufficent_HP && \
    resume_hw_comp_when_insufficent_HP && \
    $test_main -m 5 -t 3 -l 8 -F $format_option && \

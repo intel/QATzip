@@ -131,6 +131,14 @@ typedef struct ProccesData_S {
     Cpa32U pcie_count;
 } processData_T;
 
+typedef enum {
+    InflateError = -1,
+    InflateNull = 0,
+    InflateInited,
+    InflateOK,
+    InflateEnd
+} InflateState_T;
+
 typedef struct QzSess_S {
     int inst_hint;   /*which instance we last used*/
     QzSessionParams_T sess_params;
@@ -155,7 +163,7 @@ typedef struct QzSess_S {
     unsigned char *next_dest;
 
     int force_sw;
-    int inflate_init;
+    InflateState_T inflate_stat;
     void *strm;
     z_stream *inflate_strm;
     unsigned long qz_in_len;

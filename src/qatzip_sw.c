@@ -186,8 +186,8 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
 
 /* The software failover function for decompression request */
 int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
-                   unsigned int *uncompressed_buf_len, unsigned char *dest,
-                   unsigned int *compressed_buffer_len)
+                   unsigned int *src_len, unsigned char *dest,
+                   unsigned int *dest_len)
 {
     z_stream *stream = NULL;
     int ret = QZ_OK;
@@ -211,13 +211,15 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
         stream->zalloc = (alloc_func)0;
         stream->zfree  = (free_func)0;
         stream->opaque = (voidpf)0;
-        ((QzSess_T *) sess->internal)->inflate_strm = stream;
+        stream->total_in    = 0;
+        stream->total_out   = 0;
+        qz_sess->inflate_strm = stream;
     }
 
     stream->next_in   = (z_const Bytef *)src;
-    stream->avail_in  = *uncompressed_buf_len;
+    stream->avail_in  = *src_len;
     stream->next_out  = (Bytef *)dest;
-    stream->avail_out = *compressed_buffer_len;
+    stream->avail_out = *dest_len;
 
     QZ_DEBUG("decomp_sw data_fmt: %d\n", data_fmt);
     switch (data_fmt) {
@@ -231,14 +233,14 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
         break;
     }
 
-    if (qz_sess->strm == NULL || !qz_sess->inflate_init) {
+    if (InflateNull == qz_sess->inflate_stat) {
         ret = inflateInit2(stream, windows_bits);
         if (Z_OK != ret) {
             ret = QZ_FAIL;
             goto done;
         }
         QZ_DEBUG("\n****** inflate init done with win_bits: %d *****\n", windows_bits);
-        qz_sess->inflate_init = 1;
+        qz_sess->inflate_stat = InflateInited;
         stream->total_in = 0;
         total_in = 0;
         stream->total_out = 0;
@@ -248,23 +250,30 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
         total_out = GET_LOWER_32BITS(stream->total_out);
     }
 
-
-    ret = inflate(stream, Z_SYNC_FLUSH);
-    zlib_ret = ret;
-    if ((ret == Z_OK) || (ret == Z_STREAM_END)) {
+    zlib_ret = inflate(stream, Z_SYNC_FLUSH);
+    switch (zlib_ret) {
+    case Z_OK:
         ret = QZ_OK;
-    } else if (Z_DATA_ERROR == ret) {
+        qz_sess->inflate_stat = InflateOK;
+        break;
+    case Z_STREAM_END:
+        ret = QZ_OK;
+        qz_sess->inflate_stat = InflateEnd;
+        break;
+    case Z_DATA_ERROR:
         QZ_DEBUG("ERR: inflate failed with Z_DATA_ERROR\n");
         ret = QZ_DATA_ERROR;
+        qz_sess->inflate_stat = InflateError;
         goto done;
-    } else {
+    default:
         QZ_DEBUG("ERR: inflate failed with error code %d\n", ret);
         ret = QZ_FAIL;
+        qz_sess->inflate_stat = InflateError;
         goto done;
     }
 
-    *compressed_buffer_len = GET_LOWER_32BITS(stream->total_out - total_out);
-    *uncompressed_buf_len = GET_LOWER_32BITS(stream->total_in - total_in);
+    *dest_len = GET_LOWER_32BITS(stream->total_out - total_out);
+    *src_len = GET_LOWER_32BITS(stream->total_in - total_in);
 
 done:
     QZ_DEBUG("Exit qzSWDecompress total_in: %u total_out: %u "
@@ -273,14 +282,14 @@ done:
              stream->total_in, stream->total_out,
              stream->avail_in, stream->avail_out,
              stream->msg,
-             *uncompressed_buf_len,
-             *compressed_buffer_len);
-    if (qz_sess->strm == NULL || zlib_ret == Z_STREAM_END) {
+             *src_len,
+             *dest_len);
+    if (zlib_ret == Z_STREAM_END) {
         if (Z_OK != inflateEnd(stream)) {
             QZ_DEBUG("inflateEnd failed.\n");
             ret = QZ_FAIL;
         }
-        qz_sess->inflate_init = 0;
+        qz_sess->inflate_stat = InflateNull;
         QZ_DEBUG("\n****** inflate end done *****\n");
     }
 
@@ -288,21 +297,21 @@ done:
 }
 
 int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
-                            unsigned int *uncompressed_buf_len, unsigned char *dest,
-                            unsigned int *compressed_buffer_len)
+                            unsigned int *src_len, unsigned char *dest,
+                            unsigned int *dest_len)
 {
     int ret = QZ_OK;
     unsigned int total_in = 0;
     unsigned int total_out = 0;
-    const unsigned int input_len = *uncompressed_buf_len;
-    const unsigned int output_len = *compressed_buffer_len;
+    const unsigned int input_len = *src_len;
+    const unsigned int output_len = *dest_len;
     unsigned int cur_input_len = input_len;
     unsigned int cur_output_len = output_len;
 #ifdef QATZIP_DEBUG
     insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
 #endif
     QZ_DEBUG("Start qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
-             *uncompressed_buf_len, *compressed_buffer_len);
+             *src_len, *dest_len);
 
     while (total_in < input_len && total_out < output_len) {
         ret = qzSWDecompress(sess,
@@ -318,12 +327,12 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
         total_out += cur_output_len;
         cur_input_len  = input_len - total_in;
         cur_output_len = output_len - total_out;
-        *uncompressed_buf_len  = total_in;
-        *compressed_buffer_len = total_out;
+        *src_len  = total_in;
+        *dest_len = total_out;
     }
 
 out:
     QZ_DEBUG("Exit qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
-             *uncompressed_buf_len, *compressed_buffer_len);
+             *src_len, *dest_len);
     return ret;
 }

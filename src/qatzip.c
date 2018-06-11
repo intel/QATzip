@@ -826,7 +826,7 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
 
     qz_sess->force_sw = 0;
     qz_sess->inflate_strm = NULL;
-    qz_sess->inflate_init = 0;
+    qz_sess->inflate_stat = InflateNull;
 
     /*set up cpaDc Session params*/
     qz_sess->session_setup_data.compLevel = qz_sess->sess_params.comp_lvl;
@@ -2054,6 +2054,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
         g_process.qz_init_status == QZ_NO_HW                            ||
         sess->hw_session_stat == QZ_NO_HW                               ||
         isStdGzipHeader(src)                                            ||
+        qz_sess->inflate_stat == InflateOK                              ||
         data_fmt != QZ_DEFLATE_GZIP_EXT) {
         QZ_DEBUG("decompression src_len=%u, hdr->extra.qz_e.src_sz = %u, "
                  "g_process.qz_init_status = %d, sess->hw_session_stat = %d, "
@@ -2151,6 +2152,7 @@ int qzTeardownSession(QzSession_T *sess)
     if (NULL != sess->internal) {
         QzSess_T *qz_sess = (QzSess_T *) sess->internal;
         if (NULL != qz_sess->inflate_strm) {
+            inflateEnd(qz_sess->inflate_strm);
             free(qz_sess->inflate_strm);
             qz_sess->inflate_strm = NULL;
         }
