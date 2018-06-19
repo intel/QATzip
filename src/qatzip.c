@@ -68,6 +68,7 @@ const char *g_dev_tag = "SHIM";
 #define IS_DEFLATE_OR_GZIP(fmt) \
         (QZ_DEFLATE_RAW == (fmt) || QZ_DEFLATE_GZIP == (fmt))
 
+#define GET_BUFFER_SLEEP_NSEC   10
 
 QzSessionParams_T g_sess_params_default = {
     .huffman_hdr       = QZ_HUFF_HDR_DEFAULT,
@@ -961,7 +962,10 @@ static void *doCompressIn(void *in)
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     unsigned int enable_cnv = qz_sess->sess_params.enable_cnv;
     CpaDcOpData opData;
+    struct timespec my_time;
 
+    my_time.tv_sec = 0;
+    my_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
     opData.inputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
     opData.outputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
     if (enable_cnv) {
@@ -989,10 +993,8 @@ static void *doCompressIn(void *in)
         j = -1;
         while (-1 == j) {
             j = getUnusedBuffer(i, j);
-            if ((-1 == j) ||
-                ((0 == qz_sess->seq % qz_sess->sess_params.req_cnt_thrshold) &&
-                 (qz_sess->seq > qz_sess->seq_in))) {
-                return ((void *) NULL);
+            if (-1 == j) {
+                nanosleep(&my_time, NULL);
             }
         }
         QZ_DEBUG("getUnusedBuffer returned %d\n", j);
@@ -1126,7 +1128,8 @@ static void *doCompressOut(void *in)
     i = qz_sess->inst_hint;
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
 
-    while (qz_sess->processed < qz_sess->submitted) {
+    while ((qz_sess->last_submitted == 0) ||
+           (qz_sess->processed < qz_sess->submitted)) {
 
         /*Poll for responses*/
         good = 0;
@@ -1283,9 +1286,6 @@ static void *doCompressOut(void *in)
                             g_process.qz_inst[i].stream[j].dest_pinned = 0;
                         }
                     }
-                    g_process.qz_inst[i].stream[j].sink2++;
-                    qz_sess->processed++;
-                    break;
                 } else {
                     dest_avail_len -= (outputHeaderSz(data_fmt) + resl->produced + outputFooterSz(
                                            data_fmt));
@@ -1339,12 +1339,11 @@ static void *doCompressOut(void *in)
                             g_process.qz_inst[i].stream[j].orig_src;
                         g_process.qz_inst[i].stream[j].src_pinned = 0;
                     }
-
-                    g_process.qz_inst[i].stream[j].sink2++;
-                    qz_sess->processed++;
-
-                    break;
                 }
+
+                g_process.qz_inst[i].stream[j].sink2++;
+                qz_sess->processed++;
+                break;
             }
         }
 
@@ -1559,6 +1558,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     qz_sess->qz_in_len = 0;
     qz_sess->qz_out_len = 0;
     qz_sess->force_sw = 0;
+    qz_sess->single_thread = 0;
 
     qz_sess->seq = 0;
     qz_sess->seq_in = 0;
@@ -1573,7 +1573,11 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
         reqcnt++;
     }
 
-    while (!qz_sess->last_processed) {
+    if (reqcnt > qz_sess->sess_params.req_cnt_thrshold) {
+        pthread_create(&(qz_sess->c_th_i), NULL, doCompressIn, (void *)sess);
+        doCompressOut((void *)sess);
+        pthread_join(qz_sess->c_th_i, NULL);
+    } else {
         doCompressIn((void *)sess);
         doCompressOut((void *)sess);
     }
@@ -1673,7 +1677,10 @@ static void *doDecompressIn(void *in)
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     StdGzF_T *qzFooter = NULL;
+    struct timespec my_time;
 
+    my_time.tv_sec = 0;
+    my_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
     i = qz_sess->inst_hint;
     src_ptr = qz_sess->src + qz_sess->qz_in_len;
     dest_ptr = qz_sess->next_dest;
@@ -1730,10 +1737,17 @@ static void *doDecompressIn(void *in)
             j = -1;
             while (-1 == j) {
                 j = getUnusedBuffer(i, j);
-                if ((-1 == j) ||
-                    ((0 == qz_sess->seq % qz_sess->sess_params.req_cnt_thrshold) &&
-                     (qz_sess->seq > qz_sess->seq_in))) {
-                    return ((void *) NULL);
+
+                if (qz_sess->single_thread) {
+                    if ((-1 == j) ||
+                        ((0 == qz_sess->seq % qz_sess->sess_params.req_cnt_thrshold) &&
+                         (qz_sess->seq > qz_sess->seq_in))) {
+                        return ((void *) NULL);
+                    }
+                } else {
+                    if (-1 == j) {
+                        nanosleep(&my_time, NULL);
+                    }
                 }
             }
 
@@ -1879,6 +1893,7 @@ static void *doDecompressOut(void *in)
     CpaDcRqResults *resl;
     CpaStatus sts;
     unsigned int sleep_cnt = 0;
+    unsigned int done = 0;
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
@@ -1886,8 +1901,7 @@ static void *doDecompressOut(void *in)
     fflush(stdout);
     i = qz_sess->inst_hint;
 
-    while (qz_sess->processed < qz_sess->submitted) {
-
+    while (!done) {
         /*Poll for responses*/
         good = 0;
         sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 1);
@@ -1969,6 +1983,12 @@ static void *doDecompressOut(void *in)
                 qz_sess->processed++;
                 break;
             }
+        }
+
+        if (qz_sess->single_thread) {
+            done = (qz_sess->processed == qz_sess->submitted);
+        } else {
+            done = (qz_sess->last_submitted) && (qz_sess->processed == qz_sess->submitted);
         }
 
         if (good == 0) {
@@ -2109,6 +2129,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     qz_sess->qz_in_len = 0;
     qz_sess->qz_out_len = 0;
     qz_sess->force_sw = 0;
+    qz_sess->single_thread = 0;
 
     qz_sess->src = (unsigned char *)src;
     qz_sess->src_sz = src_len;
@@ -2120,9 +2141,17 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
         reqcnt++;
     }
 
-    while (!qz_sess->last_processed) {
-        doDecompressIn((void *)sess);
+    if (reqcnt > qz_sess->sess_params.req_cnt_thrshold) {
+        qz_sess->single_thread = 0;
+        pthread_create(&(qz_sess->c_th_i), NULL, doDecompressIn, (void *)sess);
         doDecompressOut((void *)sess);
+        pthread_join(qz_sess->c_th_i, NULL);
+    } else {
+        qz_sess->single_thread = 1;
+        while (!qz_sess->last_processed) {
+            doDecompressIn((void *)sess);
+            doDecompressOut((void *)sess);
+        }
     }
 
     qzReleaseInstance(i);

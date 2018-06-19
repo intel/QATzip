@@ -170,6 +170,7 @@ typedef struct QzSess_S {
     unsigned long qz_out_len;
     unsigned long *crc32;
     unsigned int last;
+    unsigned int single_thread;
 } QzSess_T;
 
 typedef struct QzStreamBuf_S {
