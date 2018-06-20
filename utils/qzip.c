@@ -38,7 +38,7 @@ static char const *const g_license_msg[] = {
     0
 };
 
-static char const *const g_version_str = "v0.2.4";
+static char const *const g_version_str = "v0.2.5";
 
 #include <stdio.h>
 #include <stdlib.h>

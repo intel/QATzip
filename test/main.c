@@ -57,7 +57,6 @@
 #include <qatzip_internal.h>
 #include <qz_utils.h>
 #include <qae_mem.h>
-#include <numa.h>
 
 #define QZ_FMT_NAME         "QZ"
 #define GZIP_FMT_NAME       "GZIP"

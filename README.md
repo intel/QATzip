@@ -89,9 +89,6 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
 
 * The partitioned internal chunk size of 16 KB is disabled, this chunk is used for QAT hardware DMA.
 
-* For some certain standard zlib\* software in level 9 compressed input data, QATzip decompressor might
-generate incorrect output length.
-
 ## Installation Instructions
 
 ### Build Intel&reg; QuickAssist Technology Driver
@@ -176,6 +173,8 @@ compressing or decompressing files:
     "  -V, --version     display version number",
     "  -L, --level       set compression level",
     "  -C, --chunksz     set chunk size",
+    "  -r,               set max inflight request number
+    "  -o,               set output file name
 ```
 
 ## QATzip API Manual
