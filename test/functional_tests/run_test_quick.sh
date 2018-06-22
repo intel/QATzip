@@ -46,9 +46,10 @@ big_file_name="calgary.2G"
 huge_file_name="calgary.4G"
 highly_compressible_file_name="big-index.html"
 CnVnR_file_name="payload6"
+residue_issue_file="compressed_1071_src_24957.gz"
 
 # 1. Trivial file compression
-echo "Preforming file compression and decompression..."
+echo "Performing file compression and decompression..."
 test_file=test.tmp
 out_file=test_out
 test_str="THIS IS TEST STRING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
@@ -146,6 +147,50 @@ function inputFileTest()
     if [[ $new_checksum != $orig_checksum ]]
     then
         echo "Checksum mismatch, input file test failed."
+        rc=1
+    fi
+
+    return $rc
+}
+
+
+function decompressFileTest()
+{
+    local test_file_name=$1
+    local output_file_name=`echo $test_file_name | cut -d '.' -f 1`
+
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    cp -f $test_file_path/$test_file_name ./
+    if $test_qzip -k -d $test_file_name
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name Failed";
+        rc=1
+    fi
+    mv $output_file_name $output_file_name.qzip
+
+    if gzip -d "$test_file_name"
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name Failed";
+        rc=1
+    fi
+    mv $output_file_name $output_file_name.gzip
+    qzip_checksum=`md5sum $output_file_name.qzip | cut -d ' ' -f 1`
+    gzip_checksum=`md5sum $output_file_name.gzip | cut -d ' ' -f 1`
+
+    if [[ $qzip_checksum != $gzip_checksum ]]
+    then
+        echo "Checksum mismatch, decompress file test failed."
         rc=1
     fi
 
@@ -339,6 +384,7 @@ if $test_main -m 1 -t 3 -l 8 && \
    inputFileTest $big_file_name 1 32&&\
    inputFileTest $CnVnR_file_name 4 &&\
    inputFileTest $huge_file_name &&\
+   decompressFileTest $residue_issue_file &&\
    qzipCompatibleTest $big_file_name &&\
    switch_to_sw_failover_in_insufficent_HP && \
    resume_hw_comp_when_insufficent_HP && \

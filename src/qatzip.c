@@ -1894,6 +1894,7 @@ static void *doDecompressOut(void *in)
     CpaStatus sts;
     unsigned int sleep_cnt = 0;
     unsigned int done = 0;
+    unsigned int src_send_sz;
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
@@ -1936,8 +1937,9 @@ static void *doDecompressOut(void *in)
                 assert(g_process.qz_inst[i].stream[j].seq == qz_sess->seq_in);
                 qz_sess->seq_in++;
                 resl = &g_process.qz_inst[i].stream[j].res;
-                QZ_DEBUG("\tconsumed = %d, produced = %d, seq_in = %ld\n",
-                         resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq);
+                QZ_DEBUG("\tconsumed = %d, produced = %d, seq_in = %ld, src_send_sz = %ld\n",
+                         resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq,
+                         g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes);
 
                 if (0 == g_process.qz_inst[i].stream[j].dest_pinned) {
                     QZ_DEBUG("memory copy in doDecompressOut\n");
@@ -1972,8 +1974,9 @@ static void *doDecompressOut(void *in)
                     goto err_check_footer;
                 }
 
+                src_send_sz = g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
                 qz_sess->next_dest += resl->produced;
-                qz_sess->qz_in_len += (qzGzipHeaderSz() + resl->consumed + stdGzipFooterSz());
+                qz_sess->qz_in_len += (qzGzipHeaderSz() + src_send_sz + stdGzipFooterSz());
                 qz_sess->qz_out_len += resl->produced;
 
                 QZ_DEBUG("qz_sess->next_dest = %p\n", qz_sess->next_dest);
