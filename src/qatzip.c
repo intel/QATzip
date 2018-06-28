@@ -961,7 +961,7 @@ static void *doCompressIn(void *in)
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     unsigned int enable_cnv = qz_sess->sess_params.enable_cnv;
-    CpaDcOpData opData;
+    CpaDcOpData opData = (const CpaDcOpData) {0};
     struct timespec my_time;
 
     my_time.tv_sec = 0;
@@ -975,7 +975,6 @@ static void *doCompressIn(void *in)
         QZ_DEBUG("Disable CnV\n");
         opData.compressAndVerify = CPA_FALSE;
     }
-    opData.flushFlag = CPA_DC_FLUSH_FINAL;
 
     i = qz_sess->inst_hint;
     src_ptr = qz_sess->src + qz_sess->qz_in_len;
