@@ -83,7 +83,6 @@ QzSessionParams_T g_sess_params_default = {
     .strm_buff_sz      = QZ_STRM_BUFF_SZ_DEFAULT,
     .input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
     .req_cnt_thrshold  = QZ_REQ_THRESHOLD_DEFAULT,
-    .enable_cnv        = QZ_REQ_CNV_DEFAULT,
     .wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT
 };
 
@@ -302,8 +301,7 @@ static int qz_sessParamsCheck(QzSessionParams_T *params)
         params->input_sz_thrshold < QZ_COMP_THRESHOLD_MINIMUM ||
         params->input_sz_thrshold > QZ_HW_BUFF_MAX_SZ         ||
         params->req_cnt_thrshold < QZ_REQ_THRESHOLD_MINIMUM   ||
-        params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXINUM   ||
-        params->enable_cnv > 1) {
+        params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXINUM) {
         return FAILURE;
     }
 
@@ -960,7 +958,6 @@ static void *doCompressIn(void *in)
     QzDataFormat_T data_fmt;
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
-    unsigned int enable_cnv = qz_sess->sess_params.enable_cnv;
     CpaDcOpData opData = (const CpaDcOpData) {0};
     struct timespec my_time;
 
@@ -968,13 +965,8 @@ static void *doCompressIn(void *in)
     my_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
     opData.inputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
     opData.outputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
-    if (enable_cnv) {
-        QZ_DEBUG("Enable CnV\n");
-        opData.compressAndVerify = CPA_TRUE;
-    } else {
-        QZ_DEBUG("Disable CnV\n");
-        opData.compressAndVerify = CPA_FALSE;
-    }
+    QZ_DEBUG("Always enable CnV\n");
+    opData.compressAndVerify = CPA_TRUE;
 
     i = qz_sess->inst_hint;
     src_ptr = qz_sess->src + qz_sess->qz_in_len;
