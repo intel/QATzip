@@ -33,7 +33,8 @@
 ################################################################
 
 LIB_SOURCES = qatzip.c qatzip_counter.c qatzip_gzip.c \
-              qatzip_sw.c qatzip_mem.c qatzip_utils.c
+              qatzip_sw.c qatzip_mem.c qatzip_utils.c \
+			  qatzip_stream.c
 
 OBJECTS = $(foreach file,$(LIB_SOURCES),$(file:.c=.o))
 
