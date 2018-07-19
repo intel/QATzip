@@ -1794,6 +1794,7 @@ static void *doDecompressIn(void *in)
                 g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData = dest_ptr;
             }
 
+            g_process.qz_inst[i].stream[j].res.checksum = 0;
             do {
                 tag = (i << 16) | j;
                 QZ_DEBUG("Decomp Sending i = %ld j = %d seq = %ld tag = %ld\n",
