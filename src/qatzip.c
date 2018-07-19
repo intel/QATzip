@@ -262,6 +262,17 @@ static int getUnusedBuffer(unsigned long i, int j)
         }
     }
 
+    for (k = 0; k < max; k++) {
+        if ((g_process.qz_inst[i].stream[k].src1 ==
+             g_process.qz_inst[i].stream[k].src2) &&
+            (g_process.qz_inst[i].stream[k].src1 ==
+             g_process.qz_inst[i].stream[k].sink1) &&
+            (g_process.qz_inst[i].stream[k].src1 ==
+             g_process.qz_inst[i].stream[k].sink2)) {
+            return k;
+        }
+    }
+
     return -1;
 }
 
@@ -969,6 +980,7 @@ static void *doCompressIn(void *in)
     opData.compressAndVerify = CPA_TRUE;
 
     i = qz_sess->inst_hint;
+    j = -1;
     src_ptr = qz_sess->src + qz_sess->qz_in_len;
     dest_ptr = qz_sess->next_dest;
     src_pinned = qzMemFindAddr(src_ptr);
@@ -981,13 +993,12 @@ static void *doCompressIn(void *in)
     QZ_DEBUG("doCompressIn: Need to g_process %ld bytes\n", remaining);
 
     while (!done) {
-        j = -1;
-        while (-1 == j) {
+        do {
             j = getUnusedBuffer(i, j);
             if (-1 == j) {
                 nanosleep(&my_time, NULL);
             }
-        }
+        } while (-1 == j);
         QZ_DEBUG("getUnusedBuffer returned %d\n", j);
 
         g_process.qz_inst[i].stream[j].src1++; /*this buffer is in use*/
@@ -1674,6 +1685,7 @@ static void *doDecompressIn(void *in)
     my_time.tv_sec = 0;
     my_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
     i = qz_sess->inst_hint;
+    j = -1;
     src_ptr = qz_sess->src + qz_sess->qz_in_len;
     dest_ptr = qz_sess->next_dest;
     src_pinned = qzMemFindAddr(src_ptr);
@@ -1726,8 +1738,7 @@ static void *doDecompressIn(void *in)
 
         case QZ_OK:
             /*QZip decompression*/
-            j = -1;
-            while (-1 == j) {
+            do {
                 j = getUnusedBuffer(i, j);
 
                 if (qz_sess->single_thread) {
@@ -1741,7 +1752,7 @@ static void *doDecompressIn(void *in)
                         nanosleep(&my_time, NULL);
                     }
                 }
-            }
+            } while (-1 == j);
 
             QZ_DEBUG("getUnusedBuffer returned %d\n", j);
 
