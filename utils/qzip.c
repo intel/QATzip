@@ -150,7 +150,7 @@ void freeTimeList(RunTimeList_T *time_list)
 }
 
 static void displayStats(RunTimeList_T *time_list,
-                         unsigned insize, unsigned outsize, int is_compress)
+                         off_t insize, off_t outsize, int is_compress)
 {
     /* Calculate time taken (from begin to end) in micro seconds */
     unsigned long us_begin = 0;
