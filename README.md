@@ -57,6 +57,8 @@ switch to software if there is insufficient system resources including accelerat
 instances or memory. This feature allows for a common software stack between server
 platforms that have acceleration devices and non-accelerated platforms.
 * Automatic recovery from hardware compression failure.
+* Provide streaming interface of compression and decompression to achieve better compression
+ratio and throughput for data sets that are submitted piecemeal.
 
 ## Hardware Requirements
 
