@@ -1058,7 +1058,7 @@ void *qzCompressAndDecompress(void *arg)
 
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
-        if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+        if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
             pthread_exit((void *)"qzInit failed");
         }
     }
@@ -1069,7 +1069,8 @@ void *qzCompressAndDecompress(void *arg)
         rc = qzSetupSession(&g_session_th[tid], ((TestArg_T *)arg)->params);
         if (rc != QZ_OK &&
             rc != QZ_NO_INST_ATTACH &&
-            rc != QZ_NONE) {
+            rc != QZ_NONE &&
+            rc != QZ_NO_HW) {
             pthread_exit((void *)"qzSetupSession failed");
         }
     }
