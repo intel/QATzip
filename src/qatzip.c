@@ -2029,6 +2029,21 @@ err_check_footer:
     return ((void *)NULL);
 }
 
+/* The internal function to process the single thread decompress
+ * in qzDecompress()
+ */
+static void *doQzDecompressSingleThread(void *in)
+{
+    QzSession_T *sess = (QzSession_T *)in;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    qz_sess->last_processed = 0;
+    while (!qz_sess->last_processed) {
+        doDecompressIn((void *)sess);
+        doDecompressOut((void *)sess);
+    }
+    return NULL;
+}
+
 /* The QATzip decompression API */
 int qzDecompress(QzSession_T *sess, const unsigned char *src,
                  unsigned int *src_len, unsigned char *dest,
@@ -2155,10 +2170,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
         pthread_join(qz_sess->c_th_i, NULL);
     } else {
         qz_sess->single_thread = 1;
-        while (!qz_sess->last_processed) {
-            doDecompressIn((void *)sess);
-            doDecompressOut((void *)sess);
-        }
+        doQzDecompressSingleThread((void *)sess);
     }
 
     qzReleaseInstance(i);
