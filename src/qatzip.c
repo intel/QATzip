@@ -1471,10 +1471,6 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
         return QZ_PARAMS;
     }
 
-    if (0 == *src_len) {
-        *dest_len = 0;
-        return QZ_OK;
-    }
 
     /*check if init called*/
     rc = qzInit(sess, getSwBackup(sess));

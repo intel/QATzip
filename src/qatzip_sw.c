@@ -119,7 +119,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     insertThread((unsigned int)pthread_self(), COMPRESSION, SW);
 #endif
 
-    while (left_input_sz) {
+    do {
         /*Gzip header*/
         if (Z_OK != deflateInit2(&stream,
                                  comp_level,
@@ -179,7 +179,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
         if (Z_OK != deflateEnd(&stream)) {
             return QZ_FAIL;
         }
-    }
+    } while (left_input_sz);
 
     return QZ_OK;
 }

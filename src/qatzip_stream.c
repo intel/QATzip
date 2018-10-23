@@ -196,11 +196,6 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
 
     while (0 == strm->pending_out) {
-        if (0 == strm->pending_in && 0 == strm->in_sz) {
-            rc = QZ_OK;
-            goto done;
-        }
-
         copied_input += copyStreamInput(strm, strm->in + consumed);
 
         if (strm->pending_in < stream_buf->buf_len &&
@@ -247,6 +242,11 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
         if (QZ_OK != rc) {
             rc = QZ_FAIL;
+            goto done;
+        }
+
+        if (0 == strm->pending_in && 0 == strm->in_sz) {
+            rc = QZ_OK;
             goto done;
         }
     }
