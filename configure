@@ -345,6 +345,28 @@ else
   exit_conf
 fi
 
+# checks for QAT driver version
+cat >$testfile.c <<_QZEOF
+#include <cpa.h>
+#include <cpa_dc.h>
+#include <icp_sal_poll.h>
+#include <icp_sal_user.h>
+
+int main(void){
+  Cpa32U pcie_count;
+  return icp_adf_get_numDevices(&pcie_count);
+}
+_QZEOF
+
+[[ ! -z $ICP_ROOT ]] && QAT_CFLAGS+=" $QAT_INCLUDE";
+if ${CC} $testfile.c -lqat_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+then :
+  echo "Checking for QAT driver version... OK"
+else
+  echo "QAT driver version is too low. Please use qat1.7.l.4.1.0 or higher."
+  exit_conf
+fi
+
 # checks for the library functions
 cat >$testfile.c <<_QZEOF
 #include <stdarg.h>
