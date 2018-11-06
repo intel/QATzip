@@ -2144,6 +2144,151 @@ done:
     pthread_exit((void *)NULL);
 }
 
+void *qzCompressStreamInvalidChunkSize(void *thd_arg)
+{
+    int rc;
+    unsigned char *src = NULL, *dest = NULL;
+    QzSessionParams_T params;
+    TestArg_T *test_arg = (TestArg_T *)thd_arg;
+    const int gen_data = test_arg->gen_data;
+    const long tid = test_arg->thd_id;
+
+    QZ_PRINT("Hello from qzCompressStreamInvalidChunkSize id %d\n", tid);
+
+    timeCheck(0, tid);
+
+    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+        pthread_exit((void *)"qzInit failed");
+    }
+    QZ_DEBUG("qzInit  rc = %d\n", rc);
+
+    qzGetDefaults(&params);
+    params.strm_buff_sz = DEFAULT_BUF_SZ;
+    if (qzSetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: set params fail with incorrect compress params.\n");
+        goto done;
+    }
+
+    params.hw_buff_sz = 525312;    /*513k*/
+    rc = qzSetupSession(&g_session_th[tid], &params);
+    if (rc != QZ_PARAMS) {
+        pthread_exit((void *)
+                     "qzCompressStreamInvalidChunkSize input param check failed");
+    }
+
+    params.hw_buff_sz = 100;
+    rc = qzSetupSession(&g_session_th[tid], &params);
+    if (rc != QZ_PARAMS) {
+        pthread_exit((void *)
+                     "qzCompressStreamInvalidChunkSize input param check failed");
+    }
+    QZ_PRINT("qzCompressStreamInvalidChunkSize : PASS\n");
+
+done:
+    timeCheck(5, tid);
+    if (gen_data) {
+        qzFree(src);
+        qzFree(dest);
+    }
+
+    (void)qzTeardownSession(&g_session_th[tid]);
+    pthread_exit((void *)NULL);
+}
+
+
+void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
+{
+    int rc;
+    unsigned char *src = NULL, *dest = NULL;
+    unsigned int src_sz, dest_sz;
+    QzStream_T comp_strm = {0};
+    QzSessionParams_T params;
+    unsigned int last = 0;
+    char *filename = NULL;
+    TestArg_T *test_arg = (TestArg_T *)thd_arg;
+    const int gen_data = test_arg->gen_data;
+    const long tid = test_arg->thd_id;
+
+    QZ_PRINT("Hello from qzCompressStreamInvalidQzStreamParam id %d\n", tid);
+
+    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+        pthread_exit((void *)"qzInit failed");
+    }
+    QZ_DEBUG("qzInit  rc = %d\n", rc);
+
+    qzGetDefaults(&params);
+    params.strm_buff_sz = DEFAULT_BUF_SZ;
+    if (qzSetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: set params fail with incorrect compress params.\n");
+        goto done;
+    }
+
+    rc = qzSetupSession(&g_session_th[tid], NULL);
+    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+        pthread_exit((void *)"qzSetupSession failed");
+    }
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
+
+    if (gen_data) {
+        src_sz = QATZIP_MAX_HW_SZ;
+        dest_sz = QATZIP_MAX_HW_SZ;
+        src = qzMalloc(src_sz, 0, COMMON_MEM);
+        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
+    } else {
+        src = test_arg->src;
+        src_sz = test_arg->src_sz;
+        dest = test_arg->comp_out;
+        dest_sz = test_arg->comp_out_sz;
+        filename = g_input_file_name;
+    }
+
+    if (!src || !dest) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+
+    if (gen_data) {
+        QZ_DEBUG("Gen Data...\n");
+        genRandomData(src, src_sz);
+    }
+
+    {
+        /*case 1: set strm all params to zero*/
+        last = 1;
+        memset(&comp_strm, 0, sizeof(QzStream_T));
+        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
+        if (rc != QZ_OK) {
+            QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
+            goto done;
+        }
+        QZ_DEBUG("Compressed %d bytes into %d\n", src_sz, dest_sz);
+
+        /*case 2: set strm in, our ptr to NULL, but in_sz, out_sz not zero*/
+        memset(&comp_strm, 0, sizeof(QzStream_T));
+        comp_strm.in_sz = src_sz;
+        comp_strm.out_sz =  dest_sz;
+        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
+        if (rc != QZ_OK) {
+            QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
+            goto done;
+        }
+
+        dumpOutputData(comp_strm.out_sz, comp_strm.out, filename);
+        qzEndStream(&g_session_th[tid], &comp_strm);
+    }
+    QZ_PRINT("qzCompressStreamInvalidQzStreamParam : PASS\n");
+
+done:
+    if (gen_data) {
+        qzFree(src);
+        qzFree(dest);
+    }
+
+    (void)qzTeardownSession(&g_session_th[tid]);
+    pthread_exit((void *)NULL);
+}
 
 void *qzCompressDecompressSwQZMixed(void *arg)
 {
@@ -3084,6 +3229,12 @@ int main(int argc, char *argv[])
         qzThdOps = qzDecompressStreamInput;
         break;
     case 13:
+        qzThdOps = qzCompressStreamInvalidChunkSize;
+        break;
+    case 14:
+        qzThdOps = qzCompressStreamInvalidQzStreamParam;
+        break;
+    case 15:
         return qzFuncTests();
     default:
         goto done;
