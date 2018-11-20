@@ -37,6 +37,7 @@ QZIP_UTIL_D = $(top_builddir)/utils
 QATZIP_LIB_D = $(top_builddir)/src
 QATZIP_LIB_STATIC = libqatzip.a
 QATZIP_LIB_SHARED = libqatzip.so
+CODE_FORMATTING_BIN   = $(top_builddir)/test/code_format_tests/format.sh
 
 QAT_INCLUDE  ?= -I$(ICP_ROOT)/quickassist/include    \
                 -I$(ICP_ROOT)/quickassist/include/dc \
@@ -77,6 +78,13 @@ qzip: $(QATZIP_LIB_STATIC)
 
 test: $(QATZIP_LIB_STATIC)
 	$(MAKE) -C $(FUNCTEST_SRC_D) all
+
+check:
+	@echo -e "\n\nPerforming code formatting tests..."
+	@if ! $(CODE_FORMATTING_BIN); then                                   \
+		echo "Check code format FAILED!!! :(";                       \
+		exit 1;                                                      \
+	fi
 
 clean:
 	$(MAKE) -C $(QATZIP_LIB_D) clean
