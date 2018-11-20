@@ -12,6 +12,7 @@
 - [Installation Instructions](#installation-instructions)
     - [Build Intel&reg; QuickAssist Technology Driver](#build-intel-quickassist-technology-driver)
     - [Install QATzip](#install-qatzip)
+    - [Non-root Install QATzip](#non-root-install-qatzip)
     - [Test QATzip](#test-qatzip)
 - [QATzip API manual](#qatzip-api-manual)
 - [Intended Audience](#intended-audience)
@@ -156,7 +157,78 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 ```
 
 With current configuration, each PCI-e device in C6XX platform could support
-up to at most 32 processes
+32 process in maximum.
+
+### Non-root Install QATzip
+
+**Set below environment variable**
+
+`ICP_ROOT`: the root directory of your QAT driver source tree
+
+`QATZIP_ROOT`: the root directory of your QATzip source tree
+
+```bash
+    export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+```
+
+**Enable huge page feature configure huge page under root privileges**
+
+```bash
+    echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=16
+```
+
+**Execute the following script to modify the properties of some files under root privileges**
+
+```bash
+    ./setenv.sh
+```
+
+**Compile and Install QATzip**
+
+```bash
+    cd $QATZIP_ROOT
+    ./configure --with-ICP_ROOT=$ICP_ROOT
+    make clean
+    make all install
+```
+You will see "install: cannot remove ‘/usr/local/lib/libqatzip.a’: Permission denied".
+Now QATZip is already installed.
+To use qzip without a absolute path, you should execute the following lines of instructions
+under root privileges.
+"QATZIP_ROOT_PATH" is the root directory of your QATzip source tree.
+
+```bash
+    install -D -m 750 QATZIP_ROOT_PATH/src/libqatzip.a /usr/local/lib
+    install -D -m 750 QATZIP_ROOT_PATH/src/libqatzip.so /usr/local/lib
+    install -D -m 750 QATZIP_ROOT_PATH/include/qatzip.h /usr/include/
+    ln -s -f /usr/local/lib/libqatzip.so /lib64/libqatzip.so
+    install -D -m 777 QATZIP_ROOT_PATH/utils/qzip /usr/local/bin
+```
+
+For more configure options, please run "./configure -h" for help
+
+**Update the configuration files under root privileges**
+
+copy the configure file(s) from directory of `$QATZIP_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
+to directory of `/etc`
+
+`YOUR_PLATFORM`: the QAT hardware platform, c6xx for Intel&reg; C62X Series
+Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
+
+`CONFIG_TYPE`: tuned configure file(s) for different usage,
+`multiple_process_opt` for multiple process optimization,
+`multiple_thread_opt` for multiple thread optimization
+
+**Restart the QAT driver under root privileges**
+
+```bash
+    service qat_service restart
+```
+
+With current configuration, each PCI-e device in C6XX platform could support
+32 process in maximum
 
 ### Test QATzip
 
