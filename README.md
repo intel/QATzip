@@ -117,7 +117,7 @@ These instructions can be found on the 01.org website in the following section:
 
 `ICP_ROOT`: the root directory of your QAT driver source tree
 
-`QATZIP_ROOT`: the root directory of your QATzip source tree
+`QZ_ROOT`: the root directory of your QATzip source tree
 
 **Enable huge page feature configure huge page**
 
@@ -130,7 +130,7 @@ These instructions can be found on the 01.org website in the following section:
 **Compile and Install QATzip**
 
 ```bash
-    cd $QATZIP_ROOT
+    cd $QZ_ROOT
     ./configure --with-ICP_ROOT=$ICP_ROOT
     make clean
     make all install
@@ -140,7 +140,7 @@ For more configure options, please run "./configure -h" for help
 
 **Update the configuration files**
 
-copy the configure file(s) from directory of `$QATZIP_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
+copy the configure file(s) from directory of `$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
 to directory of `/etc`
 
 `YOUR_PLATFORM`: the QAT hardware platform, c6xx for Intel&reg; C62X Series
@@ -165,7 +165,7 @@ With current configuration, each PCI-e device in C6XX platform could support
 
 `ICP_ROOT`: the root directory of your QAT driver source tree
 
-`QATZIP_ROOT`: the root directory of your QATzip source tree
+`QZ_ROOT`: the root directory of your QATzip source tree
 
 ```bash
     export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
@@ -188,7 +188,7 @@ With current configuration, each PCI-e device in C6XX platform could support
 **Compile and Install QATzip**
 
 ```bash
-    cd $QATZIP_ROOT
+    cd $QZ_ROOT
     ./configure --with-ICP_ROOT=$ICP_ROOT
     make clean
     make all install
@@ -211,7 +211,7 @@ For more configure options, please run "./configure -h" for help
 
 **Update the configuration files under root privileges**
 
-copy the configure file(s) from directory of `$QATZIP_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
+copy the configure file(s) from directory of `$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
 to directory of `/etc`
 
 `YOUR_PLATFORM`: the QAT hardware platform, c6xx for Intel&reg; C62X Series
