@@ -152,6 +152,12 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         goto end;
     }
 
+    if (NULL == strm->in || \
+        NULL == strm->out) {
+        rc = QZ_PARAMS;
+        goto end;
+    }
+
     if (NULL == strm->opaque) {
         rc = initStream(sess, strm);
         if (QZ_FAIL == rc) {
@@ -278,6 +284,12 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     if (NULL == sess     || \
         NULL == strm     || \
         (last != 0 && last != 1)) {
+        rc = QZ_PARAMS;
+        goto end;
+    }
+
+    if (NULL == strm->in || \
+        NULL == strm->out) {
         rc = QZ_PARAMS;
         goto end;
     }
