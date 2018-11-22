@@ -91,6 +91,11 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
 ## Limitations
 
 * The partitioned internal chunk size of 16 KB is disabled, this chunk is used for QAT hardware DMA.
+* For stream object, user should reset the stream object by calling qzEndStream() before reuse it
+  in the other session.
+* For stream object, user should clear stream object by calling qzEndStream() before clear session
+  object with qzTeardownSession(). Otherwise, memory leak happens.
+
 
 ## Installation Instructions
 
@@ -111,7 +116,7 @@ These instructions can be found on the 01.org website in the following section:
 
 [7]:https://01.org/packet-processing/intel%C2%AE-quickassist-technology-drivers-and-patches
 
-### Install QATzip
+### Install QATzip as root user
 
 **Set below environment variable**
 
@@ -119,7 +124,7 @@ These instructions can be found on the 01.org website in the following section:
 
 `QZ_ROOT`: the root directory of your QATzip source tree
 
-**Enable huge page feature configure huge page**
+**Enable huge page**
 
 ```bash
     echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
@@ -127,7 +132,7 @@ These instructions can be found on the 01.org website in the following section:
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=16
 ```
 
-**Compile and Install QATzip**
+**Compile and install QATzip**
 
 ```bash
     cd $QZ_ROOT
@@ -138,7 +143,7 @@ These instructions can be found on the 01.org website in the following section:
 
 For more configure options, please run "./configure -h" for help
 
-**Update the configuration files**
+**Update configuration files**
 
 copy the configure file(s) from directory of `$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
 to directory of `/etc`
@@ -150,7 +155,7 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 `multiple_process_opt` for multiple process optimization,
 `multiple_thread_opt` for multiple thread optimization
 
-**Restart the QAT driver**
+**Restart QAT driver**
 
 ```bash
     service qat_service restart
@@ -159,9 +164,9 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 With current configuration, each PCI-e device in C6XX platform could support
 32 process in maximum.
 
-### Non-root Install QATzip
+### Install QATzip for non-root user
 
-**Set below environment variable**
+**Set below environment variable as non-root user**
 
 `ICP_ROOT`: the root directory of your QAT driver source tree
 
@@ -171,7 +176,7 @@ With current configuration, each PCI-e device in C6XX platform could support
     export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 ```
 
-**Enable huge page feature configure huge page under root privileges**
+**Enable huge page as root user**
 
 ```bash
     echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
@@ -179,13 +184,13 @@ With current configuration, each PCI-e device in C6XX platform could support
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=16
 ```
 
-**Execute the following script to modify the properties of some files under root privileges**
+**Execute the following script as root user to modify the file properties**
 
 ```bash
     ./setenv.sh
 ```
 
-**Compile and Install QATzip**
+**Compile and install QATzip as non-root user**
 
 ```bash
     cd $QZ_ROOT
@@ -193,10 +198,10 @@ With current configuration, each PCI-e device in C6XX platform could support
     make clean
     make all install
 ```
-You will see "install: cannot remove ‘/usr/local/lib/libqatzip.a’: Permission denied".
+You will see the following error:
+"install: cannot remove ‘/usr/local/lib/libqatzip.a’: Permission denied".
 Now QATZip is already installed.
-To use qzip without a absolute path, you should execute the following lines of instructions
-under root privileges.
+To use qzip without a absolute path, you should execute the following command as root user.
 "QATZIP_ROOT_PATH" is the root directory of your QATzip source tree.
 
 ```bash
@@ -209,7 +214,7 @@ under root privileges.
 
 For more configure options, please run "./configure -h" for help
 
-**Update the configuration files under root privileges**
+**Update the configuration files as root user**
 
 copy the configure file(s) from directory of `$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
 to directory of `/etc`
@@ -221,7 +226,7 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 `multiple_process_opt` for multiple process optimization,
 `multiple_thread_opt` for multiple thread optimization
 
-**Restart the QAT driver under root privileges**
+**Restart the QAT driver as root user**
 
 ```bash
     service qat_service restart
