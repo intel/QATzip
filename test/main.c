@@ -2260,7 +2260,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
         memset(&comp_strm, 0, sizeof(QzStream_T));
         rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
         if (rc != QZ_OK) {
-            QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
+            QZ_ERROR("qzCompressStream failure, return: %d\n", rc);
             goto done;
         }
         QZ_DEBUG("Compressed %d bytes into %d\n", src_sz, dest_sz);
@@ -2271,7 +2271,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
         comp_strm.out_sz =  dest_sz;
         rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
         if (rc != QZ_OK) {
-            QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
+            QZ_ERROR("qzCompressStream failure, return: %d\n", rc);
             goto done;
         }
 
