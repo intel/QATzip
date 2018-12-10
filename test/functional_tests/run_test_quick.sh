@@ -101,6 +101,109 @@ $test_qzip $test_file.gz -d
 #clear test file
 rm -f ${test_file}.gz ${test_file}
 
+#1.4 size 0 file compress/decompress test
+echo "" > $test_file
+$test_qzip $test_file -o $out_file         #compress
+$test_qzip $out_file.gz -d -o $test_file   #decompress
+
+if [ "" == "$(cat $test_file)" ]; then
+    echo "size 0 file compress/decompress test OK :)"
+else
+    echo "size 0 file compress/decompress test FAILED!!! :("
+    exit 1
+fi
+
+# 1.5 QAT pipe & redirection Compress and Decompress
+echo $test_str > $test_file
+cat $test_file | $test_qzip > $out_file.gz         #compress
+cat $out_file.gz | $test_qzip -d > $test_file         #decompress
+
+if [ "$test_str" == "$(cat $test_file)" ]; then
+    echo "QAT pipe & redirection Compress and Decompress OK :)"
+else
+    echo "QAT pipe & redirection Compress and Decompress FAILED!!! :("
+    exit 1
+fi
+
+#clear test file
+rm -f ${test_file}.gz ${test_file}
+
+# 1.6 QAT SW pipe & redirection Compression and Decompress
+if [ -d  $ICP_ROOT/CRB_modules ];
+then
+  DRIVER_DIR=$ICP_ROOT/CRB_modules;
+else
+  DRIVER_DIR=$ICP_ROOT/build;
+fi
+$DRIVER_DIR/adf_ctl down
+
+echo $test_str > $test_file
+cat $test_file | $test_qzip > $out_file.gz 2>/dev/null
+cat $out_file.gz | $test_qzip -d > $test_file 2>/dev/null
+
+if [ "$test_str" == "$(cat $test_file)" ]; then
+    echo "QAT SW pipe & redirection Compression and Decompress OK :)"
+else
+    echo "QAT SW pipe & redirection Compression and Decompress FAILED!!! :("
+    exit 1
+fi
+
+$DRIVER_DIR/adf_ctl up
+
+#clear test file
+rm -f ${test_file}.gz ${test_file}
+
+# 1.7 Check QAT SW pipe & redirection compatibility with extra flag
+head -c $((4*1024*1024)) /dev/urandom | od -x > $test_file
+orig_checksum=`md5sum $test_file`
+cat $test_file | gzip > $test_file.gz
+cat $test_file.gz | $test_qzip -d > $test_file
+[[ $? -ne 0 ]] && { echo "Check QAT SW pipe & redirection compatibility with extra flag FAILED !!! :("; exit 1; }
+new_checksum=`md5sum $test_file`
+if [[ $new_checksum == $orig_checksum ]]; then
+    echo "Check QAT SW pipe & redirection compatibility with extra flag OK :)"
+else
+    echo "Check QAT SW pipe & redirection compatibility with extra flag FAILED!!! :("
+    exit 1
+fi
+
+#clear test file
+rm -f ${test_file}.gz ${test_file}
+
+# 1.8 Check QAT SW pipe & redirection compatibility with extra flag reversal
+echo $test_str > $test_file
+head -c $((4*1024*1024)) /dev/urandom | od -x > $test_file
+orig_checksum=`md5sum $test_file`
+cat $test_file | $test_qzip > $test_file.gz
+cat $test_file.gz | gzip -d > $test_file
+[[ $? -ne 0 ]] && { echo "Check QAT SW pipe & redirection compatibility with extra flag reversal FAILED !!! :("; exit 1; }
+new_checksum=`md5sum $test_file`
+if [[ $new_checksum == $orig_checksum ]]; then
+    echo "Check QAT SW pipe & redirection compatibility with extra flag reversal OK :)"
+else
+    echo "Check QAT SW pipe & redirection compatibility with extra flag reversal FAILED!!! :("
+    exit 1
+fi
+
+#clear test file
+rm -f ${test_file}.gz ${test_file}
+
+#1.9 QAT pipe & redirection size 0 file compress/decompress test
+echo "" > $test_file
+
+cat $test_file | $test_qzip > $out_file.gz         #compress
+cat $out_file.gz | $test_qzip -d > $test_file      #decompress
+
+if [ "" == "$(cat $test_file)" ]; then
+    echo "QAT pipe & redirection size 0 file compress/decompress test OK :)"
+else
+    echo "QAT pipe & redirection size 0 file compress/decompress test FAILED!!! :("
+    exit 1
+fi
+
+#clear test file
+rm -f ${test_file}.gz ${test_file}
+
 function testOn3MBRandomDataFile()
 {
     dd if=/dev/urandom of=random-3m.txt bs=3M count=1;
@@ -153,6 +256,47 @@ function inputFileTest()
     return $rc
 }
 
+function inputFileTest_pipe_redirection()
+{
+    local test_file_name=$1
+    local comp_level=$2
+    local req_cnt_thrshold=$3
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    if [ -z $comp_level ]
+    then
+            comp_level=1
+    fi
+
+    if [ -z $req_cnt_thrshold ]
+    then
+            req_cnt_thrshold=16
+    fi
+
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name`
+    if cat $test_file_name | $test_qzip -L $comp_level -r $req_cnt_thrshold > $test_file_name.gz && cat $test_file_name.gz | $test_qzip -d -r $req_cnt_thrshold > $test_file_name
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name Failed";
+        rc=1
+    fi
+    new_checksum=`md5sum $test_file_name`
+
+    if [[ $new_checksum != $orig_checksum ]]
+    then
+        echo "Checksum mismatch, input file test failed."
+        rc=1
+    fi
+
+    return $rc
+}
 
 function decompressFileTest()
 {
@@ -205,6 +349,8 @@ function qzipCompatibleTest()
         echo "$test_file_path/$test_file_name does not exit!"
         return 1
     fi
+
+    rm -f ./$test_file_name ./$test_file_name.gz
 
     cp -f $test_file_path/$test_file_name ./
     orig_checksum=`md5sum $test_file_name`
@@ -384,6 +530,11 @@ if $test_main -m 1 -t 3 -l 8 && \
    inputFileTest $big_file_name 1 32&&\
    inputFileTest $CnVnR_file_name 4 &&\
    inputFileTest $huge_file_name &&\
+   inputFileTest_pipe_redirection $highly_compressible_file_name &&\
+   inputFileTest_pipe_redirection $big_file_name &&\
+   inputFileTest_pipe_redirection $big_file_name 1 32&&\
+   inputFileTest_pipe_redirection $CnVnR_file_name 4 &&\
+   inputFileTest_pipe_redirection $huge_file_name &&\
    decompressFileTest $residue_issue_file &&\
    qzipCompatibleTest $big_file_name &&\
    switch_to_sw_failover_in_insufficent_HP && \
