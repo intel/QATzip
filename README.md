@@ -242,10 +242,13 @@ compressing or decompressing files:
 
 ```bash
     qzip -k $your_input_file (add -h for help)
+    or
+    cat $your_input_file | qzip > $yout_output_file
 
     This compression and decompression util could support below options:
     "  -A, --algorithm   set algorithm type, currently only support deflate",
     "  -d, --decompress  decompress",
+    "  -f, --force       force overwrite of output file and compress links",
     "  -h, --help        give this help",
     "  -H, --huffmanhdr  set huffman header type",
     "  -k, --keep        keep (don't delete) input files",
