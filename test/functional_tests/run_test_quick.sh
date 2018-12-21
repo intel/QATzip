@@ -548,9 +548,10 @@ if $test_main -m 1 -t 3 -l 8 && \
    $test_main -m 10 -l 1000  -t 1 && \
    streamingCompressFileTest $sample_file_name && \
    streamingDecompressFileTest $sample_file_name && \
-   $test_main -m 13
-   $test_main -m 14
-   $test_main -m 15
+   $test_main -m 13 && \
+   $test_main -m 14 && \
+#   $test_main -m 15 && \
+   $test_main -m 16
 then
     echo "Functional tests OK"
 else
