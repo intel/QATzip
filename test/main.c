@@ -2451,6 +2451,111 @@ void *qzDecompressStreamNegParam(void *arg)
 
 }
 
+void *testqzEndStreamInvalidParam(void *arg, int test_no)
+{
+    int rc = -1;
+    QzSession_T comp_sess = {0}, decomp_sess = {0};
+    QzStream_T comp_strm = {0};
+    QzSessionParams_T comp_params = {0};
+    uint8_t *orig_src, *comp_src, *decomp_src;
+    size_t orig_sz, comp_sz, decomp_sz;
+    unsigned int slice_sz = 0, done = 0;
+    unsigned int consumed = 0, produced = 0;
+    unsigned int input_left = 0, last = 0;
+
+    QzSession_T *test_sess = NULL;
+    QzStream_T *test_strm = NULL;
+
+    TestArg_T *test_arg = (TestArg_T *) arg;
+
+    orig_sz = comp_sz = decomp_sz = test_arg->src_sz;
+    orig_src = malloc(orig_sz);
+    comp_src = malloc(comp_sz);
+    decomp_src = calloc(orig_sz, 1);
+
+    qzGetDefaults(&comp_params);
+
+    slice_sz = comp_params.hw_buff_sz / 4;
+
+    if (NULL == orig_src ||
+        NULL == comp_src ||
+        NULL == decomp_src) {
+        free(orig_src);
+        free(comp_src);
+        free(decomp_src);
+        QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
+        return NULL;
+    }
+    comp_params.data_fmt = test_arg->params->data_fmt;
+    QZ_DEBUG("*** Data Format: %d ***\n", comp_params.data_fmt);
+
+    genRandomData(orig_src, orig_sz);
+
+    while (!done) {
+        input_left      = orig_sz - consumed;
+        comp_strm.in    = orig_src + consumed;
+        comp_strm.out   = comp_src + produced;
+        comp_strm.in_sz = (input_left > slice_sz) ? slice_sz : input_left;
+        comp_strm.out_sz =  comp_sz - produced;
+        last = (((consumed + comp_strm.in_sz) == orig_sz) ? 1 : 0);
+
+        rc = qzCompressStream(&comp_sess, &comp_strm, last);
+        if (rc != QZ_OK) {
+            QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+            goto exit;
+        }
+
+        consumed += comp_strm.in_sz;
+        produced += comp_strm.out_sz;
+        QZ_DEBUG("consumed is %u, in_sz is %d\n", consumed, comp_strm.in_sz);
+
+        if (1 == last && 0 == comp_strm.pending_in && 0 == comp_strm.pending_out) {
+            done = 1;
+        }
+    }
+
+
+    if (1 == test_no) {
+        QZ_DEBUG("T#############T qzEndStream Session is null Test ***\n");
+        test_strm = &comp_strm;
+    } else if (2 == test_no) {
+        QZ_DEBUG("T#############T qzEndStream stream is null Test ***\n");
+        test_sess = &comp_sess;
+    } else {
+        goto exit;
+    }
+
+    rc = qzEndStream(test_sess, test_strm);
+    if (rc == QZ_OK) {
+        QZ_ERROR("\nT#############T ERROR: qzEndStream negative test FAILED,return: %d*** \n",
+                 rc);
+        goto exit;
+    }
+    QZ_DEBUG("T#############T: qzEndStream return value: %d*** \n", rc);
+
+exit:
+    qzFree(orig_src);
+    qzFree(comp_src);
+    qzFree(decomp_src);
+    qzEndStream(&comp_sess, &comp_strm);
+    (void)qzTeardownSession(&comp_sess);
+    (void)qzTeardownSession(&decomp_sess);
+    qzClose(&comp_sess);
+    qzClose(&decomp_sess);
+    return NULL;
+}
+
+void *qzEndStreamNegParam(void *arg)
+{
+    int test_no = 0;
+    for (test_no = 1; test_no <= 3; test_no++) {
+        QZ_DEBUG("*** qzEndStreamNegParam test_no: %d ***\n", test_no);
+        testqzEndStreamInvalidParam(arg, test_no);
+    }
+
+    return NULL;
+}
+
 void *qzCompressDecompressSwQZMixed(void *arg)
 {
     enum TestType_E {
@@ -3398,6 +3503,9 @@ int main(int argc, char *argv[])
         qzThdOps = qzDecompressStreamNegParam;
         break;
     case 16:
+        qzThdOps = qzEndStreamNegParam;
+        break;
+    case 17:
         return qzFuncTests();
     default:
         goto done;

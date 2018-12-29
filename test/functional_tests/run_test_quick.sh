@@ -551,7 +551,8 @@ if $test_main -m 1 -t 3 -l 8 && \
    $test_main -m 13 && \
    $test_main -m 14 && \
 #   $test_main -m 15 && \
-   $test_main -m 16
+   $test_main -m 16 && \
+   $test_main -m 17
 then
     echo "Functional tests OK"
 else
