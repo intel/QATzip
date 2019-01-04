@@ -269,4 +269,10 @@ esac
 
 #show Error
 cat $RESULT_FILE | egrep -i -e 'ERROR' -e 'err' -e 'FAILED' -n
+
+if ! ${BASEDIR}/run_test_threading.sh
+then
+    exit 1
+fi
+
 exit 0
