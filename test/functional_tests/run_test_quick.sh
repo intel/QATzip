@@ -574,4 +574,10 @@ else
     exit 2
 fi
 
+#test for chunksz
+if ! ${BASEDIR}/run_test_chunksz.sh
+then
+    exit 2
+fi
+
 exit 0
