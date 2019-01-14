@@ -580,4 +580,117 @@ then
     exit 2
 fi
 
+#Mim allocated memory test
+echo "Mim allocated memory test"
+function minAllocatedMemoryTest1()
+{
+    local test_file_name=$1
+    local rc=0
+
+    current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
+
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    echo 1 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1 max_huge_pages_per_process=1
+
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name`
+
+    if $test_qzip $test_file_name > minAllocatedMemoryTestlog 2>&1 && \
+        gzip -d "$test_file_name.gz"
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name FAILED";
+        rc=1
+    fi
+    new_checksum=`md5sum $test_file_name`
+
+    if [[ $new_checksum != $orig_checksum ]]
+    then
+        echo "Checksum mismatch, mim allocated memory test1 FAILED."
+        rc=1
+    fi
+
+    error_Key=$(grep "QZ_NO_HW" minAllocatedMemoryTestlog)
+    if [[ -z $error_Key ]]
+    then
+        echo "Check error_Key is null, mim allocated memory test1 FAILED."
+        rc=1
+    fi
+
+    echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
+
+    return $rc
+}
+
+function minAllocatedMemoryTest2()
+{
+    local test_file_name=$1
+    local rc=0
+
+    current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
+
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=1
+
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name`
+
+    if $test_qzip $test_file_name > minAllocatedMemoryTestlog 2>&1 && \
+        gzip -d "$test_file_name.gz"
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name FAILED";
+        rc=1
+    fi
+    new_checksum=`md5sum $test_file_name`
+
+    if [[ $new_checksum != $orig_checksum ]]
+    then
+        echo "Checksum mismatch, mim allocated memory test2 FAILED."
+        rc=1
+    fi
+
+    error_Key=$(grep "QZ_NO_HW" minAllocatedMemoryTestlog)
+    if [[ -z $error_Key ]]
+    then
+        echo "Check error_Key is null, mim allocated memory test2 FAILED."
+        rc=1
+    fi
+
+    echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
+
+    return $rc
+}
+
+if minAllocatedMemoryTest1 $sample_file_name && \
+   minAllocatedMemoryTest2 $sample_file_name
+then
+    echo "Mim allocated memory test OK"
+else
+    echo "Mim allocated memory test FAILED!!! :(";
+    exit 2
+fi
+
 exit 0
