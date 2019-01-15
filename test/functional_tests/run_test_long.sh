@@ -275,4 +275,10 @@ then
     exit 1
 fi
 
+if ! ${BASEDIR}/run_test_threadsafety.sh
+then
+    echo "run test threadsafety FAILED!!! :("
+    exit 1
+fi
+
 exit 0

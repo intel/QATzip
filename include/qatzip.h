@@ -1309,6 +1309,41 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *****************************************************************************/
 int qzEndStream(QzSession_T *sess, QzStream_T *strm);
 
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *       check g_process
+ *
+ * @description
+ *      This function is used to check g_process in the thread_safety_test.
+ *
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       None
+ *
+ * @retval QZ_OK          Check g_process PASSED.
+ * @retval QZ_FAIL        Check g_process FAILED.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+int qz_do_g_process_Check(void);
+
 #ifdef __cplusplus
 }
 #endif

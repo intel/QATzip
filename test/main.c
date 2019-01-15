@@ -128,6 +128,7 @@ typedef struct {
     QzBlock_T *blks;
     int init_engine_disabled;
     int init_sess_disabled;
+    int thread_sleep;
 } TestArg_T;
 
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * MB - 5 * KB);
@@ -149,6 +150,7 @@ char *g_input_file_name = NULL;
 static struct timeval g_timers[100][100];
 static struct timeval g_timer_start;
 extern void dumpAllCounters();
+static int test_thread_safe_flag = 0;
 
 QzBlock_T *parseFormatOption(char *buf)
 {
@@ -1049,6 +1051,7 @@ void *qzCompressAndDecompress(void *arg)
     const int verify_data = ((TestArg_T *)arg)->verify_data;
     const int count = ((TestArg_T *)arg)->count;
     const int gen_data = ((TestArg_T *)arg)->gen_data;
+    int thread_sleep = ((TestArg_T *)arg)->thread_sleep;
 
     src_sz = org_src_sz;
     comp_out_sz = org_comp_out_sz;
@@ -1253,6 +1256,13 @@ void *qzCompressAndDecompress(void *arg)
                  comp_out_sz, decomp_out_sz);
     }
     QZ_PRINT("\n");
+    if (test_thread_safe_flag == 1) {
+        if (thread_sleep == 0) {
+            srand(time(NULL));
+            thread_sleep = (rand() % 500 + 1) * 1000;
+        }
+        usleep(thread_sleep);
+    }
     pthread_mutex_unlock(&g_lock_print);
 
 done:
@@ -3235,6 +3245,7 @@ int qzFuncTests(void)
     "    -T huffmanType        static | dynamic\n"                              \
     "    -P poll_sleep         0 means disable thread polling\n"                \
     "    -r req_cnt_thrshold   max inflight request num, default is 16\n"       \
+    "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -3245,7 +3256,7 @@ void qzPrintUsageAndExit(char *progName)
 
 int main(int argc, char *argv[])
 {
-    int rc = 0, ret = 0;
+    int rc = 0, ret = 0, rc_check = 0;
     int i = 0;
     void *p_rc;
     int thread_count = 1, test = 0;
@@ -3257,12 +3268,14 @@ int main(int argc, char *argv[])
     unsigned char *input_buf = NULL;
     unsigned int input_buf_len = QATZIP_MAX_HW_SZ;
 
+    int thread_sleep = 0;
+
     s1.sa_handler = sigInt;
     sigemptyset(&s1.sa_mask);
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:P:i:l:e:s:r:B:O:vh";
+    const char *optstring = "m:t:A:C:D:F:L:T:P:i:l:e:s:r:B:O:S:vh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -3408,6 +3421,14 @@ int main(int argc, char *argv[])
                 return -1;
             }
             break;
+        case 'S':
+            thread_sleep = GET_LOWER_32BITS(strtol(optarg, &stop, 0));
+            if (*stop != '\0' || errno) {
+                QZ_ERROR("Error thread_sleep arg: %s\n", optarg);
+                return -1;
+            }
+            thread_sleep *= 1000;
+            break;
         default:
             qzPrintUsageAndExit(argv[0]);
         }
@@ -3509,6 +3530,11 @@ int main(int argc, char *argv[])
         break;
     case 17:
         return qzFuncTests();
+        break;
+    case 18:
+        test_thread_safe_flag = 1;
+        qzThdOps = qzCompressAndDecompress;
+        break;
     default:
         goto done;
     }
@@ -3531,6 +3557,7 @@ int main(int argc, char *argv[])
         test_arg[i].params = &g_params_th;
         test_arg[i].ops = qzThdOps;
         test_arg[i].blks = qzBlocks;
+        test_arg[i].thread_sleep = thread_sleep;
         if (!test_arg[i].comp_out || !test_arg[i].decomp_out) {
             QZ_ERROR("ERROR: fail to create memory for thread %ld\n", i);
             return -1;
@@ -3548,7 +3575,7 @@ int main(int argc, char *argv[])
     }
 
     /*for qzCompressAndDecompress test*/
-    if (test == 4) {
+    if (test == 4 || test == 18) {
         ret = pthread_mutex_lock(&g_cond_mutex);
         if (ret != 0) {
             QZ_ERROR("Failure to get Mutex Lock, status = %d\n", ret);
@@ -3591,6 +3618,16 @@ int main(int argc, char *argv[])
 
     if (g_input_file_name != NULL) {
         qzFree(input_buf);
+    }
+
+    if (test == 18) {
+        rc_check = qz_do_g_process_Check();
+        if (QZ_OK == rc_check) {
+            QZ_PRINT("Check g_process PASSED\n");
+        } else {
+            ret = -1;
+            QZ_PRINT("Check g_process FAILED\n");
+        }
     }
 
 done:
