@@ -830,6 +830,7 @@ done:
     pthread_exit((void *)NULL);
 }
 
+
 void *qzSetupParamFuncTest(void *arg)
 {
     QzSessionParams_T def_params;
@@ -879,7 +880,7 @@ void *qzSetupParamFuncTest(void *arg)
     // Negative Test
     cus_params.huffman_hdr = QZ_STATIC_HDR + 1;
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("Err: set params should fail with incorrect huffman: %d.\n",
+        QZ_ERROR("FAILED: set params should fail with incorrect huffman: %d.\n",
                  cus_params.huffman_hdr);
         goto end;
     }
@@ -891,7 +892,7 @@ void *qzSetupParamFuncTest(void *arg)
 
     cus_params.direction = QZ_DIR_BOTH + 1;
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("Err: set params should fail with incorrect direction: %d.\n",
+        QZ_ERROR("FAILED: set params should fail with incorrect direction: %d.\n",
                  cus_params.direction);
         goto end;
     }
@@ -903,7 +904,7 @@ void *qzSetupParamFuncTest(void *arg)
 
     cus_params.comp_lvl = 0;
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("Err: set params should fail with incorrect comp_level: %d.\n",
+        QZ_ERROR("FAILED: set params should fail with incorrect comp_level: %d.\n",
                  cus_params.comp_lvl);
         goto end;
     }
@@ -915,7 +916,7 @@ void *qzSetupParamFuncTest(void *arg)
 
     cus_params.comp_lvl = 10;
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("Err: set params should fail with incorrect comp_level: %d.\n",
+        QZ_ERROR("FAILED: set params should fail with incorrect comp_level: %d.\n",
                  cus_params.comp_lvl);
         goto end;
     }
@@ -927,7 +928,7 @@ void *qzSetupParamFuncTest(void *arg)
 
     cus_params.comp_algorithm = QZ_SNAPPY;
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("Err: set params should fail with incorrect algorithm: %d.\n",
+        QZ_ERROR("FAILED: set params should fail with incorrect algorithm: %d.\n",
                  cus_params.comp_algorithm);
         goto end;
     }
@@ -939,7 +940,7 @@ void *qzSetupParamFuncTest(void *arg)
 
     cus_params.sw_backup = 2;
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("Err: set params should fail with incorrect sw_backup: %d.\n",
+        QZ_ERROR("FAILED: set params should fail with incorrect sw_backup: %d.\n",
                  cus_params.sw_backup);
         goto end;
     }
@@ -951,7 +952,7 @@ void *qzSetupParamFuncTest(void *arg)
 
     cus_params.hw_buff_sz = 0;
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("Err: set params should fail with incorrect hw_buff_sz %d.\n",
+        QZ_ERROR("FAILED: set params should fail with incorrect hw_buff_sz %d.\n",
                  cus_params.hw_buff_sz);
         goto end;
     }
@@ -963,7 +964,7 @@ void *qzSetupParamFuncTest(void *arg)
 
     cus_params.hw_buff_sz = 1025;
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("Err: set params should fail with incorrect hw_buff_sz %d.\n",
+        QZ_ERROR("FAILED: set params should fail with incorrect hw_buff_sz %d.\n",
                  cus_params.hw_buff_sz);
         goto end;
     }
@@ -975,7 +976,7 @@ void *qzSetupParamFuncTest(void *arg)
 
     cus_params.hw_buff_sz = 2 * 1024 * 1024; //2M
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("Err: set params should fail with incorrect hw_buff_sz %d.\n",
+        QZ_ERROR("FAILED: set params should fail with incorrect hw_buff_sz %d.\n",
                  cus_params.hw_buff_sz);
         goto end;
     }
@@ -1031,6 +1032,7 @@ end:
     (void)qzTeardownSession(&g_session_th[tid]);
     pthread_exit((void *)NULL);
 }
+
 
 void *qzCompressAndDecompress(void *arg)
 {
@@ -2174,14 +2176,14 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
     rc = qzSetupSession(&g_session_th[tid], &params);
     if (rc != QZ_PARAMS) {
         pthread_exit((void *)
-                     "qzCompressStreamInvalidChunkSize input param check failed");
+                     "qzCompressStreamInvalidChunkSize input param check FAILED");
     }
 
     params.hw_buff_sz = 100;
     rc = qzSetupSession(&g_session_th[tid], &params);
     if (rc != QZ_PARAMS) {
         pthread_exit((void *)
-                     "qzCompressStreamInvalidChunkSize input param check failed");
+                     "qzCompressStreamInvalidChunkSize input param check FAILED");
     }
     QZ_PRINT("qzCompressStreamInvalidChunkSize : PASS\n");
 
@@ -2651,7 +2653,7 @@ int qzDecompressFailedAtUnknownGzipHeader(void)
     rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
                       (uint32_t *)(&decomp_sz));
     if (rc != QZ_FAIL) {
-        QZ_ERROR("ERROR: Decompression success with Error GipHeader\n");
+        QZ_ERROR("FAILED: Decompression success with Error GipHeader\n");
         goto done;
     }
     rc = 0;
@@ -2737,7 +2739,7 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
     rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
                       (uint32_t *)(&decomp_sz));
     if (rc != QZ_FAIL && rc != QZ_DATA_ERROR) {
-        QZ_ERROR("ERROR: Decompression success with Error Unknown Gzip block\n");
+        QZ_ERROR("FAILED: Decompression success with Error Unknown Gzip block\n");
         goto done;
     }
     rc = 0;
@@ -2794,7 +2796,7 @@ int qzDecompressHWFailedAtUnknownGzipBlock(void)
     rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
                       (uint32_t *)(&decomp_sz));
     if (rc != QZ_FAIL) {
-        QZ_ERROR("ERROR: Decompression success with Error Unknown Gzip block\n");
+        QZ_ERROR("FAILED: Decompression success with Error Unknown Gzip block\n");
         goto done;
     }
     rc = 0;
@@ -3006,7 +3008,7 @@ int qzCompressFailedAtBufferOverflow(void)
     rc = qzDecompress(&sess, comp, (uint32_t *)(&comp_sz), low_decomp,
                       (uint32_t *)(&low_decomp_sz));
     if (rc != QZ_BUF_ERROR) {
-        QZ_ERROR("ERROR: Decompression success with overflow buffer length:rc = %d\n",
+        QZ_ERROR("FAILED: Decompression success with overflow buffer length:rc = %d\n",
                  rc);
         goto done;
     }
@@ -3016,7 +3018,7 @@ int qzCompressFailedAtBufferOverflow(void)
     rc = qzCompress(&sess, src, (uint32_t *)(&orig_sz), low_comp,
                     (uint32_t *)(&low_comp_sz), 1);
     if (rc != QZ_BUF_ERROR) {
-        QZ_ERROR("ERROR: Compression success with overflow buffer length:rc = %d\n",
+        QZ_ERROR("FAILED: Compression success with overflow buffer length:rc = %d\n",
                  rc);
         goto done;
     }
