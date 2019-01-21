@@ -152,8 +152,13 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         goto end;
     }
 
-    if (NULL == strm->in || \
-        NULL == strm->out) {
+    if (NULL == strm->out) {
+        rc = QZ_PARAMS;
+        goto end;
+    }
+
+    if (NULL == strm->in && \
+        strm->in_sz > 0) {
         rc = QZ_PARAMS;
         goto end;
     }
