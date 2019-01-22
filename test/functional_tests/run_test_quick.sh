@@ -693,4 +693,10 @@ else
     exit 2
 fi
 
+#test for hw down sw up and down
+if ! ${BASEDIR}/run_test_sw.sh
+then
+    exit 2
+fi
+
 exit 0

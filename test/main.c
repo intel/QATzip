@@ -1064,6 +1064,8 @@ void *qzCompressAndDecompress(void *arg)
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
         if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+            g_ready_thread_count++;
+            pthread_cond_signal(&g_ready_cond);
             pthread_exit((void *)"qzInit failed");
         }
     }
@@ -1076,6 +1078,8 @@ void *qzCompressAndDecompress(void *arg)
             rc != QZ_NO_INST_ATTACH &&
             rc != QZ_NONE &&
             rc != QZ_NO_HW) {
+            g_ready_thread_count++;
+            pthread_cond_signal(&g_ready_cond);
             pthread_exit((void *)"qzSetupSession failed");
         }
     }
@@ -3236,7 +3240,8 @@ int qzFuncTests(void)
     "    -e init engine        enable | disable. enabled by default\n"          \
     "    -s init session       enable | disable. enabled by default\n"          \
     "    -A comp_algorithm     deflate | snappy | lz4\n"                        \
-    "    -B                    swBack, disabled by default\n"                   \
+    "    -B swBack             0 means disable sw\n"                            \
+    "                          1 means enable sw\n"                             \
     "    -C hw_buff_sz         default 64K\n"                                   \
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
@@ -3328,7 +3333,12 @@ int main(int argc, char *argv[])
             }
             break;
         case 'B':
-            g_params_th.sw_backup = 1;
+            g_params_th.sw_backup = GET_LOWER_32BITS(strtol(optarg, &stop, 0));
+            if (*stop != '\0' || errno || (g_params_th.sw_backup != 0 &&
+                                           g_params_th.sw_backup != 1)) {
+                QZ_ERROR("Error input: %s\n", optarg);
+                return -1;
+            }
             break;
         case 'C':
             g_params_th.hw_buff_sz = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
