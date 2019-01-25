@@ -151,6 +151,7 @@ static struct timeval g_timers[100][100];
 static struct timeval g_timer_start;
 extern void dumpAllCounters();
 static int test_thread_safe_flag = 0;
+extern processData_T g_process;
 
 QzBlock_T *parseFormatOption(char *buf)
 {
@@ -3257,6 +3258,19 @@ void qzPrintUsageAndExit(char *progName)
 {
     QZ_ERROR("%s %s", USAGE_STRING, progName);
     exit(-1);
+}
+
+static int qz_do_g_process_Check(void)
+{
+    if (g_process.qz_init_status == QZ_OK &&
+        g_process.sw_backup == 1 &&
+        (g_process.num_instances == 12 || g_process.num_instances == 4) &&
+        (g_process.pcie_count == 3 || g_process.pcie_count == 1)) {
+        return QZ_OK;
+    } else {
+        return QZ_FAIL;
+    }
+
 }
 
 int main(int argc, char *argv[])

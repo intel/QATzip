@@ -2311,16 +2311,3 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz)
 
     return dest_sz;
 }
-
-int qz_do_g_process_Check(void)
-{
-    if (g_process.qz_init_status == QZ_OK &&
-        g_process.sw_backup == 1 &&
-        (g_process.num_instances == 12 || g_process.num_instances == 4) &&
-        (g_process.pcie_count == 3 || g_process.pcie_count == 1)) {
-        return QZ_OK;
-    } else {
-        return QZ_FAIL;
-    }
-
-}
