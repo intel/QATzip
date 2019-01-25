@@ -699,4 +699,166 @@ then
     exit 2
 fi
 
+#Early HW detection test
+echo "Early HW detection test"
+function early_HW_detection_service_down_test()
+{
+    local test_file_name=$1
+    local rc=0
+
+    if [ -d  $ICP_ROOT/CRB_modules ];
+    then
+        DRIVER_DIR=$ICP_ROOT/CRB_modules;
+    else
+        DRIVER_DIR=$ICP_ROOT/build;
+    fi
+
+    $DRIVER_DIR/adf_ctl down
+
+    if $test_main -m 9 -B 0 > EarlyHWDetectionTestlog 2>&1
+    then
+        echo "early HW detection service down test PASSED"
+        rc=0
+    else
+        echo "early HW detection service down test FAILED"
+        rc=1
+    fi
+
+    error_Key=$(grep "QZ_NOSW_NO_HW" EarlyHWDetectionTestlog)
+    rm -f EarlyHWDetectionTestlog
+
+    if [[ -z $error_Key ]]
+    then
+        echo "Check error_Key is null, early HW detection service down test FAILED."
+        rc=1
+    fi
+
+    $DRIVER_DIR/adf_ctl up
+
+    return $rc
+}
+
+function early_HW_detection_service_up_test()
+{
+    local test_file_name=$1
+    local rc=0
+
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name`
+
+    if $test_main -m 9 -B 1 -i $test_file_name -D "both"
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name FAILED";
+        rc=1
+    fi
+
+    new_checksum=`md5sum $test_file_name`
+
+    if [[ $new_checksum != $orig_checksum ]]
+    then
+        echo "Checksum mismatch, early HW detection service up test FAILED."
+        rc=1
+    fi
+    return $rc
+}
+#The following function "early HW detection service hugepage0 test FAILED" is pass
+function early_HW_detection_service_hugepage0_test()
+{
+    local rc=0
+
+    current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
+    echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=0 max_huge_pages_per_process=0
+
+    if $test_main -m 9 -B 0 > EarlyHWDetectionTestlog 2>&1
+    then
+        echo "early HW detection service hugepage0 test PASSED"
+        rc=1
+    else
+        echo "early HW detection service hugepage0 test failed"
+        rc=0
+    fi
+
+    error_Key=$(grep "fail to create memory for thread 0" EarlyHWDetectionTestlog)
+    rm -f EarlyHWDetectionTestlog
+
+    if [[ -z $error_Key ]]
+    then
+        echo "Check error_Key is null, early HW detection service down test FAILED."
+        rc=1
+    fi
+
+    echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
+
+    return $rc
+}
+
+function early_HW_detection_service_up_hugepage0_test()
+{
+    local test_file_name=$1
+    local rc=0
+
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name`
+
+    current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
+    echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=0 max_huge_pages_per_process=0
+
+#    if $test_main -m 9 -i $test_file_name -D "both"
+    if $test_qzip $test_file_name && \
+        $test_qzip -d "$test_file_name.gz"
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name FAILED";
+        rc=1
+    fi
+
+    new_checksum=`md5sum $test_file_name`
+
+    if [[ $new_checksum != $orig_checksum ]]
+    then
+        echo "Checksum mismatch, early HW detection service up hugepage0 test FAILED."
+        rc=1
+    fi
+
+    echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
+
+    return $rc
+}
+
+if early_HW_detection_service_down_test  && \
+   early_HW_detection_service_up_test $sample_file_name  && \
+   early_HW_detection_service_hugepage0_test  && \
+   early_HW_detection_service_up_hugepage0_test $sample_file_name
+then
+    echo "Early HW detection test OK"
+else
+    echo "Early HW detection test FAILED!!! :(";
+    exit 2
+fi
+
 exit 0
