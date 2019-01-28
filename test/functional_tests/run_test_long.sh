@@ -281,4 +281,9 @@ then
     exit 1
 fi
 
+if ! ${BASEDIR}/run_test_cnvr.sh
+then
+    exit 1
+fi
+
 exit 0
