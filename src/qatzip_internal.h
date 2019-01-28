@@ -71,6 +71,9 @@ extern"C" {
                                    QZ_NOSW_NO_HW == rc || \
                                    QZ_NOSW_LOW_MEM == rc)
 
+#define likely(x)   __builtin_expect (!!(x), 1)
+#define unlikely(x) __builtin_expect (!!(x), 0)
+
 typedef struct QzCpaStream_S {
     signed long seq;
     signed long src1;

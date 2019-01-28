@@ -413,11 +413,11 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     static unsigned int waiting = 0;
     static unsigned int wait_cnt = 0;
 
-    if (sess == NULL) {
+    if (unlikely(sess == NULL)) {
         return QZ_PARAMS;
     }
 
-    if (sw_backup > 1) {
+    if (unlikely(sw_backup > 1)) {
         return QZ_PARAMS;
     }
 
@@ -432,12 +432,12 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
     waiting = 0;
 
-    if (0 != pthread_mutex_lock(&g_lock)) {
+    if (unlikely(0 != pthread_mutex_lock(&g_lock))) {
         return QZ_FAIL;
     }
 
     if (QZ_OK == g_process.qz_init_status) {
-        if (0 != pthread_mutex_unlock(&g_lock)) {
+        if (unlikely(0 != pthread_mutex_unlock(&g_lock))) {
             return QZ_FAIL;
         }
         return QZ_DUPLICATE;
@@ -477,7 +477,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     g_process.dc_inst_handle =
         malloc(g_process.num_instances * sizeof(CpaInstanceHandle));
     g_process.qz_inst = calloc(g_process.num_instances, sizeof(QzInstance_T));
-    if (NULL == g_process.dc_inst_handle || NULL == g_process.qz_inst) {
+    if (unlikely(NULL == g_process.dc_inst_handle || NULL == g_process.qz_inst)) {
         QZ_ERROR("malloc failed\n");
         BACKOUT;
     }
@@ -489,13 +489,13 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
 
     qat_hw = calloc(1, sizeof(QzHardware_T));
-    if (NULL == qat_hw) {
+    if (unlikely(NULL == qat_hw)) {
         QZ_ERROR("malloc failed\n");
         BACKOUT;
     }
     for (i = 0; i < g_process.num_instances; i++) {
         QzInstanceList_T *new_inst = calloc(1, sizeof(QzInstanceList_T));
-        if (NULL == new_inst) {
+        if (unlikely(NULL == new_inst)) {
             QZ_ERROR("malloc failed\n");
             QZ_HW_BACKOUT;
         }
@@ -522,7 +522,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         new_inst->dc_inst_handle = g_process.dc_inst_handle[i];
 
         dev_id = new_inst->instance.instance_info.physInstId.packageId;
-        if (QZ_OK != setInstance(dev_id, new_inst, qat_hw)) {
+        if (unlikely(QZ_OK != setInstance(dev_id, new_inst, qat_hw))) {
             QZ_ERROR("Insert instance on device %d failed\n", dev_id);
             QZ_HW_BACKOUT;
         }
@@ -559,7 +559,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
 
     rc = atexit(exitFunc);
-    if (QZ_OK != rc) {
+    if (unlikely(QZ_OK != rc)) {
         QZ_ERROR("Error in register exit hander rc = %d\n", rc);
         BACKOUT;
     }
@@ -568,7 +568,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
 
 done:
     initDebugLock();
-    if (0 != pthread_mutex_unlock(&g_lock)) {
+    if (unlikely(0 != pthread_mutex_unlock(&g_lock))) {
         return QZ_FAIL;
     }
 
@@ -802,14 +802,14 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
 {
     QzSess_T *qz_sess;
 
-    if (NULL == sess) {
+    if (unlikely(NULL == sess)) {
         return QZ_PARAMS;
     }
 
     sess->hw_session_stat = QZ_FAIL;
     if (sess->internal == NULL) {
         sess->internal = calloc(1, sizeof(QzSess_T));
-        if (NULL == sess->internal) {
+        if (unlikely(NULL == sess->internal)) {
             sess->hw_session_stat = QZ_NOSW_LOW_MEM;
             return QZ_NOSW_LOW_MEM;
         }
@@ -995,7 +995,7 @@ static void *doCompressIn(void *in)
     while (!done) {
         do {
             j = getUnusedBuffer(i, j);
-            if (-1 == j) {
+            if (unlikely(-1 == j)) {
                 nanosleep(&my_time, NULL);
             }
         } while (-1 == j);
@@ -1003,9 +1003,9 @@ static void *doCompressIn(void *in)
 
         g_process.qz_inst[i].stream[j].src1++; /*this buffer is in use*/
         src_send_sz = (remaining < src_sz) ? remaining : src_sz;
-        if (IS_DEFLATE(data_fmt) &&
-            1 == qz_sess->last &&
-            remaining <= src_sz) {
+        if (unlikely(IS_DEFLATE(data_fmt) &&
+                     1 == qz_sess->last &&
+                     remaining <= src_sz)) {
             opData.flushFlag = CPA_DC_FLUSH_FINAL;
         }
         g_process.qz_inst[i].stream[j].seq = qz_sess->seq; /*this buffer is in use*/
@@ -1036,7 +1036,7 @@ static void *doCompressIn(void *in)
         }
 
         /*using zerocopy for the first request while dest buffer is pinned*/
-        if (dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq)) {
+        if (unlikely(dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq))) {
             g_process.qz_inst[i].stream[j].orig_dest =
                 g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData;
             g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
@@ -1057,19 +1057,19 @@ static void *doCompressIn(void *in)
                                     &opData,
                                     &g_process.qz_inst[i].stream[j].res,
                                     (void *)(tag));
-            if (CPA_STATUS_RETRY == rc) {
+            if (unlikely(CPA_STATUS_RETRY == rc)) {
                 g_process.qz_inst[i].num_retries++;
                 usleep(qz_sess->sess_params.poll_sleep);
             }
 
-            if (g_process.qz_inst[i].num_retries > MAX_NUM_RETRY) {
+            if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
                 QZ_ERROR("instance %d retry count:%d exceed the max count: %d\n",
                          i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
                 goto err_exit;
             }
         } while (rc == CPA_STATUS_RETRY);
 
-        if (CPA_STATUS_SUCCESS != rc) {
+        if (unlikely(CPA_STATUS_SUCCESS != rc)) {
             QZ_ERROR("Error in cpaDcCompressData: %d\n", rc);
             goto err_exit;
         }
@@ -1080,7 +1080,7 @@ static void *doCompressIn(void *in)
         src_ptr += src_send_sz;
         remaining -= src_send_sz;
 
-        if (qz_sess->stop_submitting) {
+        if (unlikely(qz_sess->stop_submitting)) {
             remaining = 0;
         }
 
@@ -1137,7 +1137,7 @@ static void *doCompressOut(void *in)
         /*Poll for responses*/
         good = 0;
         sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 1);
-        if (CPA_STATUS_FAIL == sts) {
+        if (unlikely(CPA_STATUS_FAIL == sts)) {
             QZ_ERROR("Error in DcPoll: %d\n", sts);
             sess->thd_sess_stat = QZ_FAIL;
             goto err_exit;
@@ -1161,8 +1161,8 @@ static void *doCompressOut(void *in)
                          getpid(), pthread_self());
 
                 resl = &g_process.qz_inst[i].stream[j].res;
-                if (CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status &&
-                    CPA_DC_VERIFY_ERROR != resl->status) {
+                if (unlikely(CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status &&
+                             CPA_DC_VERIFY_ERROR != resl->status)) {
                     QZ_ERROR("Error(%d) in callback: %ld, %ld, ReqStatus: %d\n",
                              g_process.qz_inst[i].stream[j].job_status, i, j,
                              g_process.qz_inst[i].stream[j].res.status);
@@ -1178,7 +1178,7 @@ static void *doCompressOut(void *in)
                 QZ_DEBUG("\tconsumed = %d, produced = %d, seq_in = %ld\n",
                          resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq);
 
-                if (CPA_DC_VERIFY_ERROR == resl->status) {
+                if (unlikely(CPA_DC_VERIFY_ERROR == resl->status)) {
                     long src_len;
                     int src_location;
                     long block_count;
@@ -1292,7 +1292,7 @@ static void *doCompressOut(void *in)
                 } else {
                     dest_avail_len -= (outputHeaderSz(data_fmt) + resl->produced + outputFooterSz(
                                            data_fmt));
-                    if (dest_avail_len < 0) {
+                    if (unlikely(dest_avail_len < 0)) {
                         QZ_DEBUG("doCompressOut: inadequate output buffer length: %ld, outlen: %ld\n",
                                  (long)(*qz_sess->dest_sz), qz_sess->qz_out_len);
                         sess->thd_sess_stat = QZ_BUF_ERROR;
@@ -1319,7 +1319,7 @@ static void *doCompressOut(void *in)
                     qz_sess->next_dest += resl->produced;
                     qz_sess->qz_in_len += resl->consumed;
 
-                    if (NULL != qz_sess->crc32) {
+                    if (likely(NULL != qz_sess->crc32)) {
                         if (0 == *(qz_sess->crc32)) {
                             *(qz_sess->crc32) = resl->checksum;
                             QZ_DEBUG("crc32 1st blk is 0x%lX \n", *(qz_sess->crc32));
@@ -1462,26 +1462,26 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     QzSess_T *qz_sess;
     int rc;
 
-    if (NULL == sess     || \
-        NULL == src      || \
-        NULL == src_len  || \
-        NULL == dest     || \
-        NULL == dest_len || \
-        (last != 0 && last != 1)) {
+    if (unlikely(NULL == sess     || \
+                 NULL == src      || \
+                 NULL == src_len  || \
+                 NULL == dest     || \
+                 NULL == dest_len || \
+                 (last != 0 && last != 1))) {
         return QZ_PARAMS;
     }
 
 
     /*check if init called*/
     rc = qzInit(sess, getSwBackup(sess));
-    if (QZ_INIT_FAIL(rc)) {
+    if (unlikely(QZ_INIT_FAIL(rc))) {
         return rc;
     }
 
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
-        if (QZ_SETUP_SESSION_FAIL(rc)) {
+        if (unlikely(QZ_SETUP_SESSION_FAIL(rc))) {
             return rc;
         }
     }
@@ -1489,8 +1489,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     qz_sess = (QzSess_T *)(sess->internal);
 
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
-    if (data_fmt != QZ_DEFLATE_RAW &&
-        data_fmt != QZ_DEFLATE_GZIP_EXT) {
+    if (unlikely(data_fmt != QZ_DEFLATE_RAW &&
+                 data_fmt != QZ_DEFLATE_GZIP_EXT)) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
         return QZ_PARAMS;
     }
@@ -1516,7 +1516,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     }
 
     i = qzGrabInstance(qz_sess->inst_hint);
-    if (i == -1) {
+    if (unlikely(i == -1)) {
         if (qz_sess->sess_params.sw_backup == 1) {
             goto sw_compression;
         } else {
@@ -1529,11 +1529,11 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     QZ_DEBUG("qzCompress: inst is %d\n", i);
     qz_sess->inst_hint = i;
 
-    if (0 ==  g_process.qz_inst[i].mem_setup ||
-        0 ==  g_process.qz_inst[i].cpa_sess_setup) {
+    if (likely(0 ==  g_process.qz_inst[i].mem_setup ||
+               0 ==  g_process.qz_inst[i].cpa_sess_setup)) {
         QZ_DEBUG("Getting HW resources  for inst %d\n", i);
         rc = qzSetupHW(sess, i);
-        if (QZ_OK != rc) {
+        if (unlikely(QZ_OK != rc)) {
             qzReleaseInstance(i);
             if (QZ_LOW_MEM == rc || QZ_NO_INST_ATTACH == rc) {
                 goto sw_compression;
@@ -1717,7 +1717,7 @@ static void *doDecompressIn(void *in)
                                 (unsigned int *)&tmp_src_avail_len,
                                 dest_ptr,
                                 (unsigned int *)&tmp_dest_avail_len);
-            if (rc != QZ_OK) {
+            if (unlikely(rc != QZ_OK)) {
                 sess->thd_sess_stat = rc;
                 remaining = 0;
                 break;
@@ -1738,13 +1738,13 @@ static void *doDecompressIn(void *in)
                 j = getUnusedBuffer(i, j);
 
                 if (qz_sess->single_thread) {
-                    if ((-1 == j) ||
-                        ((0 == qz_sess->seq % qz_sess->sess_params.req_cnt_thrshold) &&
-                         (qz_sess->seq > qz_sess->seq_in))) {
+                    if (unlikely((-1 == j) ||
+                                 ((0 == qz_sess->seq % qz_sess->sess_params.req_cnt_thrshold) &&
+                                  (qz_sess->seq > qz_sess->seq_in)))) {
                         return ((void *) NULL);
                     }
                 } else {
-                    if (-1 == j) {
+                    if (unlikely(-1 == j)) {
                         nanosleep(&my_time, NULL);
                     }
                 }
@@ -1815,19 +1815,19 @@ static void *doDecompressIn(void *in)
                                          CPA_DC_FLUSH_FINAL,
                                          (void *)(tag));
                 QZ_DEBUG("mw>> %s():  DcDecompressData() rc = %d\n", __func__, rc);
-                if (CPA_STATUS_RETRY == rc) {
+                if (unlikely(CPA_STATUS_RETRY == rc)) {
                     g_process.qz_inst[i].num_retries++;
                     usleep(qz_sess->sess_params.poll_sleep);
                 }
 
-                if (g_process.qz_inst[i].num_retries > MAX_NUM_RETRY) {
+                if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
                     QZ_ERROR("instance %d retry count:%d exceed the max count: %d\n",
                              i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
                     goto err_exit;
                 }
             } while (rc == CPA_STATUS_RETRY);
 
-            if (CPA_STATUS_SUCCESS != rc) {
+            if (unlikely(CPA_STATUS_SUCCESS != rc)) {
                 QZ_ERROR("Error in cpaDcCompressData: %d\n", rc);
                 goto err_exit;
             }
@@ -1906,7 +1906,7 @@ static void *doDecompressOut(void *in)
         /*Poll for responses*/
         good = 0;
         sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 1);
-        if (CPA_STATUS_FAIL == sts) {
+        if (unlikely(CPA_STATUS_FAIL == sts)) {
             QZ_ERROR("Error in DcPoll: %d\n", sts);
             sess->thd_sess_stat = QZ_FAIL;
             goto err_exit;
@@ -1927,7 +1927,7 @@ static void *doDecompressOut(void *in)
                 QZ_DEBUG("doDecompressOut: Processing seqnumber %2.2d %2.2d %4.4ld\n",
                          i, j, g_process.qz_inst[i].stream[j].seq);
 
-                if (CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status) {
+                if (unlikely(CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status)) {
                     QZ_ERROR("Error(%d) in callback: %ld, %ld, ReqStatus: %d\n",
                              g_process.qz_inst[i].stream[j].job_status, i, j,
                              g_process.qz_inst[i].stream[j].res.status);
@@ -1959,8 +1959,9 @@ static void *doDecompressOut(void *in)
                     g_process.qz_inst[i].stream[j].src_pinned = 0;
                 }
 
-                if (resl->checksum != g_process.qz_inst[i].stream[j].gzip_footer_checksum ||
-                    resl->produced != g_process.qz_inst[i].stream[j].gzip_footer_orgdatalen) {
+                if (unlikely(resl->checksum !=
+                             g_process.qz_inst[i].stream[j].gzip_footer_checksum ||
+                             resl->produced != g_process.qz_inst[i].stream[j].gzip_footer_orgdatalen)) {
                     QZ_ERROR("Error in check footer, inst %ld, stream %ld\n", i, j);
                     QZ_DEBUG("resp checksum: %x data checksum %x\n",
                              resl->checksum,
@@ -2050,29 +2051,29 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     QzSess_T *qz_sess;
     QzGzH_T *hdr = (QzGzH_T *)src;
 
-    if (NULL == sess                 || \
-        NULL == src                  || \
-        NULL == src_len              || \
-        NULL == dest                 || \
-        NULL == dest_len) {
+    if (unlikely(NULL == sess                 || \
+                 NULL == src                  || \
+                 NULL == src_len              || \
+                 NULL == dest                 || \
+                 NULL == dest_len)) {
         return QZ_PARAMS;
     }
 
-    if (0 == *src_len) {
+    if (unlikely(0 == *src_len)) {
         *dest_len = 0;
         return QZ_OK;
     }
 
     /*check if init called*/
     rc = qzInit(sess, getSwBackup(sess));
-    if (QZ_INIT_FAIL(rc)) {
+    if (unlikely(QZ_INIT_FAIL(rc))) {
         return rc;
     }
 
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
-        if (QZ_SETUP_SESSION_FAIL(rc)) {
+        if (unlikely(QZ_SETUP_SESSION_FAIL(rc))) {
             return rc;
         }
     }
@@ -2080,9 +2081,9 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     qz_sess = (QzSess_T *)(sess->internal);
 
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
-    if (data_fmt != QZ_DEFLATE_RAW &&
-        data_fmt != QZ_DEFLATE_GZIP &&
-        data_fmt != QZ_DEFLATE_GZIP_EXT) {
+    if (unlikely(data_fmt != QZ_DEFLATE_RAW &&
+                 data_fmt != QZ_DEFLATE_GZIP &&
+                 data_fmt != QZ_DEFLATE_GZIP_EXT)) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
         return QZ_PARAMS;
     }
@@ -2107,7 +2108,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     }
 
     i = qzGrabInstance(qz_sess->inst_hint);
-    if (i == -1) {
+    if (unlikely(i == -1)) {
         if (qz_sess->sess_params.sw_backup == 1) {
             goto sw_decompression;
         } else {
@@ -2119,11 +2120,11 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     QZ_DEBUG("qzDecompress: inst is %d\n", i);
     qz_sess->inst_hint = i;
 
-    if (0 ==  g_process.qz_inst[i].mem_setup ||
-        0 ==  g_process.qz_inst[i].cpa_sess_setup) {
+    if (likely(0 ==  g_process.qz_inst[i].mem_setup ||
+               0 ==  g_process.qz_inst[i].cpa_sess_setup)) {
         QZ_DEBUG("Getting HW resources for inst %d\n", i);
         rc = qzSetupHW(sess, i);
-        if (QZ_OK != rc) {
+        if (unlikely(QZ_OK != rc)) {
             qzReleaseInstance(i);
             if (QZ_LOW_MEM == rc || QZ_NO_INST_ATTACH == rc) {
                 goto sw_decompression;
@@ -2189,13 +2190,13 @@ sw_decompression:
 
 int qzTeardownSession(QzSession_T *sess)
 {
-    if (sess == NULL) {
+    if (unlikely(sess == NULL)) {
         return QZ_PARAMS;
     }
 
-    if (NULL != sess->internal) {
+    if (likely(NULL != sess->internal)) {
         QzSess_T *qz_sess = (QzSess_T *) sess->internal;
-        if (NULL != qz_sess->inflate_strm) {
+        if (likely(NULL != qz_sess->inflate_strm)) {
             inflateEnd(qz_sess->inflate_strm);
             free(qz_sess->inflate_strm);
             qz_sess->inflate_strm = NULL;
@@ -2235,11 +2236,11 @@ int qzClose(QzSession_T *sess)
 {
     int i;
 
-    if (sess == NULL) {
+    if (unlikely(sess == NULL)) {
         return QZ_PARAMS;
     }
 
-    if (0 != pthread_mutex_lock(&g_lock)) {
+    if (unlikely(0 != pthread_mutex_lock(&g_lock))) {
         return QZ_FAIL;
     }
 
@@ -2249,7 +2250,7 @@ int qzClose(QzSession_T *sess)
     }
 
     stopQat();
-    if (0 != pthread_mutex_unlock(&g_lock)) {
+    if (unlikely(0 != pthread_mutex_unlock(&g_lock))) {
         return QZ_FAIL;
     }
 
