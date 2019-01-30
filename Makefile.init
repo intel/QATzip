@@ -35,8 +35,12 @@
 FUNCTEST_SRC_D = $(top_builddir)/test
 QZIP_UTIL_D = $(top_builddir)/utils
 QATZIP_LIB_D = $(top_builddir)/src
+QATZIP_MAN_D = $(top_builddir)/docs
 QATZIP_LIB_STATIC = libqatzip.a
 QATZIP_LIB_SHARED = libqatzip.so
+QATZIP_INCLUDE = qatzip.h
+QATZIP_MAN = QATzip-man.pdf
+QZIP_UTIL = qzip
 CODE_FORMATTING_BIN   = $(top_builddir)/test/code_format_tests/format.sh
 
 QAT_INCLUDE  ?= -I$(ICP_ROOT)/quickassist/include    \
@@ -54,18 +58,20 @@ default: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED) qzip
 all: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED) qzip test
 
 install: qzip $(QATZIP_LIB_SHARED)
-	$(INSTALL) -D -m 750 $(QATZIP_LIB_D)/$(QATZIP_LIB_STATIC) $(staticlib_dir)
-	$(INSTALL) -D -m 750 $(QATZIP_LIB_D)/$(QATZIP_LIB_SHARED) $(sharedlib_dir)
-	$(INSTALL) -D -m 750 $(top_builddir)/include/qatzip.h /usr/include/
-	$(LN_S) -f $(sharedlib_dir)/$(QATZIP_LIB_SHARED) /lib64/$(QATZIP_LIB_SHARED)
-	$(INSTALL) -D -m 777 $(QZIP_UTIL_D)/qzip $(bindir)
+	$(INSTALL) -D -m 750 $(QATZIP_LIB_D)/$(QATZIP_LIB_STATIC) $(staticlib_dir)/$(QATZIP_LIB_STATIC)
+	$(INSTALL) -D -m 750 $(QATZIP_LIB_D)/$(QATZIP_LIB_SHARED) $(sharedlib_dir)/$(QATZIP_LIB_SHARED)
+	$(INSTALL) -D -m 750 $(top_builddir)/include/$(QATZIP_INCLUDE) $(includedir)/$(QATZIP_INCLUDE)
+	$(LN_S) -f $(sharedlib_dir)/$(QATZIP_LIB_SHARED) /lib64
+	$(INSTALL) -D -m 777 $(QZIP_UTIL_D)/$(QZIP_UTIL) $(bindir)/$(QZIP_UTIL)
+	$(INSTALL) -D -m 777 $(QATZIP_MAN_D)/$(QATZIP_MAN) $(mandir)/$(QATZIP_MAN)
 
 uninstall:
 	$(RM) $(staticlib_dir)/$(QATZIP_LIB_STATIC)
 	$(RM) $(sharedlib_dir)/$(QATZIP_LIB_SHARED)
-	$(RM) /usr/include/qatzip.h
+	$(RM) $(includedir)/$(QATZIP_INCLUDE)
 	$(RM) /lib64/$(QATZIP_LIB_SHARED)
-	$(RM) $(bindir)/qzip
+	$(RM) $(bindir)/$(QZIP_UTIL)
+	$(RM) $(mandir)/$(QATZIP_MAN)
 
 $(QATZIP_LIB_STATIC):
 	$(MAKE) -C $(QATZIP_LIB_D) $(QATZIP_LIB_STATIC)
@@ -74,7 +80,7 @@ $(QATZIP_LIB_SHARED):
 	$(MAKE) -C $(QATZIP_LIB_D) $(QATZIP_LIB_SHARED)
 
 qzip: $(QATZIP_LIB_STATIC)
-	$(MAKE) -C $(QZIP_UTIL_D) qzip
+	$(MAKE) -C $(QZIP_UTIL_D) $(QZIP_UTIL)
 
 test: $(QATZIP_LIB_STATIC)
 	$(MAKE) -C $(FUNCTEST_SRC_D) all
@@ -91,5 +97,5 @@ clean:
 	$(MAKE) -C $(FUNCTEST_SRC_D) clean
 	$(MAKE) -C $(QZIP_UTIL_D) clean
 
-.PHONY: install uninstall $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED) qzip test clean
+.PHONY: install uninstall $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED) $(QZIP_UTIL) test clean
 export

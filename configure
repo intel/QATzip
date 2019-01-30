@@ -126,8 +126,8 @@ done
 
 # set install path
 bindir=${bindir:-$prefix/bin}
-staticlib_dir=${staticlib_dir:-$prefix/lib}
-sharedlib_dir=${sharedlib_dir:-$prefix/lib}
+staticlib_dir=${staticlib_dir:-$prefix/lib64}
+sharedlib_dir=${sharedlib_dir:-$prefix/lib64}
 includedir=${includedir:-$prefix/include}
 mandir=${mandir:-$prefix/share/man}
 
