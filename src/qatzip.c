@@ -292,7 +292,7 @@ static void init_timers(void)
     gettimeofday(&g_thread.timer[0], NULL);
 }
 
-static int qz_sessParamsCheck(QzSessionParams_T *params)
+int qz_sessParamsCheck(QzSessionParams_T *params)
 {
     if (!params) {
         return FAILURE;

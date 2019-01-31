@@ -550,7 +550,7 @@ if $test_main -m 1 -t 3 -l 8 && \
    streamingDecompressFileTest $sample_file_name && \
    $test_main -m 13 && \
    $test_main -m 14 && \
-#   $test_main -m 15 && \
+   $test_main -m 15 && \
    $test_main -m 16 && \
    $test_main -m 17
 then

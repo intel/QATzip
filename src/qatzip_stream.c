@@ -169,7 +169,11 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
             goto done;
         }
     }
-
+    if (qz_sessParamsCheck(&(((QzSess_T *)(sess->internal))->sess_params)) !=
+        SUCCESS) {
+        rc = QZ_PARAMS;
+        goto end;
+    }
     switch (strm->crc_type) {
     case QZ_CRC64:
         strm_crc = (unsigned long *)&strm->crc_64;
@@ -305,6 +309,13 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
             goto done;
         }
     }
+
+    if (qz_sessParamsCheck(&(((QzSess_T *)(sess->internal))->sess_params)) !=
+        SUCCESS) {
+        rc = QZ_PARAMS;
+        goto end;
+    }
+
     stream_buf = (QzStreamBuf_T *) strm->opaque;
     QZ_DEBUG("Decompress Stream Start...\n");
 
