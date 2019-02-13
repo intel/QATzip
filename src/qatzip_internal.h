@@ -266,4 +266,6 @@ unsigned char getSwBackup(QzSession_T *sess);
 
 extern CpaStatus icp_adf_get_numDevices(Cpa32U *);
 
+int initStream(QzSession_T *sess, QzStream_T *strm);
+
 #endif //_QATZIPP_H

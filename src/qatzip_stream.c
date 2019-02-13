@@ -44,7 +44,7 @@
 #include <qz_utils.h>
 #include <qatzip_internal.h>
 
-static int initStream(QzSession_T *sess, QzStream_T *strm)
+int initStream(QzSession_T *sess, QzStream_T *strm)
 {
     int rc = QZ_FAIL;
     QzSess_T *qz_sess = NULL;
