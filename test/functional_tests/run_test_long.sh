@@ -286,4 +286,8 @@ then
     exit 1
 fi
 
+if ! ${BASEDIR}/run_test_ascii.sh
+then
+    exit 1
+fi
 exit 0
