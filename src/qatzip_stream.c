@@ -221,7 +221,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
         input_len = strm->pending_in;
         output_len = stream_buf->buf_len;
-        copied_input -= strm->pending_in;
+
         strm_last = (0 == strm->in_sz && last) ? 1 : 0;
         QZ_DEBUG("Before Call qzCompressCrc input_len %u output_len %u "
                  "stream->pending_in %u stream->pending_out %u "
@@ -267,7 +267,8 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
 
 done:
-    strm->in_sz = copied_input + consumed;
+
+    strm->in_sz = copied_input;
     strm->out_sz = produced;
     QZ_DEBUG("Exit Compress Stream input_len %u output_len %u "
              "stream->pending_in %u stream->pending_out %u "
@@ -288,6 +289,8 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     unsigned int copied_input = 0;
     unsigned int consumed = 0;
     unsigned int produced = 0;
+    unsigned int copy_more = 1;
+    unsigned int inbuf_offset = 0;
     QzStreamBuf_T *stream_buf = NULL;
 
     if (NULL == sess     || \
@@ -331,37 +334,37 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
 
     while (0 == strm->pending_out) {
-        if (0 == strm->in_sz) {
-            rc = QZ_OK;
-            QZ_DEBUG("No input...\n");
-            goto done;
-        }
 
-        copied_input += copyStreamInput(strm, strm->in + consumed);
+        if (1 == copy_more) {
+            copied_input += copyStreamInput(strm, strm->in + consumed);
 
-        if (strm->pending_in < stream_buf->buf_len &&
-            last != 1) {
-            rc = QZ_OK;
-            QZ_DEBUG("Batch more input data...\n");
-            goto done;
+            if (strm->pending_in < stream_buf->buf_len &&
+                last != 1) {
+                rc = QZ_OK;
+                QZ_DEBUG("Batch more input data...\n");
+                goto done;
+            } else {
+                copy_more = 0;
+            }
         }
 
         input_len = strm->pending_in;
         output_len = stream_buf->buf_len;
-        copied_input -= strm->pending_in;
+
         QZ_DEBUG("Before Call qzDecompress input_len %u output_len %u "
                  "stream->pending_in %u stream->pending_out %u "
                  "stream->in_sz %d stream->out_sz %d\n",
                  input_len, output_len, strm->pending_in, strm->pending_out,
                  strm->in_sz, strm->out_sz);
-        rc = qzDecompress(sess, stream_buf->in_buf, &input_len,
+        rc = qzDecompress(sess, stream_buf->in_buf + inbuf_offset, &input_len,
                           stream_buf->out_buf, &output_len);
 
         QZ_DEBUG("Return code = %d\n", rc);
         if (QZ_OK != rc && QZ_BUF_ERROR != rc) {
-            return rc;
+            goto done;
         }
 
+        inbuf_offset += input_len;
         consumed += input_len;
         strm->pending_in -= input_len;
         strm->pending_out = output_len;
@@ -375,19 +378,24 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
                  input_len, output_len, strm->pending_in, strm->pending_out,
                  strm->in_sz, strm->out_sz);
         if (QZ_BUF_ERROR == rc) {
-            QZ_DEBUG("Recoverable buffer error occurs... set pending_in 0\n");
-            strm->pending_in = 0;
+            QZ_DEBUG("Recoverable buffer error occurs... \n");
             rc = QZ_OK;
-            break;
+            continue;
         }
-        if (0 == strm->pending_out) {
-            QZ_DEBUG("Pending_out = 0, set pending_in 0\n");
-            strm->pending_in = 0;
+
+        if (0 == strm->pending_in) {
+            copy_more = 1;
+            inbuf_offset = 0;
+        }
+        if (0 == strm->pending_in && 0 == strm->in_sz) {
+            rc = QZ_OK;
+            goto done;
         }
     }
 
 done:
-    strm->in_sz = copied_input + consumed;
+
+    strm->in_sz = copied_input;
     strm->out_sz = produced;
     QZ_DEBUG("Exit Decompress Stream input_len %u output_len %u "
              "stream->pending_in %u stream->pending_out %u "
