@@ -1390,6 +1390,12 @@ void *qzMemFuncTest(void *test_arg)
         if (ptr[i] == NULL || ptr2[i] == NULL) {
             QZ_ERROR("[Test2 %ld]\tptr[%d]=0x%lx\t0x%lx\n", tid, i,
                      (unsigned long)ptr[i], (unsigned long)ptr2[i]);
+            if (ptr[i]) {
+                qzFree(ptr[i]);
+            }
+            if (ptr2[i]) {
+                qzFree(ptr2[i]);
+            }
             break;
         }
         success++;
@@ -2573,6 +2579,110 @@ void *qzEndStreamNegParam(void *arg)
     return NULL;
 }
 
+void *qzInitPcieCountCheck(void *thd_arg)
+{
+    int rc;
+    unsigned char *src = NULL, *dest = NULL;
+    unsigned int src_sz, dest_sz;
+    unsigned int consumed, done;
+    QzStream_T decomp_strm = {0};
+    QzSessionParams_T params;
+    unsigned int last = 0;
+    char *filename = NULL;
+    TestArg_T *test_arg = (TestArg_T *)thd_arg;
+    const int gen_data = test_arg->gen_data;
+    const long tid = test_arg->thd_id;
+
+    QZ_DEBUG("Start qzInitPcieCountCheck test\n");
+
+    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+        QZ_ERROR("qzInit1 error. rc = %d\n", rc);
+    }
+    QZ_DEBUG("qzInit1 done. rc = %d, g_process.pcie_count = %d\n", rc,
+             g_process.pcie_count);
+
+    qzClose(&g_session_th[tid]);
+    QZ_DEBUG("qzClose done. g_process.pcie_count = %d\n", g_process.pcie_count);
+
+    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+        QZ_ERROR("qzInit2 error. rc = %d\n", rc);
+    }
+    QZ_DEBUG("qzInit2 done. rc = %d, g_process.pcie_count = %d\n", rc,
+             g_process.pcie_count);
+
+    if (qzGetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: fail to get defulat params.\n");
+        goto done;
+    }
+    params.strm_buff_sz = 1024 * 1024;
+    if (qzSetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: set params fail with incorrect compress params.\n");
+        goto done;
+    }
+
+    //set by default configurations
+    rc = qzSetupSession(&g_session_th[tid], NULL);
+    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+        pthread_exit((void *)"qzSetupSession failed");
+    }
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
+
+    if (gen_data) {
+        QZ_ERROR("Err: No input file.\n");
+        goto done;
+    }
+
+    src = test_arg->src;
+    src_sz = test_arg->src_sz;
+    dest = test_arg->decomp_out;
+    dest_sz = test_arg->decomp_out_sz;
+    consumed = 0;
+    done = 0;
+    filename = g_input_file_name;
+
+    if (!src || !dest) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+
+    {
+        while (!done) {
+            decomp_strm.in    = src + consumed;
+            decomp_strm.in_sz = src_sz - consumed;
+            decomp_strm.out   = dest;
+            decomp_strm.out_sz =  dest_sz;
+            last = 1;
+
+            rc = qzDecompressStream(&g_session_th[tid], &decomp_strm, last);
+            if (rc != QZ_OK) {
+                QZ_ERROR("qzDecompressStream FAILED, return: %d\n", rc);
+                goto done;
+            }
+
+            QZ_DEBUG("Decompressed %d bytes into %d\n", src_sz, dest_sz);
+            dumpDecompressedData(decomp_strm.out_sz, decomp_strm.out, filename);
+            consumed += decomp_strm.in_sz;
+
+            if (src_sz == consumed && decomp_strm.pending_out == 0) {
+                done = 1;
+            }
+        }
+
+        qzEndStream(&g_session_th[tid], &decomp_strm);
+    }
+
+done:
+    if (gen_data) {
+        qzFree(src);
+        qzFree(dest);
+    }
+
+    (void)qzTeardownSession(&g_session_th[tid]);
+    pthread_exit((void *)NULL);
+}
+
 void *qzCompressDecompressSwQZMixed(void *arg)
 {
     enum TestType_E {
@@ -3559,6 +3669,9 @@ int main(int argc, char *argv[])
     case 18:
         test_thread_safe_flag = 1;
         qzThdOps = qzCompressAndDecompress;
+        break;
+    case 19:
+        qzThdOps = qzInitPcieCountCheck;
         break;
     default:
         goto done;

@@ -326,7 +326,7 @@ static void stopQat(void)
 
     if (QZ_NONE == g_process.qz_init_status ||
         QZ_NO_HW == g_process.qz_init_status) {
-        return;
+        goto reset;
     }
 
     QZ_DEBUG("Call stopQat.\n");
@@ -345,8 +345,11 @@ static void stopQat(void)
     }
 
     (void)icp_sal_userStop();
+
+reset:
     g_process.num_instances = (Cpa16U)0;
     g_process.qz_init_status = QZ_NONE;
+    g_process.pcie_count = -1;
 }
 
 static void freeQzMemEntries(void)

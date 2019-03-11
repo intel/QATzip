@@ -957,4 +957,10 @@ else
     exit 2
 fi
 
+#test for calling qzInit() again after a qzClose(), in "no HW" environment (pcie_count == 0)
+if ! ${BASEDIR}/run_test_qzInit.sh
+then
+    exit 2
+fi
+
 exit 0
