@@ -575,12 +575,12 @@ else
 fi
 
 #test for chunksz
-if [ "$SERVER_LOCATION_DALIAN" != "DALIAN" ];then
-    if ! ${BASEDIR}/run_test_chunksz.sh
-    then
-        exit 2
-    fi
-fi
+#if [ "$SERVER_LOCATION_DALIAN" != "DALIAN" ];then
+#    if ! ${BASEDIR}/run_test_chunksz.sh
+#    then
+#        exit 2
+#    fi
+#fi
 
 #Mim allocated memory test
 echo "Mim allocated memory test"

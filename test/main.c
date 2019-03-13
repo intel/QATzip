@@ -3496,6 +3496,7 @@ int main(int argc, char *argv[])
 
         if (fread(input_buf, 1, input_buf_len, file) != input_buf_len) {
             QZ_ERROR("ERROR: fail to read file %s\n", g_input_file_name);
+            fclose(file);
             return -1;
         } else {
             QZ_ERROR("Read %d bytes from file %s\n", input_buf_len, g_input_file_name);
