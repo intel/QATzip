@@ -151,8 +151,15 @@ void *qzMalloc(size_t sz, int numa, int pinned)
         if (NULL == g_qz_mem) {
             if (QZ_OK != qzGetMaxHugePages() || \
                 0 == g_mem_entries) {
-                (void)pthread_mutex_unlock(&g_qz_mem_lock);
-                return NULL;
+                if (COMMON_MEM == pinned) {
+                    QZ_ERROR("qzGetMaxHugePages failed, use malloc for qzMalloc\n");
+                    g_a = malloc(sz);
+                    (void)pthread_mutex_unlock(&g_qz_mem_lock);
+                    return g_a;
+                } else {
+                    (void)pthread_mutex_unlock(&g_qz_mem_lock);
+                    return NULL;
+                }
             }
 
             g_qz_mem = (QzMem_T *)calloc(g_mem_entries, sizeof(QzMem_T));

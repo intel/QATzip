@@ -784,14 +784,14 @@ function early_HW_detection_service_hugepage0_test()
 
     if $test_main -m 9 -B 0 > EarlyHWDetectionTestlog 2>&1
     then
-        echo "early HW detection service hugepage0 test PASSED"
-        rc=1
-    else
-        echo "early HW detection service hugepage0 test failed"
+        echo "Hugepage = 0 test PASSED"
         rc=0
+    else
+        echo "Hugepage = 0 test failed"
+        rc=1
     fi
 
-    error_Key=$(grep "fail to create memory for thread 0" EarlyHWDetectionTestlog)
+    error_Key=$(grep "qzGetMaxHugePages failed, use malloc for qzMalloc" EarlyHWDetectionTestlog)
     rm -f EarlyHWDetectionTestlog
 
     if [[ -z $error_Key ]]
@@ -860,6 +860,99 @@ then
     echo "Early HW detection test OK"
 else
     echo "Early HW detection test FAILED!!! :(";
+    exit 2
+fi
+
+function none_QAT_stream_compress_decompress_test()
+{
+    local test_file_name=$1
+    local rc=0
+
+    if [ ! -f "$test_file_path/$test_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+
+    rm -f $test_file_name $test_file_name.gz $test_file_name.gz.decomp
+
+    cp -f $test_file_path/$test_file_name ./
+    orig_checksum=`md5sum $test_file_name`
+    current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
+
+    $ICP_BUILD_OUTPUT/adf_ctl down
+
+   if $test_main -m 11 -i $test_file_name && \
+        $test_main -m 12 -i "$test_file_name.gz"
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name Failed";
+        rc=1
+        return $rc
+    fi
+
+    new_checksum=`md5sum $test_file_name.gz.decomp`
+
+    echo 'new_checksum '$new_checksum
+    echo 'orig_checksum '$orig_checksum
+
+    if [[ ${new_checksum%% *} != ${orig_checksum%% *} ]]
+    then
+        echo "Checksum mismatch, stream compress decompress test with adf_ctl down FAILED."
+        rc=1
+        return $rc
+    else
+        echo "Checksum match, stream compress decompress test with adf_ctl down PASSED."
+        rc=0
+    fi
+
+    $ICP_BUILD_OUTPUT/adf_ctl up
+
+    rm -f $test_file_name $test_file_name.gz $test_file_name.gz.decomp
+
+    cp -f $test_file_path/$test_file_name ./
+
+    echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+
+   if $test_main -m 11 -i $test_file_name && \
+        $test_main -m 12 -i "$test_file_name.gz"
+    then
+        echo "(De)Compress $test_file_name OK";
+        rc=0
+    else
+        echo "(De)Compress $test_file_name Failed";
+        rc=1
+        return $rc
+    fi
+
+    new_checksum=`md5sum $test_file_name.gz.decomp`
+
+    echo 'new_checksum '$new_checksum
+    echo 'orig_checksum '$orig_checksum
+
+    if [[ ${new_checksum%% *} != ${orig_checksum%% *} ]]
+    then
+        echo "Checksum mismatch, stream compress decompress test without usdm_drv FAILED."
+        rc=1
+        return $rc
+    else
+        echo "Checksum match, stream compress decompress test without usdm_drv PASSED."
+        rc=0
+    fi
+
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
+
+    return $rc
+}
+
+if none_QAT_stream_compress_decompress_test $sample_file_name
+then
+    echo "None QAT stream compress decompress test OK"
+else
+    echo "None QAT stream compress decompress test FAILED!!! :("
     exit 2
 fi
 

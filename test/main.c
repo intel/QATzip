@@ -1995,7 +1995,7 @@ void *qzCompressStreamOutput(void *thd_arg)
     QZ_DEBUG("Hello from qzCompressStreamOutput id %d\n", tid);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
@@ -2012,7 +2012,7 @@ void *qzCompressStreamOutput(void *thd_arg)
 
     //set by default configurations
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH && rc != QZ_NO_HW) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);
@@ -2085,7 +2085,7 @@ void *qzDecompressStreamInput(void *thd_arg)
     QZ_DEBUG("Hello from qzDecompressStreamInput id %d\n", tid);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
@@ -2102,7 +2102,7 @@ void *qzDecompressStreamInput(void *thd_arg)
 
     //set by default configurations
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH && rc != QZ_NO_HW) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);

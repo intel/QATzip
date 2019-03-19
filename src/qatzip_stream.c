@@ -76,6 +76,15 @@ static int initStream(QzSession_T *sess, QzStream_T *strm)
     stream_buf->in_buf = qzMalloc(stream_buf->buf_len, NODE_0, PINNED_MEM);
     stream_buf->out_buf = qzMalloc(stream_buf->buf_len, NODE_0, PINNED_MEM);
 
+    if (NULL == stream_buf->in_buf) {
+        QZ_DEBUG("stream_buf->in_buf : PINNED_MEM failed, try COMMON_MEM\n");
+        stream_buf->in_buf = qzMalloc(stream_buf->buf_len, NODE_0, COMMON_MEM);
+    }
+    if (NULL == stream_buf->out_buf) {
+        QZ_DEBUG("stream_buf->out_buf : PINNED_MEM failed, try COMMON_MEM\n");
+        stream_buf->out_buf = qzMalloc(stream_buf->buf_len, NODE_0, COMMON_MEM);
+    }
+
     if (NULL == stream_buf->in_buf ||
         NULL == stream_buf->out_buf) {
         QZ_ERROR("Fail to allocate memory for QzStreamBuf");

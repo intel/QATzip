@@ -324,7 +324,8 @@ static void stopQat(void)
     int i;
     CpaStatus status = CPA_STATUS_SUCCESS;
 
-    if (QZ_NONE == g_process.qz_init_status) {
+    if (QZ_NONE == g_process.qz_init_status ||
+        QZ_NO_HW == g_process.qz_init_status) {
         return;
     }
 
