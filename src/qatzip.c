@@ -1475,7 +1475,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
 
     /*check if init called*/
     rc = qzInit(sess, getSwBackup(sess));
-    if (unlikely(QZ_INIT_FAIL(rc))) {
+    if (QZ_INIT_FAIL(rc)) {
         return rc;
     }
 
@@ -2060,14 +2060,14 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
         return QZ_PARAMS;
     }
 
-    if (unlikely(0 == *src_len)) {
+    if (0 == *src_len) {
         *dest_len = 0;
         return QZ_OK;
     }
 
     /*check if init called*/
     rc = qzInit(sess, getSwBackup(sess));
-    if (unlikely(QZ_INIT_FAIL(rc))) {
+    if (QZ_INIT_FAIL(rc)) {
         return rc;
     }
 
