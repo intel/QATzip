@@ -14,6 +14,7 @@
     - [Install QATzip](#install-qatzip)
     - [Non-root Install QATzip](#non-root-install-qatzip)
     - [Test QATzip](#test-qatzip)
+    - [Performance test with QATzip](#performance-test-with-qatzip)
 - [QATzip API manual](#qatzip-api-manual)
 - [Intended Audience](#intended-audience)
 - [Legal](#legal)
@@ -257,6 +258,19 @@ compressing or decompressing files:
     "  -C, --chunksz     set chunk size",
     "  -r,               set max inflight request number
     "  -o,               set output file name
+```
+
+### Performance test with QATzip
+
+Please run the QATzip (de)compression performance test with the following command.
+Please update the drive configuration and process/thread argument in run_perf_test.sh
+before running the performance test.
+Note that when number for threads changed, the argument "max_huge_pages_per_process"
+in run_perf_test.sh should be changed accordingly, at least 6 times of threads number.
+
+```bash
+    cd $QZ_ROOT/test/performance_tests
+    ./run_perf_test.sh
 ```
 
 ## QATzip API Manual
