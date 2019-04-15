@@ -87,8 +87,7 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
 
     if (NULL == stream_buf->in_buf ||
         NULL == stream_buf->out_buf) {
-        QZ_ERROR("Fail to allocate memory for QzStreamBuf");
-        return QZ_FAIL;
+        goto clear;
     }
     QZ_DEBUG("Allocate stream buf %u\n", stream_buf->buf_len);
 
@@ -97,6 +96,23 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
     strm->crc_32 = 0;
     strm->crc_64 = 0;
     return QZ_OK;
+
+clear:
+    if (NULL == stream_buf->in_buf) {
+        QZ_ERROR("Fail to allocate memory for in_buf of QzStreamBuf");
+    } else {
+        qzFree(stream_buf->in_buf);
+    }
+
+    if (NULL == stream_buf->out_buf) {
+        QZ_ERROR("Fail to allocate memory for out_buf of QzStreamBuf");
+    } else {
+        qzFree(stream_buf->out_buf);
+    }
+    free(stream_buf);
+    stream_buf = NULL;
+    strm->opaque = NULL;
+    return QZ_FAIL;
 }
 
 static unsigned int copyStreamInput(QzStream_T *strm, unsigned char *in)
