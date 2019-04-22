@@ -87,6 +87,9 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     QzDataFormat_T data_fmt = QZ_DATA_FORMAT_DEFAULT;
     unsigned int chunk_sz = QZ_HW_BUFF_SZ;
 
+    *src_len = 0;
+    *dest_len = 0;
+
     /*check if setupSession called*/
     if (NULL == sess->internal) {
         ret = qzSetupSession(sess, NULL);
@@ -205,6 +208,8 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     if (NULL == stream) {
         stream = malloc(sizeof(z_stream));
         if (NULL == stream) {
+            *src_len = 0;
+            *dest_len = 0;
             return QZ_FAIL;
         }
 
@@ -220,6 +225,8 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     stream->avail_in  = *src_len;
     stream->next_out  = (Bytef *)dest;
     stream->avail_out = *dest_len;
+    *src_len = 0;
+    *dest_len = 0;
 
     QZ_DEBUG("decomp_sw data_fmt: %d\n", data_fmt);
     switch (data_fmt) {
@@ -312,6 +319,9 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
 #endif
     QZ_DEBUG("Start qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
              *src_len, *dest_len);
+
+    *src_len = 0;
+    *dest_len = 0;
 
     while (total_in < input_len && total_out < output_len) {
         ret = qzSWDecompress(sess,

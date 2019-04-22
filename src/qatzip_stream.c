@@ -147,6 +147,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     unsigned int output_len = 0;
     unsigned int copied_output = 0;
     unsigned int copied_input = 0;
+    unsigned int copied_input_last = 0;
     unsigned int consumed = 0;
     unsigned int produced = 0;
     unsigned int strm_last = 0;
@@ -158,17 +159,25 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         NULL == strm     || \
         (last != 0 && last != 1)) {
         rc = QZ_PARAMS;
+        if (NULL != strm) {
+            strm->in_sz = 0;
+            strm->out_sz = 0;
+        }
         goto end;
     }
 
     if (NULL == strm->out) {
         rc = QZ_PARAMS;
+        strm->in_sz = 0;
+        strm->out_sz = 0;
         goto end;
     }
 
     if (NULL == strm->in && \
         strm->in_sz > 0) {
         rc = QZ_PARAMS;
+        strm->in_sz = 0;
+        strm->out_sz = 0;
         goto end;
     }
 
@@ -181,6 +190,8 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     if (qz_sessParamsCheck(&(((QzSess_T *)(sess->internal))->sess_params)) !=
         SUCCESS) {
         rc = QZ_PARAMS;
+        strm->in_sz = 0;
+        strm->out_sz = 0;
         goto end;
     }
     switch (strm->crc_type) {
@@ -198,6 +209,8 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
+            strm->in_sz = 0;
+            strm->out_sz = 0;
             return rc;
         }
     }
@@ -206,6 +219,8 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     if (data_fmt != QZ_DEFLATE_RAW &&
         data_fmt != QZ_DEFLATE_GZIP_EXT) {
         QZ_ERROR("Invalid data format: %d\n", data_fmt);
+        strm->in_sz = 0;
+        strm->out_sz = 0;
         return QZ_PARAMS;
     }
 
@@ -220,6 +235,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
 
     while (0 == strm->pending_out) {
+        copied_input_last = copied_input;
         copied_input += copyStreamInput(strm, strm->in + consumed);
 
         if (strm->pending_in < stream_buf->buf_len &&
@@ -257,6 +273,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
             if (0 == input_len) {
                 QZ_ERROR("ERROR in copy stream output, stream buf size = %u\n",
                          stream_buf->buf_len);
+                copied_input = copied_input_last;
                 rc = QZ_FAIL;
             } else {
                 rc = QZ_OK;
@@ -265,6 +282,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         }
 
         if (QZ_OK != rc) {
+            copied_input = copied_input_last;
             rc = QZ_FAIL;
             goto done;
         }
@@ -296,6 +314,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     unsigned int output_len = 0;
     unsigned int copied_output = 0;
     unsigned int copied_input = 0;
+    unsigned int copied_input_last = 0;
     unsigned int consumed = 0;
     unsigned int produced = 0;
     unsigned int copy_more = 1;
@@ -306,12 +325,18 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         NULL == strm     || \
         (last != 0 && last != 1)) {
         rc = QZ_PARAMS;
+        if (NULL != strm) {
+            strm->in_sz = 0;
+            strm->out_sz = 0;
+        }
         goto end;
     }
 
     if (NULL == strm->in || \
         NULL == strm->out) {
         rc = QZ_PARAMS;
+        strm->in_sz = 0;
+        strm->out_sz = 0;
         goto end;
     }
 
@@ -325,6 +350,8 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     if (qz_sessParamsCheck(&(((QzSess_T *)(sess->internal))->sess_params)) !=
         SUCCESS) {
         rc = QZ_PARAMS;
+        strm->in_sz = 0;
+        strm->out_sz = 0;
         goto end;
     }
 
@@ -345,6 +372,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     while (0 == strm->pending_out) {
 
         if (1 == copy_more) {
+            copied_input_last = copied_input;
             copied_input += copyStreamInput(strm, strm->in + consumed);
 
             if (strm->pending_in < stream_buf->buf_len &&
@@ -370,6 +398,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
         QZ_DEBUG("Return code = %d\n", rc);
         if (QZ_OK != rc && QZ_BUF_ERROR != rc) {
+            copied_input = copied_input_last;
             goto done;
         }
 

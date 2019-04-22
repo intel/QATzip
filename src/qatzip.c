@@ -1442,6 +1442,12 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
     QzSess_T *qz_sess = NULL;
 
     if (NULL == sess || (last != 0 && last != 1)) {
+        if (NULL != src_len) {
+            *src_len = 0;
+        }
+        if (NULL != dest_len) {
+            *dest_len = 0;
+        }
         return QZ_PARAMS;
     }
 
@@ -1449,6 +1455,12 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
+            if (NULL != src_len) {
+                *src_len = 0;
+            }
+            if (NULL != dest_len) {
+                *dest_len = 0;
+            }
             return rc;
         }
     }
@@ -1472,6 +1484,12 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
                  NULL == dest     || \
                  NULL == dest_len || \
                  (last != 0 && last != 1))) {
+        if (NULL != src_len) {
+            *src_len = 0;
+        }
+        if (NULL != dest_len) {
+            *dest_len = 0;
+        }
         return QZ_PARAMS;
     }
 
@@ -1479,6 +1497,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     /*check if init called*/
     rc = qzInit(sess, getSwBackup(sess));
     if (QZ_INIT_FAIL(rc)) {
+        *src_len = 0;
+        *dest_len = 0;
         return rc;
     }
 
@@ -1486,6 +1506,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (unlikely(QZ_SETUP_SESSION_FAIL(rc))) {
+            *src_len = 0;
+            *dest_len = 0;
             return rc;
         }
     }
@@ -1496,6 +1518,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     if (unlikely(data_fmt != QZ_DEFLATE_RAW &&
                  data_fmt != QZ_DEFLATE_GZIP_EXT)) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
+        *src_len = 0;
+        *dest_len = 0;
         return QZ_PARAMS;
     }
     QZ_DEBUG("qzCompressCrc data_fmt: %d, input crc32 is 0x%lX\n",
@@ -1516,6 +1540,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
         goto sw_compression;
     } else if (sess->hw_session_stat != QZ_OK &&
                sess->hw_session_stat != QZ_NO_INST_ATTACH) {
+        *src_len = 0;
+        *dest_len = 0;
         return sess->hw_session_stat;
     }
 
@@ -1525,6 +1551,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
             goto sw_compression;
         } else {
             sess->hw_session_stat = QZ_NO_INST_ATTACH;
+            *src_len = 0;
+            *dest_len = 0;
             return QZ_NOSW_NO_INST_ATTACH;
         }
         /*Make this a s/w compression*/
@@ -1542,6 +1570,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
             if (QZ_LOW_MEM == rc || QZ_NO_INST_ATTACH == rc) {
                 goto sw_compression;
             } else {
+                *src_len = 0;
+                *dest_len = 0;
                 return rc;
             }
         }
@@ -2060,6 +2090,12 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
                  NULL == src_len              || \
                  NULL == dest                 || \
                  NULL == dest_len)) {
+        if (NULL != src_len) {
+            *src_len = 0;
+        }
+        if (NULL != dest_len) {
+            *dest_len = 0;
+        }
         return QZ_PARAMS;
     }
 
@@ -2071,6 +2107,8 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     /*check if init called*/
     rc = qzInit(sess, getSwBackup(sess));
     if (QZ_INIT_FAIL(rc)) {
+        *src_len = 0;
+        *dest_len = 0;
         return rc;
     }
 
@@ -2078,6 +2116,8 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (unlikely(QZ_SETUP_SESSION_FAIL(rc))) {
+            *src_len = 0;
+            *dest_len = 0;
             return rc;
         }
     }
@@ -2089,6 +2129,8 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
                  data_fmt != QZ_DEFLATE_GZIP &&
                  data_fmt != QZ_DEFLATE_GZIP_EXT)) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
+        *src_len = 0;
+        *dest_len = 0;
         return QZ_PARAMS;
     }
 
@@ -2108,6 +2150,8 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
         goto sw_decompression;
     } else if (sess->hw_session_stat != QZ_OK &&
                sess->hw_session_stat != QZ_NO_INST_ATTACH) {
+        *src_len = 0;
+        *dest_len = 0;
         return sess->hw_session_stat;
     }
 
@@ -2117,6 +2161,8 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
             goto sw_decompression;
         } else {
             sess->hw_session_stat = QZ_NO_INST_ATTACH;
+            *src_len = 0;
+            *dest_len = 0;
             return QZ_NOSW_NO_INST_ATTACH;
         }
         /*Make this a s/w compression*/
@@ -2133,6 +2179,8 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
             if (QZ_LOW_MEM == rc || QZ_NO_INST_ATTACH == rc) {
                 goto sw_decompression;
             } else {
+                *src_len = 0;
+                *dest_len = 0;
                 return rc;
             }
         }
