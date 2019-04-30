@@ -73,13 +73,16 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
 
 {
     int ret;
-    z_stream stream;
+    z_stream *stream = NULL;
+    int flush_flag;
+    int last_loop_in;
+    int last_loop_out;
+    int current_loop_in;
+    int current_loop_out;
     gz_header hdr;
-    CpaDcRqResults res;
     unsigned int left_input_sz = *src_len;
     unsigned int left_output_sz = *dest_len;
     unsigned int send_sz;
-    unsigned int cur_hdr_pos = 0;
     unsigned int total_in = 0, total_out = 0;
     QzSess_T *qz_sess = NULL;
     int windows_bits = 0;
@@ -104,65 +107,97 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                  Z_BEST_COMPRESSION : Z_DEFAULT_COMPRESSION;
     data_fmt = qz_sess->sess_params.data_fmt;
     chunk_sz = qz_sess->sess_params.hw_buff_sz;
+    stream = qz_sess->deflate_strm;
 
-    switch (data_fmt) {
-    case QZ_DEFLATE_RAW:
-        windows_bits = -MAX_WBITS;
-        break;
-    case QZ_DEFLATE_GZIP_EXT:
-    default:
-        windows_bits = MAX_WBITS + GZIP_WRAPPER;
-        break;
-    }
+    if (DeflateNull == qz_sess->deflate_stat) {
+        if (NULL == stream) {
+            stream = malloc(sizeof(z_stream));
+            if (NULL == stream) {
+                return QZ_FAIL;
+            }
 
-    stream.zalloc = (alloc_func)0;
-    stream.zfree = (free_func)0;
-    stream.opaque = (voidpf)0;
-#ifdef QATZIP_DEBUG
-    insertThread((unsigned int)pthread_self(), COMPRESSION, SW);
-#endif
+            qz_sess->deflate_strm = stream;
+        }
 
-    do {
+        stream->zalloc = (alloc_func)0;
+        stream->zfree = (free_func)0;
+        stream->opaque = (voidpf)0;
+        stream->total_in = 0;
+        stream->total_out = 0;
+
+        switch (data_fmt) {
+        case QZ_DEFLATE_RAW:
+            windows_bits = -MAX_WBITS;
+            break;
+        case QZ_DEFLATE_GZIP_EXT:
+        default:
+            windows_bits = MAX_WBITS + GZIP_WRAPPER;
+            break;
+        }
+
         /*Gzip header*/
-        if (Z_OK != deflateInit2(&stream,
+        if (Z_OK != deflateInit2(stream,
                                  comp_level,
                                  Z_DEFLATED,
                                  windows_bits,
                                  MAX_MEM_LEVEL,
                                  Z_DEFAULT_STRATEGY)) {
+            qz_sess->deflate_stat = DeflateNull;
             return QZ_FAIL;
         }
+        qz_sess->deflate_stat = DeflateInited;
 
-        if (QZ_DEFLATE_RAW != data_fmt) {
+        if (QZ_DEFLATE_GZIP_EXT == data_fmt) {
             gen_qatzip_hdr(&hdr);
-            if (Z_OK != deflateSetHeader(&stream, &hdr)) {
+            if (Z_OK != deflateSetHeader(stream, &hdr)) {
+                qz_sess->deflate_stat = DeflateNull;
+                stream->total_in = 0;
+                stream->total_out = 0;
                 return QZ_FAIL;
             }
         }
+    }
 
+#ifdef QATZIP_DEBUG
+    insertThread((unsigned int)pthread_self(), COMPRESSION, SW);
+#endif
+
+    do {
         send_sz = left_input_sz > chunk_sz ? chunk_sz : left_input_sz;
         left_input_sz -= send_sz;
 
-        stream.next_in   = (z_const Bytef *)src + total_in;
-        stream.avail_in  = send_sz;
-        stream.next_out  = (Bytef *)dest + total_out;
-        stream.avail_out = left_output_sz;
+        if (0 == left_input_sz && 1 == last) {
+            flush_flag = Z_FINISH;
+        } else {
+            flush_flag = Z_FULL_FLUSH;
+        }
 
-        if (Z_STREAM_END != (ret = deflate(&stream, Z_FINISH))) {
-            QZ_ERROR("ERR: deflate failed with return code: %d\n", ret);
+        stream->next_in   = (z_const Bytef *)src + total_in;
+        stream->avail_in  = send_sz;
+        stream->next_out  = (Bytef *)dest + total_out;
+        stream->avail_out = left_output_sz;
+
+        last_loop_in = GET_LOWER_32BITS(stream->total_in);
+        last_loop_out = GET_LOWER_32BITS(stream->total_out);
+
+
+        ret = deflate(stream, flush_flag);
+        if ((Z_STREAM_END != ret && Z_FINISH == flush_flag) ||
+            (Z_OK != ret  && Z_FULL_FLUSH == flush_flag)) {
+            QZ_ERROR("ERR: deflate failed with return code: %d flush_flag: %d\n", ret,
+                     flush_flag);
+            stream->total_in = 0;
+            stream->total_out = 0;
+            qz_sess->deflate_stat = DeflateNull;
             return QZ_FAIL;
         }
 
-        left_output_sz -= GET_LOWER_32BITS(stream.total_out);
-        res.consumed = (Cpa32U) GET_LOWER_32BITS(stream.total_in);
-        res.produced = (Cpa32U) GET_LOWER_32BITS((stream.total_out -
-                       outputHeaderSz(data_fmt) -
-                       outputFooterSz(data_fmt)));
-        outputHeaderGen(dest + cur_hdr_pos, &res, data_fmt);
-        cur_hdr_pos += GET_LOWER_32BITS(stream.total_out);
+        current_loop_in = GET_LOWER_32BITS(stream->total_in) - last_loop_in;
+        current_loop_out = GET_LOWER_32BITS(stream->total_out) - last_loop_out;
+        left_output_sz -= current_loop_out;
 
-        total_out += GET_LOWER_32BITS(stream.total_out);
-        total_in += GET_LOWER_32BITS(stream.total_in);
+        total_out += current_loop_out;
+        total_in += current_loop_in;
         *src_len = total_in;
         *dest_len = total_out;
 
@@ -171,18 +206,24 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                 *qz_sess->crc32 = crc32(*qz_sess->crc32, src, *src_len);
             } else {
                 if (0 == *qz_sess->crc32) {
-                    *qz_sess->crc32 = stream.adler;
+                    *qz_sess->crc32 = stream->adler;
                 } else {
                     *qz_sess->crc32 =
-                        crc32_combine(*qz_sess->crc32, stream.adler, *src_len);
+                        crc32_combine(*qz_sess->crc32, stream->adler, *src_len);
                 }
             }
         }
+    } while (left_input_sz);
 
-        if (Z_OK != deflateEnd(&stream)) {
+    if (NULL != qz_sess->deflate_strm && 1 == last) {
+        ret = deflateEnd(stream);
+        stream->total_in = 0;
+        stream->total_out = 0;
+        qz_sess->deflate_stat = DeflateNull;
+        if (Z_OK != ret) {
             return QZ_FAIL;
         }
-    } while (left_input_sz);
+    }
 
     return QZ_OK;
 }

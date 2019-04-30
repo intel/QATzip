@@ -142,6 +142,11 @@ typedef enum {
     InflateEnd
 } InflateState_T;
 
+typedef enum {
+    DeflateNull = 0,
+    DeflateInited
+} DeflateState_T;
+
 typedef struct QzSess_S {
     int inst_hint;   /*which instance we last used*/
     QzSessionParams_T sess_params;
@@ -174,6 +179,9 @@ typedef struct QzSess_S {
     unsigned long *crc32;
     unsigned int last;
     unsigned int single_thread;
+
+    z_stream *deflate_strm;
+    DeflateState_T deflate_stat;
 } QzSess_T;
 
 typedef struct QzStreamBuf_S {

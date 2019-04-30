@@ -1148,4 +1148,52 @@ else
    exit 2
 fi
 
+function qzSWCompression_block_test()
+{
+    $DRIVER_DIR/adf_ctl down
+    if [ ! -f "$test_file_path/$sample_file_name" ]
+    then
+        echo "$test_file_path/$test_file_name does not exit!"
+        return 1
+    fi
+    cp -f $test_file_path/$sample_file_name ./
+
+    OLDMD5=`md5sum $sample_file_name`
+    $test_main -m 11 -i $sample_file_name
+    rm -f $sample_file_name
+    gzip -d $sample_file_name.gz
+    NEWMD5=`md5sum $sample_file_name`
+    echo "old md5" $OLDMD5
+    echo "new md5" $NEWMD5
+    if [[ $NEWMD5 != $OLDMD5 ]]
+    then
+        return 1
+    fi
+
+    OLDMD5=`md5sum $sample_file_name`
+    $test_qzip $sample_file_name
+    rm -f $sample_file_name
+    gzip -d $sample_file_name.gz
+    NEWMD5=`md5sum $sample_file_name`
+    echo "old md5" $OLDMD5
+    echo "new md5" $NEWMD5
+    if [[ $NEWMD5 != $OLDMD5 ]]
+    then
+        return 1
+    fi
+
+    $DRIVER_DIR/adf_ctl up
+    rm -f $sample_file_name
+    rm -f $sample_file_name.gz
+
+    return 0
+}
+if qzSWCompression_block_test
+then
+   echo "qzSWCompression block test PASS"
+else
+   echo "qzSWCompression block test FAIL"
+   exit 2
+fi
+
 exit 0

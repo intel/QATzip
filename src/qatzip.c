@@ -857,6 +857,8 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
     qz_sess->force_sw = 0;
     qz_sess->inflate_strm = NULL;
     qz_sess->inflate_stat = InflateNull;
+    qz_sess->deflate_strm = NULL;
+    qz_sess->deflate_stat = DeflateNull;
 
     /*set up cpaDc Session params*/
     qz_sess->session_setup_data.compLevel = qz_sess->sess_params.comp_lvl;
@@ -2268,6 +2270,12 @@ int qzTeardownSession(QzSession_T *sess)
             inflateEnd(qz_sess->inflate_strm);
             free(qz_sess->inflate_strm);
             qz_sess->inflate_strm = NULL;
+        }
+
+        if (likely(NULL != qz_sess->deflate_strm)) {
+            deflateEnd(qz_sess->deflate_strm);
+            free(qz_sess->deflate_strm);
+            qz_sess->deflate_strm = NULL;
         }
 
         free(sess->internal);
