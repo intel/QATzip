@@ -44,7 +44,7 @@ platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
 if [ $platform != "37c8" ]
 then
     platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-    if [ $platform != "DH895XCC" ]
+    if [[ $platform != "DH895XCC" && $platform != "C62x" ]]
     then
         echo "Unsupport Platform: `lspci | grep Co-processor` "
         exit 1
@@ -53,7 +53,7 @@ fi
 echo "platform=$platform"
 
 #get the performance data of 8 instances(hw), 12 threads, 4 to SW
-if [ $platform = "37c8" ]
+if [[ $platform = "37c8" || $platform = "C62x" ]]
 then
     DVR_OPT="-D8 -P1 -L"
     # Install upstream driver
@@ -88,7 +88,7 @@ fi
 #deterimine if this test passed
 echo "throught_ave_hardware=$throught_ave_hardware"
 echo "throught_ave_software=$throught_ave_software"
-if [[ $platform = "37c8" && \
+if [[ ( $platform = "37c8" || $platform = "C62x" ) && \
       $(echo "$throught_ave_hardware > 2.5" | bc) = 1 && \
       $(echo "$throught_ave_software < 0.4" | bc) = 1 ]]
 then

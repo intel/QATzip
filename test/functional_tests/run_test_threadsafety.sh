@@ -44,7 +44,7 @@ platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
 if [ $platform != "37c8" ]
 then
     platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-    if [ $platform != "DH895XCC" ]
+    if [[ $platform != "DH895XCC" && $platform != "C62x" ]]
     then
         echo "Unsupport Platform: `lspci | grep Co-processor` "
         exit 1
@@ -62,7 +62,7 @@ else
     exit 1
 fi
 
-if [ $platform = "37c8" ]
+if [[ $platform = "37c8" || $platform = "C62x" ]]
 then
     echo > log_threadsafety
     for((numProc = 0; numProc < 8; numProc ++))

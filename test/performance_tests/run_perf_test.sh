@@ -43,7 +43,7 @@ platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
 if [ $platform != "37c8" ]
 then
     platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-    if [ $platform != "DH895XCC" ]
+    if [[ $platform != "DH895XCC" && $platform != "C62x" ]]
     then
         echo "Unsupport Platform: `lspci | grep Co-processor` "
         exit 1
@@ -53,7 +53,7 @@ echo "platform=$platform"
 
 #Replace the driver configuration files and configure hugepages
 echo "Replace the driver configuration files and configure hugepages."
-if [ $platform = "37c8" ]
+if [[ $platform = "37c8" || $platform = "C62x" ]]
 then
     process=24
     \cp $CURRENT_PATH/config_file/c6xx/c6xx_dev0.conf /etc
