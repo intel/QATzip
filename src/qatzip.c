@@ -326,6 +326,14 @@ static void stopQat(void)
 
     if (QZ_NONE == g_process.qz_init_status ||
         QZ_NO_HW == g_process.qz_init_status) {
+        if (NULL != g_process.dc_inst_handle) {
+            free(g_process.dc_inst_handle);
+            g_process.dc_inst_handle = NULL;
+        }
+        if (NULL != g_process.qz_inst) {
+            free(g_process.qz_inst);
+            g_process.qz_inst = NULL;
+        }
         goto reset;
     }
 
