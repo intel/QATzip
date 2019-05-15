@@ -53,54 +53,71 @@ fi
 echo "platform=$platform"
 
 #get the performance data of 8 instances(hw), 12 threads, 4 to SW
-if [[ $platform = "37c8" || $platform = "C62x" ]]
+echo "Test 8 instances(hw), 12 threads, 4 to SW"
+DVR_OPT="-D8 -P1 -L"
+# Install upstream driver
+if $DRV_FILE $DVR_OPT > /dev/null
 then
-    DVR_OPT="-D8 -P1 -L"
-    # Install upstream driver
-    if $DRV_FILE $DVR_OPT > /dev/null
-    then
-      echo -e "\nInstall upstream driver with NumberDcInstances = 8 OK :)\n"
-    else
-      echo "Install upstream driver with NumberDcInstances = 8 FAILED!!! :("
-      exit 1
-    fi
-    $test_main -m 4 -t 12 -i /opt/compressdata/calgary.1G > result 2>&1
-    throught_ave_hardware=$(cat result | head -n 9 | tail -n 8 | awk '{sum+=$8} END{sum/=8; print sum}')
-    throught_ave_software=$(cat result | tail -n 4 | awk '{sum+=$8} END{sum/=4; print sum}')
-    rm -f result
-elif [ $platform = "DH895XCC" ]
-then
-    DVR_OPT="-D8 -P1"
-    # Install upstream driver
-    if $DRV_FILE $DVR_OPT > /dev/null
-    then
-      echo -e "\nInstall upstream driver with NumberDcInstances = 8 OK :)\n"
-    else
-      echo "Install upstream driver with NumberDcInstances = 8 FAILED!!! :("
-      exit 1
-    fi
-    $test_main -m 4 -t 12 -i /opt/compressdata/calgary.1G > result 2>&1
-    throught_ave_hardware=$(cat result | head -n 9 | tail -n 8 | awk '{sum+=$8} END{sum/=8; print sum}')
-    throught_ave_software=$(cat result | tail -n 4 | awk '{sum+=$8} END{sum/=4; print sum}')
-    rm -f result
+  echo -e "\nInstall upstream driver with NumberDcInstances = 8 OK :)\n"
+else
+  echo "Install upstream driver with NumberDcInstances = 8 FAILED!!! :("
+  exit 1
 fi
+$test_main -m 4 -t 12 -i /opt/compressdata/calgary.1G > result 2>&1
+throught_ave_hardware=$(cat result | head -n 9 | tail -n 8 | awk '{sum+=$8} END{sum/=8; print sum}')
+throught_ave_software=$(cat result | tail -n 4 | awk '{sum+=$8} END{sum/=4; print sum}')
+rm -f result
 
 #deterimine if this test passed
 echo "throught_ave_hardware=$throught_ave_hardware"
 echo "throught_ave_software=$throught_ave_software"
 if [[ ( $platform = "37c8" || $platform = "C62x" ) && \
-      $(echo "$throught_ave_hardware > 2.5" | bc) = 1 && \
-      $(echo "$throught_ave_software < 0.4" | bc) = 1 ]]
+      $(echo "$throught_ave_hardware > 2.29" | bc) = 1 && \
+      $(echo "$throught_ave_software < 0.24" | bc) = 1 ]]
 then
-    echo -e "run test threading PASSED:)\n"
-    exit 0
+    echo -e "run test 8 instances(hw), 12 threads, 4 to SW PASSED:)\n"
 elif [[ $platform = "DH895XCC" && \
-      $(echo "$throught_ave_hardware > 0" | bc) = 1 && \
-      $(echo "$throught_ave_software < 2.5" | bc) = 1 ]]
+      $(echo "$throught_ave_hardware > 1.27" | bc) = 1 && \
+      $(echo "$throught_ave_software < 0.22" | bc) = 1 ]]
 then
-    echo -e "run test threading PASSED:)\n"
-    exit 0
+    echo -e "run test 8 instances(hw), 12 threads, 4 to SW PASSED:)\n"
 else
-    echo "run test threading FAILED!!! :("
+    echo "run test 8 instances(hw), 12 threads, 4 to SW FAILED!!! :("
     exit 1
 fi
+
+#get the performance data of 1 instances(hw), 12 threads, 11 to SW
+echo "Test 1 instances(hw), 12 threads, 11 to SW"
+DVR_OPT="-D1 -P1 -L"
+# Install upstream driver
+if $DRV_FILE $DVR_OPT > /dev/null
+then
+  echo -e "\nInstall upstream driver with NumberDcInstances = 1 OK :)\n"
+else
+  echo "Install upstream driver with NumberDcInstances = 1 FAILED!!! :("
+  exit 1
+fi
+$test_main -m 4 -t 12 -i /opt/compressdata/calgary.1G > result 2>&1
+throught_ave_hardware=$(cat result | head -n 2 | tail -n 1 | awk '{sum+=$8} END{sum/=1; print sum}')
+throught_ave_software=$(cat result | tail -n 11 | awk '{sum+=$8} END{sum/=11; print sum}')
+rm -f result
+
+#deterimine if this test passed
+echo "throught_ave_hardware=$throught_ave_hardware"
+echo "throught_ave_software=$throught_ave_software"
+if [[ ( $platform = "37c8" || $platform = "C62x" ) && \
+      $(echo "$throught_ave_hardware > 17.3" | bc) = 1 && \
+      $(echo "$throught_ave_software < 0.15" | bc) = 1 ]]
+then
+   echo -e "run test 1 instances(hw), 12 threads, 11 to SW PASSED:)\n"
+elif [[ $platform = "DH895XCC" && \
+      $(echo "$throught_ave_hardware > 10.2" | bc) = 1 && \
+      $(echo "$throught_ave_software < 0.15" | bc) = 1 ]]
+then
+    echo -e "run test 1 instances(hw), 12 threads, 11 to SW PASSED:)\n"
+else
+    echo "run test 1 instances(hw), 12 threads, 11 to SW FAILED!!! :("
+    exit 1
+fi
+
+exit 0
