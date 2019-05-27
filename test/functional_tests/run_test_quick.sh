@@ -963,4 +963,10 @@ then
     exit 2
 fi
 
+#test reading special-name files
+if ! ${BASEDIR}/run_test_readfiles.sh
+then
+    exit 1
+fi
+
 exit 0
