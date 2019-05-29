@@ -515,6 +515,30 @@ function resume_hw_comp_when_insufficent_HP()
     return $?
 }
 
+#block device compress test
+function blockDeviceTest()
+{
+    local block_device_test_file="block_device_file"
+    local rc=0
+
+    dd if=/dev/zero of=$block_device_test_file bs=1M count=100
+    [[ $? -ne 0 ]] && { echo "dd error, block device compress test failed"; return 1; }
+    loop_dev=`losetup --find --show $block_device_test_file`
+    [[ $? -ne 0 ]] && { echo "device not created, block device compress test failed"; return 1; }
+    orig_checksum=`md5sum $block_device_test_file`
+    $test_qzip -k $loop_dev -o $block_device_test_file
+    gzip -fd $block_device_test_file.gz
+    new_checksum=`md5sum $block_device_test_file`
+    losetup -d $loop_dev
+    if [[ $new_checksum != $orig_checksum ]]
+    then
+        echo "Checksum mismatch, block device compress test failed"
+        rc=1
+    fi
+
+    rm -f ${block_device_test_file}.gz ${block_device_test_file}
+    return $rc
+}
 
 # 2. Very basic misc functional tests
 
@@ -524,6 +548,7 @@ if $test_main -m 1 -t 3 -l 8 && \
    $test_main -m 3 -t 3 -l 8 && \
    $test_main -m 4 -t 3 -l 8 && \
    $test_main -m 4 -t 3 -l 8 -r 32&& \
+   blockDeviceTest && \
    testOn3MBRandomDataFile && \
    inputFileTest $highly_compressible_file_name &&\
    inputFileTest $big_file_name &&\

@@ -51,7 +51,10 @@ static char const *const g_version_str = "v0.2.7";
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/ioctl.h>
+#include <linux/fs.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <qz_utils.h>
 #include <qatzip.h> /* new QATzip interface */
 #include <cpa_dc.h>
@@ -270,6 +273,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     const unsigned int ratio_limit =
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
     unsigned int read_more = 0;
+    int src_fd = 0;
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
     assert(NULL != time_list_head);
     gettimeofday(&time_list_head->time_s, NULL);
@@ -282,7 +286,22 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         exit(ERROR);
     }
 
-    src_file_size = src_file_stat.st_size;
+    if (S_ISBLK(src_file_stat.st_mode)) {
+        if ((src_fd = open(src_file_name, O_RDONLY)) < 0) {
+            perror(src_file_name);
+            exit(ERROR);
+        } else {
+            if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
+                close(src_fd);
+                perror(src_file_name);
+                exit(ERROR);
+            }
+            src_file_size *= 512; /* size get via BLKGETSIZE is divided by 512 */
+            close(src_fd);
+        }
+    } else {
+        src_file_size = src_file_stat.st_size;
+    }
     src_buffer_size = (src_file_size > SRC_BUFF_LEN) ? SRC_BUFF_LEN : src_file_size;
     if (is_compress) {
         dst_buffer_size = qzMaxCompressedLength(src_buffer_size);
