@@ -39,7 +39,7 @@ top_builddir=`pwd`
 
 MAKE='make'
 CC='gcc'
-CFLAGS='-Wall -Werror -std=gnu99 -pedantic -O2 -fstack-protector -fPIE -fPIC -D_FORTIFY_SOURCE=2'
+CFLAGS='-Wall -Werror -std=gnu99 -pedantic -O2 -fstack-protector -fPIE -fPIC -D_FORTIFY_SOURCE=2 -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv'
 LDFLAGS='-fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
 AR='ar'
 LN_S='ln -s'
