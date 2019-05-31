@@ -969,4 +969,160 @@ then
     exit 1
 fi
 
+function configuration_file_test()
+{
+    echo "QAT driver configuration file configurable section name test 1 start ..."
+    platformInfo=`lspci | grep Co-processor | awk '{print $6}' | head -1`
+    if [ $platformInfo == "37c8" ]; then
+        platform="MULTI"
+    else
+        platformInfo=`lspci | grep Co-processor | awk '{print $5}' | head -1`
+        if [ $platformInfo == "C62x" ]; then
+            platform="MULTI"
+        elif [ $platformInfo == "DH895XCC" ]; then
+            platform="SIGNAL"
+        else
+            echo "Unsupport Platform: `lspci | grep Co-processor` "
+            exit 1
+        fi
+    fi
+    numberOfCPM=`lspci | grep Co-processor | wc -l`
+
+    dd if=/dev/urandom of=random.tmp bs=1M count=1;
+    export QATZIP_SECTION_NAME="CFTEST"
+
+    #Change to CFTEST
+    for ((i = 0; i < $numberOfCPM; i++)); do
+      if [ "$platform" == "MULTI" ]; then
+        sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/c6xx_dev$i.conf
+      else
+        sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/dh895xcc_dev$i.conf
+      fi
+    done
+    service qat_service restart
+
+    OLDMD5=`md5sum random.tmp`
+    echo "old md5" $OLDMD5
+
+    $test_qzip -k random.tmp > result.log 2>&1
+    ERROR_MSG=`grep -rn userStarMultiProcess result.log`
+    echo $ERROR_MSG
+    if [ -z "$ERROR_MSG" ]; then
+        echo "QAT section name is configurable :)"
+    else
+        echo "QAT section name is not configurable :("
+        RESULT=1
+    fi
+
+    rm -f random.tmp
+
+    gzip -df random.tmp.gz
+
+    NEWMD5=`md5sum random.tmp`
+    echo "new md5 " $NEWMD5
+
+    if [[ $NEWMD5 != $OLDMD5 ]]
+    then
+        echo "Checksum mismatch FAILED"
+        RESULT=1
+    else
+        echo "Checksum match PASS"
+    fi
+
+    #Change back to SHIM
+    export QATZIP_SECTION_NAME="SHIM"
+    for ((i = 0; i < $numberOfCPM; i++)); do
+      if [ "$platform" == "MULTI" ]; then
+        sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c6xx_dev$i.conf
+      else
+        sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/dh895xcc_dev$i.conf
+      fi
+    done
+    service qat_service restart
+    rm -f random.tmp
+    rm -f random.tmp.gz
+    rm -f result.log
+    if [ ! -z $RESULT ];then
+        return 1
+    fi
+    return 0
+}
+
+function configuration_file_test_software_compress()
+{
+    echo "QAT driver configuration file configurable section name test 2 start ..."
+    platformInfo=`lspci | grep Co-processor | awk '{print $6}' | head -1`
+    if [ $platformInfo == "37c8" ]; then
+        platform="MULTI"
+    else
+        platformInfo=`lspci | grep Co-processor | awk '{print $5}' | head -1`
+        if [ $platformInfo == "C62x" ]; then
+            platform="MULTI"
+        elif [ $platformInfo == "DH895XCC" ]; then
+            platform="SIGNAL"
+        else
+            echo "Unsupport Platform: `lspci | grep Co-processor` "
+            exit 1
+        fi
+    fi
+    numberOfCPM=`lspci | grep Co-processor | wc -l`
+
+    dd if=/dev/urandom of=random.tmp bs=1M count=1;
+    export QATZIP_SECTION_NAME="CFTEST"
+
+    OLDMD5=`md5sum random.tmp`
+    echo "old md5" $OLDMD5
+
+    $test_qzip -k random.tmp > result.log 2>&1
+    ERROR_MSG=`grep -rn userStarMultiProcess result.log`
+    echo $ERROR_MSG
+    if [ -z "$ERROR_MSG" ]; then
+        echo "QATZIP still work in HW mode :("
+        RESULT=1
+    else
+        echo "QATZIP can switch to SW mode :)"
+    fi
+
+    rm -f random.tmp
+
+    gzip -df random.tmp.gz
+
+    NEWMD5=`md5sum random.tmp`
+    echo "new md5 " $NEWMD5
+
+    if [[ $NEWMD5 != $OLDMD5 ]]
+    then
+        echo "Checksum mismatch FAILED"
+        RESULT=1
+    else
+        echo "Checksum match PASS"
+    fi
+
+    #Change back to SHIM
+    export QATZIP_SECTION_NAME="SHIM"
+    for ((i = 0; i < $numberOfCPM; i++)); do
+      if [ "$platform" == "MULTI" ]; then
+        sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c6xx_dev$i.conf
+      else
+        sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/dh895xcc_dev$i.conf
+      fi
+    done
+    service qat_service restart
+    rm -f random.tmp
+    rm -f random.tmp.gz
+    rm -f result.log
+    if [ ! -z $RESULT ];then
+        return 1
+    fi
+    return 0
+}
+if configuration_file_test \
+   && configuration_file_test_software_compress
+then
+   echo "QAT driver configuration file confifurable test PASS"
+else
+   echo "QAT driver configuration file confifurable test FAIL"
+   exit 2
+fi
+
 exit 0

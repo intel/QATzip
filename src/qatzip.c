@@ -409,6 +409,14 @@ static unsigned int getWaitCnt(QzSession_T *sess)
     }                                                              \
     BACKOUT;
 
+const char *getSectionName(void)
+{
+    char *section_name = getenv("QATZIP_SECTION_NAME");
+    if (NULL == section_name || 0 == strlen(section_name)) {
+        return g_dev_tag;
+    }
+    return section_name;
+}
 
 /* Initialize the QAT hardware, get the QAT instance for current
  * process
@@ -470,7 +478,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         BACKOUT;
     }
 
-    status = icp_sal_userStartMultiProcess(g_dev_tag, CPA_FALSE);
+    status = icp_sal_userStartMultiProcess(getSectionName(), CPA_FALSE);
     if (CPA_STATUS_SUCCESS != status) {
         QZ_ERROR("Error userStarMultiProcess(%d), switch to SW if permitted\n",
                  status);
