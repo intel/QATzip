@@ -11,10 +11,10 @@
 - [Limitations](#limitations)
 - [Installation Instructions](#installation-instructions)
     - [Build Intel&reg; QuickAssist Technology Driver](#build-intel-quickassist-technology-driver)
-    - [Install QATzip](#install-qatzip)
-    - [Non-root Install QATzip](#non-root-install-qatzip)
+    - [Install QATzip As Root User](#install-qatzip-as-root-user)
+    - [Install QATzip As Non-root User](#install-qatzip-as-non-root-user)
     - [Test QATzip](#test-qatzip)
-    - [Performance test with QATzip](#performance-test-with-qatzip)
+    - [Performance Test With QATzip](#performance-test-with-qatzip)
 - [QATzip API manual](#qatzip-api-manual)
 - [Intended Audience](#intended-audience)
 - [Legal](#legal)
@@ -51,8 +51,8 @@ working buffers to be pinned, contiguous buffers that can be used for DMA operat
 and from the hardware.
 * Instance over-subscription, allowing a number of threads in the same process to
 seamlessly share a smaller number of hardware instances.
-* Memory allocation backed by huge page to provide access to pinned, contiguous memory.
-This is useful if there is contention for traditional kernel memory.
+* Memory allocation backed by huge page and kernel memory to provide access to pinned,
+contiguous memory. Allocating from huge-page when kernel memory contention.
 * Configurable accelerator device sharing among processes.
 * Optional software failover for both compression and decompression services. QATzip may
 switch to software if there is insufficient system resources including acceleration
@@ -61,6 +61,7 @@ platforms that have acceleration devices and non-accelerated platforms.
 * Automatic recovery from hardware compression failure.
 * Provide streaming interface of compression and decompression to achieve better compression
 ratio and throughput for data sets that are submitted piecemeal.
+* 'qzip' utility support compression from regular file, pipeline and block device.
 
 ## Hardware Requirements
 
@@ -69,8 +70,10 @@ acceleration devices:
 
 * Intel&reg; C62X Series Chipset
 * [Intel&reg; Communications Chipset 8925 to 8955 Series][1]
+* [Intel&reg; Communications Chipset 8960 to 8970 Series][2]
 
 [1]:https://www.intel.com/content/www/us/en/ethernet-products/gigabit-server-adapters/quickassist-adapter-8950-brief.html
+[2]:https://www.intel.com/content/www/us/en/ethernet-products/gigabit-server-adapters/quickassist-adapter-8960-8970-brief.html
 
 ## Software Requirements
 
@@ -113,11 +116,11 @@ Started Guide (330750)
 
 These instructions can be found on the 01.org website in the following section:
 
-[Intel&reg; Quickassist Technology][7]
+[Intel&reg; Quickassist Technology][3]
 
-[7]:https://01.org/packet-processing/intel%C2%AE-quickassist-technology-drivers-and-patches
+[3]:https://01.org/packet-processing/intel%C2%AE-quickassist-technology-drivers-and-patches
 
-### Install QATzip as root user
+### Install QATzip As Root User
 
 **Set below environment variable**
 
@@ -146,7 +149,14 @@ For more configure options, please run "./configure -h" for help
 
 **Update configuration files**
 
-copy the configure file(s) from directory of `$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
+The Intel&reg; QATzip comes with some example conf files to use with the Intel&reg; QAT Driver.
+The Intel&reg; QATzip will not function with the default Intel&reg; QAT Driver conf file because
+the default conf does not contain a[SHIM] section which the Intel&reg; QATzip requires by default.
+The default section name in the QATzip can be modified if required by setting the environment
+variable "QATZIP_SECTION_NAME".
+
+To update the configuration file, copy the configure file(s) from directory of
+`$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
 to directory of `/etc`
 
 `YOUR_PLATFORM`: the QAT hardware platform, c6xx for Intel&reg; C62X Series
@@ -165,17 +175,16 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 With current configuration, each PCI-e device in C6XX platform could support
 32 process in maximum.
 
-### Install QATzip for non-root user
+**Enable QATzip For Non-root user**
 
-**Set below environment variable as non-root user**
-
-`ICP_ROOT`: the root directory of your QAT driver source tree
-
-`QZ_ROOT`: the root directory of your QATzip source tree
+Execute the following script as root user to modify the file properties.
 
 ```bash
-    export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+    cd $QZ_ROOT
+    ./setenv.sh
 ```
+
+### Install QATzip As Non-root User
 
 **Enable huge page as root user**
 
@@ -188,36 +197,14 @@ With current configuration, each PCI-e device in C6XX platform could support
 **Execute the following script as root user to modify the file properties**
 
 ```bash
+    cd $QZ_ROOT
     ./setenv.sh
 ```
 
-**Compile and install QATzip as non-root user**
-
-```bash
-    cd $QZ_ROOT
-    ./configure --with-ICP_ROOT=$ICP_ROOT
-    make clean
-    make all install
-```
-You will see the following error:
-"install: cannot remove ‘/usr/local/lib/libqatzip.a’: Permission denied".
-Now QATZip is already installed.
-To use qzip without a absolute path, you should execute the following command as root user.
-"QATZIP_ROOT_PATH" is the root directory of your QATzip source tree.
-
-```bash
-    install -D -m 750 QATZIP_ROOT_PATH/src/libqatzip.a /usr/local/lib
-    install -D -m 750 QATZIP_ROOT_PATH/src/libqatzip.so /usr/local/lib
-    install -D -m 750 QATZIP_ROOT_PATH/include/qatzip.h /usr/include/
-    ln -s -f /usr/local/lib/libqatzip.so /lib64/libqatzip.so
-    install -D -m 777 QATZIP_ROOT_PATH/utils/qzip /usr/local/bin
-```
-
-For more configure options, please run "./configure -h" for help
-
 **Update the configuration files as root user**
 
-copy the configure file(s) from directory of `$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
+To update the configuration file, copy the configure file(s) from directory of
+`$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
 to directory of `/etc`
 
 `YOUR_PLATFORM`: the QAT hardware platform, c6xx for Intel&reg; C62X Series
@@ -235,6 +222,24 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 
 With current configuration, each PCI-e device in C6XX platform could support
 32 process in maximum
+
+**Set below environment variable as non-root user**
+
+`ICP_ROOT`: the root directory of your QAT driver source tree
+
+`QZ_ROOT`: the root directory of your QATzip source tree
+
+**Compile and install QATzip as non-root user**
+
+```bash
+    cd $QZ_ROOT
+    ./configure --with-ICP_ROOT=$ICP_ROOT
+    make clean
+    make all
+    export LD_LIBRARY_PATH=$QZ_ROOT/utils:$LD_LIBRARY_PATH
+```
+
+For more configure options, please run "./configure -h" for help
 
 ### Test QATzip
 
@@ -260,7 +265,7 @@ compressing or decompressing files:
     "  -o,               set output file name
 ```
 
-### Performance test with QATzip
+### Performance Test With QATzip
 
 Please run the QATzip (de)compression performance test with the following command.
 Please update the drive configuration and process/thread argument in run_perf_test.sh

@@ -2,7 +2,7 @@
  *
  *   BSD LICENSE
  *
- *   Copyright(c) 2007-2018 Intel Corporation. All rights reserved.
+ *   Copyright(c) 2007-2019 Intel Corporation. All rights reserved.
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ static char const *const g_license_msg[] = {
     0
 };
 
-static char const *const g_version_str = "v0.2.7";
+static char const *const g_version_str = "v1.0.0";
 
 #include <stdio.h>
 #include <stdlib.h>
