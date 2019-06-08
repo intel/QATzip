@@ -503,6 +503,9 @@ function resume_hw_comp_when_insufficent_HP()
     #re-allocate huge page
     echo -e "\n\nResume huge age"
     echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    rmmod usdm_drv
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
+
     cat /proc/meminfo | grep "HugePages_Total\|HugePages_Free"
     echo; echo
 
@@ -796,7 +799,8 @@ function early_HW_detection_service_up_test()
     fi
     return $rc
 }
-#The following function "early HW detection service hugepage0 test FAILED" is pass
+
+#QATzip will use 2MB continuous kernel memory when hugepage = 0
 function early_HW_detection_service_hugepage0_test()
 {
     local rc=0
@@ -806,21 +810,12 @@ function early_HW_detection_service_hugepage0_test()
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=0 max_huge_pages_per_process=0
 
-    if $test_main -m 9 -B 0 > EarlyHWDetectionTestlog 2>&1
+    if $test_main -m 9 -B 0
     then
         echo "Hugepage = 0 test PASSED"
         rc=0
     else
         echo "Hugepage = 0 test failed"
-        rc=1
-    fi
-
-    error_Key=$(grep "qzGetMaxHugePages failed, use malloc for qzMalloc" EarlyHWDetectionTestlog)
-    rm -f EarlyHWDetectionTestlog
-
-    if [[ -z $error_Key ]]
-    then
-        echo "Check error_Key is null, early HW detection service down test FAILED."
         rc=1
     fi
 

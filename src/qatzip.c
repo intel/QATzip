@@ -360,19 +360,9 @@ reset:
     g_process.pcie_count = -1;
 }
 
-static void freeQzMemEntries(void)
-{
-    extern QzMem_T *g_qz_mem;
-    if (NULL != g_qz_mem) {
-        free(g_qz_mem);
-        g_qz_mem = NULL;
-    }
-}
-
 static void exitFunc(void)
 {
     stopQat();
-    freeQzMemEntries();
 #ifdef QATZIP_DEBUG
     dumpThreadInfo();
 #endif
@@ -428,8 +418,6 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     unsigned int dev_id = 0;
     QzHardware_T *qat_hw = NULL;
     unsigned int instance_found = 0;
-    extern QzMem_T *g_qz_mem;
-    extern size_t g_mem_entries;
     static unsigned int waiting = 0;
     static unsigned int wait_cnt = 0;
 
@@ -564,19 +552,6 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
     clearDevices(qat_hw);
     free(qat_hw);
-
-    /* init qzMem entries*/
-    if (NULL == g_qz_mem) {
-        if (QZ_OK != qzGetMaxHugePages() || \
-            0 == g_mem_entries) {
-            BACKOUT;
-        }
-
-        g_qz_mem = (QzMem_T *)calloc(g_mem_entries, sizeof(QzMem_T));
-        if (NULL == g_qz_mem) {
-            BACKOUT;
-        }
-    }
 
     rc = atexit(exitFunc);
     if (unlikely(QZ_OK != rc)) {

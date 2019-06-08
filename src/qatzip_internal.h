@@ -254,7 +254,6 @@ void outputFooterGen(QzSess_T *qz_sess,
                      QzDataFormat_T data_fmt);
 void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr);
 int isStdGzipHeader(const unsigned char *const ptr);
-int qzGetMaxHugePages(void);
 
 int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                  unsigned int *src_len, unsigned char *dest,
