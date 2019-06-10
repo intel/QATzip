@@ -600,12 +600,10 @@ else
 fi
 
 #test for chunksz
-if [ "$SERVER_LOCATION_DALIAN" != "DALIAN" ];then
-   echo "run test chunksz."
-   if ! ${BASEDIR}/run_test_chunksz.sh
-    then
-        exit 2
-    fi
+echo "test for chunksz"
+if ! ${BASEDIR}/run_test_chunksz.sh
+then
+    exit 2
 fi
 
 #Mim allocated memory test

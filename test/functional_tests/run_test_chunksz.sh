@@ -95,13 +95,13 @@ echo "throught_hardware=$throught_hardware"
 echo "throught_software=$throught_software"
 if [[ ( $platform = "37c8" || $platform = "C62x" ) && \
       $(echo "$throught_hardware > 16367.2" | bc) = 1 && \
-      $(echo "$throught_software < 898.0" | bc) = 1 ]]
+      $(echo "$throught_software < 1252.3" | bc) = 1 ]]
 then
     echo -e "run test chunksz PASSED:)\n"
     exit 0
 elif [[ $platform = "DH895XCC" && \
       $(echo "$throught_hardware > 15718.3" | bc) = 1 && \
-      $(echo "$throught_software < 1197.4" | bc) = 1 ]]
+      $(echo "$throught_software < 1218.8" | bc) = 1 ]]
 then
     echo -e "run test chunksz PASSED:)\n"
     exit 0
