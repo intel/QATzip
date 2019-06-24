@@ -1432,7 +1432,6 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
                unsigned int *dest_len, unsigned int last)
 {
     int rc = QZ_FAIL;
-    QzSess_T *qz_sess = NULL;
 
     if (NULL == sess || (last != 0 && last != 1)) {
         if (NULL != src_len) {
@@ -1457,8 +1456,6 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
             return rc;
         }
     }
-    qz_sess = (QzSess_T *)(sess->internal);
-    qz_sess->sess_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
     return qzCompressCrc(sess, src, src_len, dest, dest_len, last, NULL);
 }
 
@@ -1509,6 +1506,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
 
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
     if (unlikely(data_fmt != QZ_DEFLATE_RAW &&
+                 data_fmt != QZ_DEFLATE_GZIP &&
                  data_fmt != QZ_DEFLATE_GZIP_EXT)) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
         *src_len = 0;

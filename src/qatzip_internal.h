@@ -240,10 +240,12 @@ typedef struct QzMem_S {
 void dumpAllCounters(void);
 int qzSetupHW(QzSession_T *sess, int i);
 unsigned long qzGzipHeaderSz(void);
+unsigned long stdGzipHeaderSz(void);
 unsigned long stdGzipFooterSz(void);
 unsigned long outputHeaderSz(QzDataFormat_T data_fmt);
 unsigned long outputFooterSz(QzDataFormat_T data_fmt);
 void qzGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
+void stdGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr);
 void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,

@@ -549,9 +549,11 @@ function blockDeviceTest()
 # 2. Very basic misc functional tests
 
 if $test_main -m 1 -t 3 -l 8 && \
+   $test_main -m 1 -O gzip -t 3 -l 8 && \
     # ignore test2 output (too verbose) \
    $test_main -m 2 -t 3 -l 8 > /dev/null && \
    $test_main -m 3 -t 3 -l 8 && \
+   $test_main -m 3 -O gzip -t 3 -l 8 && \
    $test_main -m 4 -t 3 -l 8 && \
    $test_main -m 4 -t 3 -l 8 -r 32&& \
    blockDeviceTest && \
@@ -1156,5 +1158,44 @@ else
    echo "fork resource check test FAILED!!!"
    exit 2
 fi
+
+#test for qzip compressing with -O options
+function qzipCompressTest()
+{
+    local test_file_name=$1
+    cp -f $test_file_path/$test_file_name ./
+
+    OLDMD5=`md5sum $test_file_name | awk '{print $1}'`
+    $test_qzip -O gzip $test_file_name -o $test_file_name
+    gzip -d $test_file_name.gz
+    NEWMD5=`md5sum $test_file_name | awk '{print $1}'`
+    rm -f $test_file_name*
+    echo "old md5" $OLDMD5
+    echo "new md5" $NEWMD5
+    if [[ $NEWMD5 != $OLDMD5 ]]
+    then
+        return 1
+    fi
+
+    return 0
+}
+if qzipCompressTest $big_file_name
+then
+    echo "qzip compress with -O option PASS"
+else
+    echo "qzip compress with -O option FAILED!!!"
+    exit 2
+fi
+
+$DRIVER_DIR/adf_ctl down
+if qzipCompressTest $big_file_name
+then
+    echo "qzip compress with -O option with hardware down PASS"
+else
+    echo "qzip compress with -O option with hardware down FAILED!!!"
+    exit 2
+fi
+$DRIVER_DIR/adf_ctl up
+
 
 exit 0

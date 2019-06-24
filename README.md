@@ -261,6 +261,7 @@ compressing or decompressing files:
     "  -V, --version     display version number",
     "  -L, --level       set compression level",
     "  -C, --chunksz     set chunk size",
+    "  -O, --output      set output header format(gzip|gzipext)",
     "  -r,               set max inflight request number
     "  -o,               set output file name
 ```

@@ -129,6 +129,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
         case QZ_DEFLATE_RAW:
             windows_bits = -MAX_WBITS;
             break;
+        case QZ_DEFLATE_GZIP:
         case QZ_DEFLATE_GZIP_EXT:
         default:
             windows_bits = MAX_WBITS + GZIP_WRAPPER;

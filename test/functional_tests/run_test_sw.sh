@@ -60,7 +60,7 @@ $ICP_BUILD_OUTPUT/adf_ctl down
 if [[ ($platform == "37c8" || $platform == "C62x" || $platform == "DH895XCC")]]
 then
 #sw permitted
-    $test_main -m 4 -B 1 > resultsw 2>&1
+    $test_main -m 4 -O gzip -B 1 > resultsw 2>&1
     qz_sw_status=$(cat resultsw | grep -c "QZ_NO_HW")
     sw_throught_ave_software=$(cat resultsw | grep -n "INFO" | awk -v sum=0 '{sum+=$8} END{print sum}')
     rm -f resultsw

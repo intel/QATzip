@@ -88,7 +88,7 @@ static QzSessionParams_T g_params_th = {(QzHuffmanHdr_T)0,};
 static const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-static char const g_short_opts[] = "A:H:L:C:r:o:dfhkV";
+static char const g_short_opts[] = "A:H:L:C:r:o:O:dfhkV";
 static const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -101,6 +101,7 @@ static const struct option g_long_opts[] = {
     {"huffmanhdr", 1, 0, 'H'}, /* set huffman header type */
     {"level",      1, 0, 'L'}, /* set compression level */
     {"chunksz",    1, 0, 'C'}, /* set chunk size */
+    {"output",     1, 0, 'O'}, /* set output header format(gzip, gzipext)*/
     { 0, 0, 0, 0 }
 };
 
@@ -130,6 +131,7 @@ static void help(void)
         "  -V, --version     display version number",
         "  -L, --level       set compression level",
         "  -C, --chunksz     set chunk size",
+        "  -O, --output      set output header format(gzip|gzipext)",
         "  -r,               set max inflight request number",
         "  -o,               set output file name",
         "",
@@ -708,6 +710,16 @@ int main(int argc, char **argv)
                 g_params_th.huffman_hdr = QZ_DYNAMIC_HDR;
             } else {
                 QZ_ERROR("Error huffman arg: %s\n", optarg);
+                return -1;
+            }
+            break;
+        case 'O':
+            if (strcmp(optarg, "gzip") == 0) {
+                g_params_th.data_fmt = QZ_DEFLATE_GZIP;
+            } else if (strcmp(optarg, "gzipext") == 0) {
+                g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
+            } else {
+                QZ_ERROR("Error gzip header format arg: %s\n", optarg);
                 return -1;
             }
             break;

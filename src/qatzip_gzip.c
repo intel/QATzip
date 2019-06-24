@@ -53,6 +53,11 @@ inline unsigned long qzGzipHeaderSz(void)
     return sizeof(QzGzH_T);
 }
 
+inline unsigned long stdGzipHeaderSz(void)
+{
+    return sizeof(StdGzH_T);
+}
+
 inline unsigned long stdGzipFooterSz(void)
 {
     return sizeof(StdGzF_T);
@@ -80,6 +85,9 @@ unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
 
     switch (data_fmt) {
     case QZ_DEFLATE_RAW:
+        break;
+    case QZ_DEFLATE_GZIP:
+        size = stdGzipHeaderSz();
         break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
@@ -123,6 +131,25 @@ void qzGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
     qzGzipHeaderExtraFieldGen((unsigned char *)&hdr->extra, res);
 }
 
+void stdGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
+{
+    assert(ptr != NULL);
+    assert(res != NULL);
+    StdGzH_T *hdr;
+
+    hdr = (StdGzH_T *)ptr;
+    hdr->id1      = 0x1f;
+    hdr->id2      = 0x8b;
+    hdr->cm       = QZ_DEFLATE;
+    hdr->flag     = 0x00;
+    hdr->mtime[0] = (char)0;
+    hdr->mtime[1] = (char)0;
+    hdr->mtime[2] = (char)0;
+    hdr->mtime[3] = (char)0;
+    hdr->xfl      = 0;
+    hdr->os       = 255;
+}
+
 void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      QzDataFormat_T data_fmt)
@@ -131,6 +158,9 @@ void outputHeaderGen(unsigned char *ptr,
 
     switch (data_fmt) {
     case QZ_DEFLATE_RAW:
+        break;
+    case QZ_DEFLATE_GZIP:
+        stdGzipHeaderGen(ptr, res);
         break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
