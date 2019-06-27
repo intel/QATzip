@@ -3328,6 +3328,116 @@ int qzFuncTests(void)
     return 0;
 }
 
+void *qzCompressStreamWithPendingOut(void *thd_arg)
+{
+    int rc;
+    unsigned char *src = NULL, *dest = NULL;
+    unsigned int src_sz, dest_sz;
+    QzStream_T comp_strm = {0};
+    QzSessionParams_T params;
+    unsigned int last = 0;
+    char *filename = NULL;
+    TestArg_T *test_arg = (TestArg_T *)thd_arg;
+    const int gen_data = test_arg->gen_data;
+    const long tid = test_arg->thd_id;
+    unsigned char *out;
+    unsigned int out_sz = 0;
+
+    QZ_DEBUG("Hello from qzCompressStreamWithPendingOut id %d\n", tid);
+
+    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+        pthread_exit((void *)"qzInit failed");
+    }
+    QZ_DEBUG("qzInit  rc = %d\n", rc);
+
+    if (qzGetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: fail to get defulat params.\n");
+        goto done;
+    }
+    params.strm_buff_sz = DEFAULT_BUF_SZ;
+    if (qzSetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: set params fail with incorrect compress params.\n");
+        goto done;
+    }
+
+    //set by default configurations
+    rc = qzSetupSession(&g_session_th[tid], NULL);
+    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH && rc != QZ_NO_HW) {
+        pthread_exit((void *)"qzSetupSession failed");
+    }
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
+
+    if (gen_data) {
+        src_sz = QATZIP_MAX_HW_SZ;
+        dest_sz = QATZIP_MAX_HW_SZ;
+        src = qzMalloc(src_sz, 0, COMMON_MEM);
+        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
+    } else {
+        src = test_arg->src;
+        src_sz = test_arg->src_sz;
+        dest = test_arg->comp_out;
+        dest_sz = test_arg->comp_out_sz;
+        filename = g_input_file_name;
+    }
+
+    if (!src || !dest) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+
+    if (gen_data) {
+        QZ_DEBUG("Gen Data...\n");
+        genRandomData(src, src_sz);
+    }
+
+    out = dest;
+    comp_strm.in    = src;
+    comp_strm.out   = dest;
+    comp_strm.in_sz = src_sz;
+    comp_strm.out_sz =  8192;
+    last = 1;
+    if (comp_strm.in_sz) {
+        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
+        if (rc != QZ_OK) {
+            QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
+            goto done;
+        }
+        out_sz += comp_strm.out_sz;
+        QZ_DEBUG("qzCompressStream in: in:%p out:%p in_sz:%ud out_sz:%ud last:%d",
+                 comp_strm.in, comp_strm.out, comp_strm.in_sz, comp_strm.out_sz, last);
+    }
+
+    while (comp_strm.pending_out > 0) {
+        comp_strm.in    = src;
+        comp_strm.out   += comp_strm.out_sz;
+        comp_strm.in_sz = 0;
+        comp_strm.out_sz =  8192;
+        last = 1;
+        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
+
+        if (rc != QZ_OK) {
+            QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
+            goto done;
+        }
+        out_sz += comp_strm.out_sz;
+        QZ_DEBUG("qzCompressStream in: in:%p out:%p in_sz:%ud out_sz:%ud last:%d",
+                 comp_strm.in, comp_strm.out, comp_strm.in_sz, comp_strm.out_sz, last);
+    }
+
+    dumpOutputData(out_sz, out, filename);
+    qzEndStream(&g_session_th[tid], &comp_strm);
+
+done:
+    if (gen_data) {
+        qzFree(src);
+        qzFree(dest);
+    }
+
+    (void)qzTeardownSession(&g_session_th[tid]);
+    pthread_exit((void *)NULL);
+}
+
 #define USAGE_STRING                                                            \
     "Usage: %s [options]\n"                                                     \
     "\n"                                                                        \
@@ -3672,6 +3782,9 @@ int main(int argc, char *argv[])
         break;
     case 19:
         qzThdOps = qzInitPcieCountCheck;
+        break;
+    case 20:
+        qzThdOps = qzCompressStreamWithPendingOut;
         break;
     default:
         goto done;

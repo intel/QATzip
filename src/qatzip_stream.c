@@ -244,7 +244,10 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     while (strm->pending_out > 0) {
         copied_output = copyStreamOutput(strm, strm->out + produced);
         produced += copied_output;
-        if (0 == copied_output) {
+        if (0 == copied_output ||
+            (0 == strm->pending_out &&
+             0 == strm->pending_in &&
+             0 == strm->in_sz)) {
             rc = QZ_OK;
             goto done;
         }

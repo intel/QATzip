@@ -47,6 +47,7 @@ huge_file_name="calgary.4G"
 highly_compressible_file_name="big-index.html"
 CnVnR_file_name="payload6"
 residue_issue_file="compressed_1071_src_24957.gz"
+qzCompressStream_pendingout_test_file="64kb_file.html"
 
 # 1. Trivial file compression
 echo "Performing file compression and decompression..."
@@ -1041,6 +1042,33 @@ then
    echo "qzSWCompression block test PASS"
 else
    echo "qzSWCompression block test FAIL"
+   exit 2
+fi
+
+function qzCompressStream_with_pending_out_test()
+{
+    local test_file_name=$1
+    cp -f $test_file_path/$test_file_name ./
+    OLDMD5=`md5sum $test_file_name`
+    $test_main -m 20 -i $test_file_name -D comp
+    rm -f $test_file_name
+    gzip -d $test_file_name.gz
+    NEWMD5=`md5sum $test_file_name`
+    rm -f $test_file_name
+    echo "old md5" $OLDMD5
+    echo "new md5" $NEWMD5
+    if [[ $NEWMD5 != $OLDMD5 ]]
+    then
+        return 1
+    fi
+
+    return 0
+}
+if qzCompressStream_with_pending_out_test $qzCompressStream_pendingout_test_file
+then
+   echo "qzCompressStream with pending_out test PASS"
+else
+   echo "qzCompressStream with pending_out test FAIL!!!"
    exit 2
 fi
 
