@@ -902,7 +902,7 @@ function configuration_file_test()
         echo "Checksum mismatch FAILED"
         RESULT=1
     else
-        echo "Checksum match PASS"
+        echo "Checksum match PASSED"
     fi
 
     #Change back to SHIM
@@ -971,7 +971,7 @@ function configuration_file_test_software_compress()
         echo "Checksum mismatch FAILED"
         RESULT=1
     else
-        echo "Checksum match PASS"
+        echo "Checksum match PASSED"
     fi
 
     #Change back to SHIM
@@ -995,9 +995,9 @@ function configuration_file_test_software_compress()
 if configuration_file_test \
    && configuration_file_test_software_compress
 then
-   echo "QAT driver configuration file confifurable test PASS"
+   echo "QAT driver configuration file confifurable test PASSED"
 else
-   echo "QAT driver configuration file confifurable test FAIL"
+   echo "QAT driver configuration file confifurable test FAILED"
    exit 2
 fi
 
@@ -1043,9 +1043,9 @@ function qzSWCompression_block_test()
 }
 if qzSWCompression_block_test
 then
-   echo "qzSWCompression block test PASS"
+   echo "qzSWCompression block test PASSED"
 else
-   echo "qzSWCompression block test FAIL"
+   echo "qzSWCompression block test FAILED"
    exit 2
 fi
 
@@ -1070,9 +1070,9 @@ function qzCompressStream_with_pending_out_test()
 }
 if qzCompressStream_with_pending_out_test $qzCompressStream_pendingout_test_file
 then
-   echo "qzCompressStream with pending_out test PASS"
+   echo "qzCompressStream with pending_out test PASSED"
 else
-   echo "qzCompressStream with pending_out test FAIL!!!"
+   echo "qzCompressStream with pending_out test FAILED!!!"
    exit 2
 fi
 
@@ -1093,12 +1093,13 @@ function decompress_test_with_large_file()
 
     return 0
 }
+
 if decompress_test_with_large_file $large_file_name
 then
-   echo "decompress test with large file PASS"
+   echo "decompress test with large file PASSED"
 else
-   echo "decompress test with large file FAIL!!!"
-   exit 2
+   echo "decompress test with large file FAILED!!!"
+exit 2
 fi
 
 #test for not exist symlink
@@ -1137,7 +1138,7 @@ function qzipCompressTest()
 }
 if qzipCompressTest $big_file_name
 then
-    echo "qzip compress with -O option PASS"
+    echo "qzip compress with -O option PASSED"
 else
     echo "qzip compress with -O option FAILED!!!"
     exit 2
@@ -1146,7 +1147,7 @@ fi
 $DRIVER_DIR/adf_ctl down
 if qzipCompressTest $big_file_name
 then
-    echo "qzip compress with -O option with hardware down PASS"
+    echo "qzip compress with -O option with hardware down PASSED"
 else
     echo "qzip compress with -O option with hardware down FAILED!!!"
     exit 2

@@ -169,15 +169,42 @@ void outputHeaderGen(unsigned char *ptr,
     }
 }
 
-int isStdGzipHeader(const unsigned char *const ptr)
+int isQATProcessable(const unsigned char *ptr,
+                     const unsigned int *const src_len,
+                     QzSess_T *const qz_sess)
 {
     QzGzH_T *h = (QzGzH_T *)ptr;
+    StdGzF_T *qzFooter = NULL;
+    long buff_sz = (DEST_SZ(qz_sess->sess_params.hw_buff_sz) < *src_len ? DEST_SZ(
+                        qz_sess->sess_params.hw_buff_sz) : *src_len);
 
-    return (h->std_hdr.id1 == 0x1f       && \
-            h->std_hdr.id2 == 0x8b       && \
-            h->std_hdr.cm  == QZ_DEFLATE && \
-            h->extra.st1 != 'Q'  && \
-            h->extra.st2 != 'Z');
+    /*check if HW can process*/
+    if (h->std_hdr.id1 == 0x1f       && \
+        h->std_hdr.id2 == 0x8b       && \
+        h->std_hdr.cm  == QZ_DEFLATE && \
+        h->std_hdr.flag == 0x00) {
+        qzFooter = (StdGzF_T *)(findStdGzipFooter((const unsigned char *)h, buff_sz));
+        if ((unsigned char *)qzFooter - ptr - stdGzipHeaderSz() > DEST_SZ(
+                qz_sess->sess_params.hw_buff_sz) ||
+            qzFooter->i_size > qz_sess->sess_params.hw_buff_sz) {
+            return 0;
+        }
+        qz_sess->sess_params.data_fmt = QZ_DEFLATE_GZIP;
+        return 1;
+    }
+
+    /* Besides standard GZIP header, only Gzip header with QZ extension can be processed by QAT */
+    if (h->std_hdr.id1 != 0x1f       || \
+        h->std_hdr.id2 != 0x8b       || \
+        h->std_hdr.cm  != QZ_DEFLATE) {
+        /* There are two possibilities when h is not a gzip header: */
+        /* 1, wrong data */
+        /* 2, It is the 2nd, 3rd... part of the file with the standard gzip header. */
+        return -1;
+    }
+
+    return (h->extra.st1 == 'Q'  && \
+            h->extra.st2 == 'Z');
 }
 
 int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr)
@@ -238,6 +265,25 @@ inline void outputFooterGen(QzSess_T *qz_sess,
 void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr)
 {
     QZ_MEMCPY(ftr, ptr, sizeof(*ftr), sizeof(*ftr));
+}
+
+unsigned char *findStdGzipFooter(const unsigned char *src_ptr,
+                                 long src_avail_len)
+{
+    StdGzH_T *gzHeader = NULL;
+    unsigned int offset = stdGzipHeaderSz() + stdGzipFooterSz();
+
+    while (src_avail_len >= offset + stdGzipHeaderSz()) {
+        gzHeader = (StdGzH_T *)(src_ptr + offset);
+        if (gzHeader->id1 == 0x1f       && \
+            gzHeader->id2 == 0x8b       && \
+            gzHeader->cm  == QZ_DEFLATE && \
+            gzHeader->flag == 0x00) {
+            return (void *)((unsigned char *)gzHeader - stdGzipFooterSz());
+        }
+        offset++;
+    }
+    return (void *)((unsigned char *)src_ptr + src_avail_len - stdGzipFooterSz());
 }
 
 #pragma pack(pop)

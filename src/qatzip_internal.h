@@ -73,6 +73,7 @@ extern"C" {
 
 #define likely(x)   __builtin_expect (!!(x), 1)
 #define unlikely(x) __builtin_expect (!!(x), 0)
+#define DEST_SZ(src_sz)           (((9 * (src_sz)) / 8) + 1024)
 
 typedef struct QzCpaStream_S {
     signed long seq;
@@ -255,7 +256,10 @@ void outputFooterGen(QzSess_T *qz_sess,
                      CpaDcRqResults *res,
                      QzDataFormat_T data_fmt);
 void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr);
-int isStdGzipHeader(const unsigned char *const ptr);
+
+int isQATProcessable(const unsigned char *ptr,
+                     const unsigned int *const src_len,
+                     QzSess_T *const qz_sess);
 
 int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                  unsigned int *src_len, unsigned char *dest,
@@ -278,4 +282,8 @@ extern CpaStatus icp_adf_get_numDevices(Cpa32U *);
 int initStream(QzSession_T *sess, QzStream_T *strm);
 
 void *qzMemSet(void *ptr, unsigned char filler, unsigned int count);
+
+unsigned char *findStdGzipFooter(const unsigned char *src_ptr,
+                                 long src_avail_len);
+
 #endif //_QATZIPP_H

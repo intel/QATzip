@@ -57,7 +57,6 @@
 const char *g_dev_tag = "SHIM";
 
 #define INTER_SZ(src_sz)          (2 * (src_sz))
-#define DEST_SZ(src_sz)           (((9 * (src_sz)) / 8) + 1024)
 #define msleep(x)                 usleep((x) * 1000)
 
 #define QZ_INIT_FAIL(rc)          (QZ_PARAMS == rc     || \
@@ -1400,6 +1399,7 @@ static int checkSessionState(QzSession_T *sess)
         break;
     case QZ_OK:
     case QZ_LOW_MEM:
+    case QZ_LOW_DEST_MEM:
     case QZ_FORCE_SW:
         rc = QZ_OK;
         break;
@@ -1641,6 +1641,8 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
 {
     unsigned char *src_ptr = src;
     long src_send_sz, dest_recv_sz;
+    StdGzF_T *qzFooter = NULL;
+    int isEndWithFooter = 0;
 
     if ((src_avail_len <= 0) || (dest_avail_len <= 0)) {
         QZ_DEBUG("checkHeader: insufficient %s buffer length\n",
@@ -1648,12 +1650,20 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         return QZ_BUF_ERROR;
     }
 
-    if (QZ_OK != qzGzipHeaderExt(src_ptr, hdr)) {
-        return QZ_FAIL;
-    }
-
     if (1 == qz_sess->force_sw) {
         return QZ_FORCE_SW;
+    }
+
+    if (QZ_DEFLATE_GZIP == qz_sess->sess_params.data_fmt) {
+        qzFooter = (StdGzF_T *)(findStdGzipFooter(src_ptr, src_avail_len));
+        hdr->extra.qz_e.dest_sz = (unsigned char *)qzFooter - src_ptr -
+                                  stdGzipHeaderSz();
+        hdr->extra.qz_e.src_sz = qzFooter->i_size;
+        if ((unsigned char *)qzFooter == src_ptr + src_avail_len - stdGzipFooterSz()) {
+            isEndWithFooter = 1;
+        }
+    } else if (QZ_OK != qzGzipHeaderExt(src_ptr, hdr)) {
+        return QZ_FAIL;
     }
 
     src_send_sz = (long)(hdr->extra.qz_e.dest_sz);
@@ -1661,6 +1671,10 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
     if ((src_send_sz > DEST_SZ(qz_sess->sess_params.hw_buff_sz)) ||
         (dest_recv_sz > qz_sess->sess_params.hw_buff_sz)) {
         if (1 == qz_sess->sess_params.sw_backup) {
+            if (QZ_DEFLATE_GZIP == qz_sess->sess_params.data_fmt &&
+                1 == isEndWithFooter) {
+                return QZ_LOW_DEST_MEM;
+            }
             qz_sess->force_sw = 1;
             return QZ_LOW_MEM;
         } else {
@@ -1701,6 +1715,7 @@ static void *doDecompressIn(void *in)
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     StdGzF_T *qzFooter = NULL;
+    QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
     struct timespec my_time;
 
     my_time.tv_sec = 0;
@@ -1734,6 +1749,7 @@ static void *doDecompressIn(void *in)
             break;
 
         case QZ_LOW_MEM:
+        case QZ_LOW_DEST_MEM:
         case QZ_FORCE_SW:
             tmp_src_avail_len = src_avail_len;
             tmp_dest_avail_len = dest_avail_len;
@@ -1779,8 +1795,8 @@ static void *doDecompressIn(void *in)
 
             g_process.qz_inst[i].stream[j].src1++;/*this buffer is in use*/
             swapDataBuffer(i, j);
-            src_ptr += qzGzipHeaderSz();
-            remaining -= qzGzipHeaderSz();
+            src_ptr += outputHeaderSz(data_fmt);
+            remaining -= outputHeaderSz(data_fmt);
             src_send_sz = hdr.extra.qz_e.dest_sz;
             dest_receive_sz = hdr.extra.qz_e.src_sz;
 
@@ -1858,7 +1874,7 @@ static void *doDecompressIn(void *in)
             }
 
             g_process.qz_inst[i].num_retries = 0;
-            src_avail_len -= (qzGzipHeaderSz() + src_send_sz + stdGzipFooterSz());
+            src_avail_len -= (outputHeaderSz(data_fmt) + src_send_sz + stdGzipFooterSz());
             dest_avail_len -= dest_receive_sz;
 
             dest_ptr += dest_receive_sz;
@@ -1920,6 +1936,7 @@ static void *doDecompressOut(void *in)
     unsigned int src_send_sz;
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
 
     QZ_DEBUG("mw>> function %s() called\n", __func__);
     fflush(stdout);
@@ -2000,7 +2017,8 @@ static void *doDecompressOut(void *in)
 
                 src_send_sz = g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
                 qz_sess->next_dest += resl->produced;
-                qz_sess->qz_in_len += (qzGzipHeaderSz() + src_send_sz + stdGzipFooterSz());
+                qz_sess->qz_in_len += (outputHeaderSz(data_fmt) + src_send_sz +
+                                       stdGzipFooterSz());
                 qz_sess->qz_out_len += resl->produced;
 
                 QZ_DEBUG("qz_sess->next_dest = %p\n", qz_sess->next_dest);
@@ -2127,15 +2145,15 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     if (hdr->extra.qz_e.src_sz < qz_sess->sess_params.input_sz_thrshold ||
         g_process.qz_init_status == QZ_NO_HW                            ||
         sess->hw_session_stat == QZ_NO_HW                               ||
-        isStdGzipHeader(src)                                            ||
+        !(isQATProcessable(src, src_len, qz_sess))                      ||
         qz_sess->inflate_stat == InflateOK                              ||
-        data_fmt != QZ_DEFLATE_GZIP_EXT) {
+        QZ_DEFLATE_RAW == data_fmt) {
         QZ_DEBUG("decompression src_len=%u, hdr->extra.qz_e.src_sz = %u, "
                  "g_process.qz_init_status = %d, sess->hw_session_stat = %d, "
-                 "isStdGzipHeader = %d, switch to software.\n",
+                 "isQATProcessable = %d, switch to software.\n",
                  *src_len,  hdr->extra.qz_e.src_sz,
                  g_process.qz_init_status, sess->hw_session_stat,
-                 isStdGzipHeader(src));
+                 isQATProcessable(src, src_len, qz_sess));
         goto sw_decompression;
     } else if (sess->hw_session_stat != QZ_OK &&
                sess->hw_session_stat != QZ_NO_INST_ATTACH) {

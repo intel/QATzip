@@ -302,6 +302,12 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     zlib_ret = inflate(stream, Z_SYNC_FLUSH);
     switch (zlib_ret) {
     case Z_OK:
+        if (QZ_LOW_DEST_MEM == sess->thd_sess_stat) {
+            QZ_DEBUG("ERR: inflate failed with Z_DATA_ERROR\n");
+            ret = QZ_DATA_ERROR;
+            qz_sess->inflate_stat = InflateError;
+            goto done;
+        }
         ret = QZ_OK;
         qz_sess->inflate_stat = InflateOK;
         break;
@@ -333,7 +339,7 @@ done:
              stream->msg,
              *src_len,
              *dest_len);
-    if (zlib_ret == Z_STREAM_END) {
+    if (zlib_ret == Z_STREAM_END || QZ_LOW_DEST_MEM == sess->thd_sess_stat) {
         if (Z_OK != inflateEnd(stream)) {
             QZ_DEBUG("inflateEnd failed.\n");
             ret = QZ_FAIL;

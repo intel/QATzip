@@ -242,6 +242,8 @@ typedef enum QzCrcType_E {
 /**<using SW: Could not attach to an instance */
 #define QZ_LOW_MEM              (14)
 /**<using SW: Not enough pinned memory */
+#define QZ_LOW_DEST_MEM         (15)
+/**<using SW: Not enough pinned memory for dest buffer */
 #define QZ_NONE                 (100)
 /**<device uninitialzied*/
 #define QZ_NOSW_NO_HW           (-101)

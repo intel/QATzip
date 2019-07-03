@@ -302,4 +302,11 @@ then
     exit 1
 fi
 
+#try HW decom for GZIP header test
+echo "try HW decom for GZIP header test START"
+if ! ${BASEDIR}/run_test_try_HW_decom_for_GZIP_header.sh
+then
+    exit 1
+fi
+
 exit 0
