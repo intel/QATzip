@@ -268,7 +268,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     unsigned char *dst_buffer = NULL;
     FILE *src_file = NULL;
     FILE *dst_file = NULL;
-    unsigned int bytes_read = 0, bytes_processed = 0;
+    unsigned int bytes_read = 0;
+    unsigned long bytes_processed = 0;
     unsigned int ratio_idx = 0;
     const unsigned int ratio_limit =
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);

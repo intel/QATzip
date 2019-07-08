@@ -1645,7 +1645,7 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
     long src_send_sz, dest_recv_sz;
 
     if ((src_avail_len <= 0) || (dest_avail_len <= 0)) {
-        QZ_DEBUG("doDecompressOut: insufficient %s buffer length\n",
+        QZ_DEBUG("checkHeader: insufficient %s buffer length\n",
                  (dest_avail_len <= 0) ? "destation" : "source");
         return QZ_BUF_ERROR;
     }
@@ -1671,10 +1671,10 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
     }
 
     if (src_send_sz > src_avail_len) {
-        QZ_DEBUG("doDecompressOut: incomplete source buffer\n");
+        QZ_DEBUG("checkHeader: incomplete source buffer\n");
         return QZ_DATA_ERROR;
     } else if (dest_recv_sz > dest_avail_len) {
-        QZ_DEBUG("doDecompressOut: insufficient destination buffer length\n");
+        QZ_DEBUG("checkHeader: insufficient destination buffer length\n");
         return QZ_BUF_ERROR;
     }
 
