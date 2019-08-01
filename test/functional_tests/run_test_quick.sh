@@ -1098,4 +1098,11 @@ else
    exit 2
 fi
 
+#test for not exist symlink
+echo "test for not exist symlink"
+if ! ${BASEDIR}/run_test_symlink.sh
+then
+    exit 2
+fi
+
 exit 0
