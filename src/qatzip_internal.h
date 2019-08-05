@@ -275,4 +275,5 @@ extern CpaStatus icp_adf_get_numDevices(Cpa32U *);
 
 int initStream(QzSession_T *sess, QzStream_T *strm);
 
+void *qzMemSet(void *ptr, unsigned char filler, unsigned int count);
 #endif //_QATZIPP_H

@@ -47,10 +47,48 @@
 #include "qatzip_page_table.h"
 
 
+#define __STDC_WANT_LIB_EXT1__ 1
+#include <linux/string.h>
+
 static QzPageTable_T g_qz_page_table = {{{0}}};
 static pthread_mutex_t g_qz_table_lock;
 static int g_table_init = 0;
 static __thread unsigned char *g_a;
+
+void *doUserMemset(void *const ptr, unsigned char filler,
+                   const unsigned int count)
+{
+    unsigned int lim = 0;
+    volatile unsigned char *volatile dstPtr = ptr;
+
+    while (lim < count) {
+        dstPtr[lim++] = filler;
+    }
+    return (void *)dstPtr;
+}
+
+/*
+ *  * Fills a memory zone with a given constant byte,
+ *   * returns pointer to the memory zone.
+ *    */
+void *qzMemSet(void *ptr, unsigned char filler, unsigned int count)
+{
+    if (ptr == NULL) {
+        QZ_ERROR("Invaild input memory pointer!");
+        return NULL;
+    }
+#ifdef __STDC_LIB_EXT1__
+    errno_t result = memset_s(
+                         ptr, sizeof(ptr), filler, count) /* Supported on C11 standard */
+    if (result != 0) {
+        QZ_ERROR("memset failed by the reason of %d", result);
+    }
+    return ptr;
+#else
+    return doUserMemset(
+               ptr, filler, count); /* Platform-independent secure memset */
+#endif /* __STDC_LIB_EXT1__ */
+}
 
 int qzMemFindAddr(unsigned char *a)
 {
@@ -121,7 +159,7 @@ void *qzMalloc(size_t sz, int numa, int pinned)
             return NULL;
         }
 
-        memset(&g_qz_page_table, 0, sizeof(QzPageTable_T));
+        qzMemSet(&g_qz_page_table, 0, sizeof(QzPageTable_T));
         g_table_init = 1;
         atexit(qzMemDestory);
 

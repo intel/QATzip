@@ -48,6 +48,7 @@
 
 #include <stdint.h>
 #include <sys/mman.h>
+#include <qatzip_internal.h>
 
 #define PAGE_SHIFT (12)
 #define PAGE_SIZE  (0x1000)
@@ -122,7 +123,7 @@ static inline void freePageTable(QzPageTable_T *const table)
     /* There are 1+3 levels in 48-bit page table for 4KB pages. */
     freePageLevel(table, 3);
     /* Reset global root table. */
-    memset(table, 0, sizeof(QzPageTable_T));
+    qzMemSet(table, 0, sizeof(QzPageTable_T));
 }
 
 static inline void storeAddr(QzPageTable_T *level,

@@ -60,7 +60,7 @@ static const QzExtraField_T g_extra_field = {
 
 static void gen_qatzip_hdr(gz_header *hdr)
 {
-    memset(hdr, 0, sizeof(gz_header));
+    qzMemSet(hdr, 0, sizeof(gz_header));
     hdr->extra = (Bytef *)&g_extra_field;
     hdr->extra_len = (uInt)sizeof(g_extra_field);
     hdr->os = 255;

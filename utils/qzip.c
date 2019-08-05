@@ -523,7 +523,7 @@ static void processFile(QzSession_T *sess, const char *in_name,
         processDir(sess, in_name, out_name, is_compress);
     } else {
         char oname[MAX_PATH_LEN];
-        memset(oname, 0, MAX_PATH_LEN);
+        qzMemSet(oname, 0, MAX_PATH_LEN);
 
         if (makeOutName(in_name, out_name, oname, is_compress)) {
             return;
