@@ -38,7 +38,7 @@ set -e
 
 test_qzip=${QZ_ROOT}/utils/qzip
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
-
+echo "run test chunksz"
 #get the type of QAT hardware
 platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
 if [ $platform != "37c8" ]

@@ -259,7 +259,7 @@ if HugePageTest $sample_file_name 1024 1024 16 1 && \
    HugePageTest $compressed_with_tar_file 0 0 0 47
    #HugePageTest $compressed_with_tar_file 0 1024 16 48
 then
-    echo "HugePage memory test OK"
+    echo "HugePage memory test PASSED"
 else
     echo "HugePage memory test FAILED!!! :(";
     exit 1

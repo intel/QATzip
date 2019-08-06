@@ -43,7 +43,7 @@ test_file_name4M="payload7"
 test_file_path="/opt/compressdata"
 hwChunkSz=("$((64*1024))" "$((128*1024))" "$((256*1024))")
 
-
+echo "CnV+R working correctly for various buffer sizes test"
 if [ ! -f "$test_file_path/$test_file_name4M" ]
 then
     echo "$test_file_path/$test_file_name4M is not exit!"
@@ -83,10 +83,10 @@ for hwSz in "${hwChunkSz[@]}"; do
     echo "new_checksum = $new_checksum";
     if [[ $new_checksum != $orig_checksum ]]
     then
-        echo "hwsz = $hwSz, Checksum mismatch, CnV+R working for various buffer sizes test failed."
+        echo "hwsz = $hwSz, Checksum mismatch, CnV+R working for various buffer sizes test FAILED."
         exit 1
     else
-        echo "hwsz = $hwSz, Checksum match, CnV+R working for various buffer sizes test success.";
+        echo "hwsz = $hwSz, Checksum match, CnV+R working for various buffer sizes test PASSED.";
     fi
 
 done

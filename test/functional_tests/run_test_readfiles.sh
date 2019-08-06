@@ -126,7 +126,7 @@ function reading_file_all_zero()
 if reading_file_named_with_symbols $highly_compressible_file_name && \
    reading_file_all_zero $sample_file_name
 then
-    echo "Reading Special-name Files test OK"
+    echo "Reading Special-name Files test PASSED"
 else
     echo "Reading Special-name Files test FAILED!!! :(";
     exit 1

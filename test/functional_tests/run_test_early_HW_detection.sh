@@ -195,7 +195,7 @@ if early_HW_detection_service_down_test  && \
    early_HW_detection_service_hugepage0_test  && \
    early_HW_detection_service_up_hugepage0_test $sample_file_name
 then
-    echo "Early HW detection test OK"
+    echo "Early HW detection test PASSED"
 else
     echo "Early HW detection test FAILED!!! :(";
     exit 1

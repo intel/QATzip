@@ -159,7 +159,7 @@ function run_with_kernel_mem()
 if run_with_hugepage  && \
    run_with_kernel_mem
 then
-    echo "Using Huge Pages test OK"
+    echo "Using Huge Pages test PASSED"
 else
     echo "Using Huge Pages test FAILED!!! :(";
     exit 1

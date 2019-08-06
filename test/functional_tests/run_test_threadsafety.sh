@@ -38,7 +38,7 @@ set -e
 
 test_main=${QZ_ROOT}/test/test
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
-
+echo "run test threadsafety"
 #get the type of QAT hardware
 platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
 if [ $platform != "37c8" ]

@@ -37,6 +37,7 @@
 set -e
 
 readonly BASEDIR=$(cd `dirname $0`; pwd)
+echo "Files that expand Test"
 test_qzip="${BASEDIR}/../../utils/qzip "
 test_file_path="/opt/compressdata"
 echo "test_file_path=$test_file_path"
@@ -82,10 +83,10 @@ echo "new_checksum = $new_checksum";
 
 if [[ $new_checksum != $orig_checksum ]]
 then
-    echo "Checksum mismatch, Files that expand test failed."
+    echo "Checksum mismatch, Files that expand test FAILED."
     exit 1
 else
-    echo "Checksum match, Files that expand test success."
+    echo "Checksum match, Files that expand test PASSED."
 fi
 
 exit 0

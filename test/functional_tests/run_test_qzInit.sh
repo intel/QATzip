@@ -36,6 +36,7 @@
 
 #set -e
 test_main=${QZ_ROOT}/test/test
+echo "No hardware in platform Test"
 echo "test for qzInitPcieCountCheck start"
 #get the type and device of QAT hardware
 platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
@@ -96,9 +97,10 @@ adf_ctl status
 #report
 if [[ $qzinit1_status == 1  &&  $qzinit2_status == 1 ]]
 then
-    echo -e "qzInitPcieCountCheck PASS\n"
+    echo -e "No hardware in platform Test PASSED."
     exit 0
 else
-    echo "qzInitPcieCountCheck FAILED!!! :(\n"
+    echo "No hardware in platform Test FAILED."
     exit 1
 fi
+
