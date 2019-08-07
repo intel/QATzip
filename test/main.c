@@ -57,6 +57,7 @@
 #include <qatzip_internal.h>
 #include <qz_utils.h>
 #include <qae_mem.h>
+#include <sys/wait.h>
 
 #define QZ_FMT_NAME         "QZ"
 #define GZIP_FMT_NAME       "GZIP"
@@ -68,6 +69,8 @@
 #define DEST_SZ(src_sz)     (((9 * (src_sz)) / 8) + 1024)
 #define KB                  (1024)
 #define MB                  (KB * KB)
+
+#define MAX_HUGEPAGE_FILE  "/sys/module/usdm_drv/parameters/max_huge_pages"
 
 typedef void *(QzThdOps)(void *);
 
@@ -3438,6 +3441,108 @@ done:
     pthread_exit((void *)NULL);
 }
 
+void *forkResourceCheck(void *arg)
+{
+    int rc = -1;
+    TestArg_T *test_arg = (TestArg_T *)arg;
+    const long tid = test_arg->thd_id;
+    pid_t pid;
+    int status;
+    char max_hp_str[10] = {0};
+    int hp_params_fd;
+    size_t number_huge_pages;
+    char *stop = NULL;
+
+    QZ_DEBUG("Hello from forkResourceCheck tid=%ld\n", tid);
+    QZ_PRINT("This is parent process, my pid = %d\n", getpid());
+    QZ_PRINT("Before qzInit, qz_init_status in parent process is %d\n",
+             g_process.qz_init_status);
+    if (!((TestArg_T *)arg)->init_engine_disabled) {
+        rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
+        if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+            g_ready_thread_count++;
+            pthread_cond_signal(&g_ready_cond);
+            pthread_exit((void *)"qzInit failed");
+        }
+    }
+
+    pid = fork();
+    if (pid > 0) {
+        QZ_PRINT("After qzInit, qz_init_status in parent process is %d\n",
+                 g_process.qz_init_status);
+        QZ_PRINT("packageId in parent process is %d\n",
+                 g_process.qz_inst[0].instance_info.physInstId.packageId);
+        hp_params_fd = open(MAX_HUGEPAGE_FILE, O_RDONLY);
+        if (hp_params_fd < 0) {
+            QZ_ERROR("Open %s failed\n", MAX_HUGEPAGE_FILE);
+            goto done;
+        }
+
+        if (read(hp_params_fd, max_hp_str, sizeof(max_hp_str)) < 0) {
+            QZ_ERROR("Read max_huge_pages from %s failed\n", MAX_HUGEPAGE_FILE);
+            close(hp_params_fd);
+            goto done;
+        }
+
+        number_huge_pages = strtoul(max_hp_str, &stop, 0);
+        if (*stop != '\n') {
+            QZ_ERROR("convert from %s to size_t failed\n", max_hp_str);
+            close(hp_params_fd);
+            goto done;
+        }
+        QZ_PRINT("After qzInit, number_huge_pages in parent process is %d\n",
+                 (int)number_huge_pages);
+        close(hp_params_fd);
+    } else if (pid == 0) {
+        sleep(2);
+        QZ_PRINT("This is child process, my pid = %d\n", getpid());
+        QZ_PRINT("This is child process, my ppid = %d\n", getppid());
+        g_process.qz_init_status = QZ_NONE;
+        QZ_PRINT("Before qzInit, qz_init_status in child process is %d\n",
+                 g_process.qz_init_status);
+        if (!((TestArg_T *)arg)->init_engine_disabled) {
+            rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
+            if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+                g_ready_thread_count++;
+                pthread_cond_signal(&g_ready_cond);
+                pthread_exit((void *)"qzInit failed");
+            }
+            QZ_PRINT("After qzInit, qz_init_status in child process is %d\n",
+                     g_process.qz_init_status);
+            QZ_PRINT("packageId in child process is %d\n",
+                     g_process.qz_inst[0].instance_info.physInstId.packageId);
+        }
+        hp_params_fd = open(MAX_HUGEPAGE_FILE, O_RDONLY);
+        if (hp_params_fd < 0) {
+            QZ_ERROR("Open %s failed\n", MAX_HUGEPAGE_FILE);
+            goto done;
+        }
+
+        if (read(hp_params_fd, max_hp_str, sizeof(max_hp_str)) < 0) {
+            QZ_ERROR("Read max_huge_pages from %s failed\n", MAX_HUGEPAGE_FILE);
+            close(hp_params_fd);
+            goto done;
+        }
+
+        number_huge_pages = strtoul(max_hp_str, &stop, 0);
+        if (*stop != '\n') {
+            QZ_ERROR("convert from %s to size_t failed\n", max_hp_str);
+            close(hp_params_fd);
+            goto done;
+        }
+        QZ_PRINT("After qzInit, number_huge_pages in child process is %d\n",
+                 (int)number_huge_pages);
+        close(hp_params_fd);
+    } else {
+        perror("fork");
+    }
+
+    wait(&status);
+
+done:
+    pthread_exit((void *)NULL);
+}
+
 #define USAGE_STRING                                                            \
     "Usage: %s [options]\n"                                                     \
     "\n"                                                                        \
@@ -3785,6 +3890,9 @@ int main(int argc, char *argv[])
         break;
     case 20:
         qzThdOps = qzCompressStreamWithPendingOut;
+        break;
+    case 21:
+        qzThdOps = forkResourceCheck;
         break;
     default:
         goto done;
