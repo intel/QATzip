@@ -90,7 +90,7 @@ processData_T g_process = {
     .qz_init_status = QZ_NONE,
     .pcie_count = -1
 };
-pthread_mutex_t g_lock;
+pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 
 __thread ThreadData_T g_thread = {
     .ppid = 0,

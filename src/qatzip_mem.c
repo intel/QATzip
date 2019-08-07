@@ -51,7 +51,7 @@
 #include <linux/string.h>
 
 static QzPageTable_T g_qz_page_table = {{{0}}};
-static pthread_mutex_t g_qz_table_lock;
+static pthread_mutex_t g_qz_table_lock = PTHREAD_MUTEX_INITIALIZER;
 static int g_table_init = 0;
 static __thread unsigned char *g_a;
 
