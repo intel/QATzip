@@ -217,7 +217,7 @@ if HugePageTest $sample_file_name 1024 1024 16 1 && \
    HugePageTest $sample_file_name 0 0 16 5 && \
    HugePageTest $sample_file_name 1024 0 0 6 && \
    HugePageTest $sample_file_name 0 0 0 7 && \
-   #HugePageTest $sample_file_name 0 1024 16 8 && \
+   HugePageTest $sample_file_name 0 1024 16 8 && \
    HugePageTest $huge_file_name 1024 1024 16 9 && \
    HugePageTest $huge_file_name 1024 1024 0 10 && \
    HugePageTest $huge_file_name 0 1024 0 11 && \
@@ -225,7 +225,7 @@ if HugePageTest $sample_file_name 1024 1024 16 1 && \
    HugePageTest $huge_file_name 0 0 16 13 && \
    HugePageTest $huge_file_name 1024 0 0 14 && \
    HugePageTest $huge_file_name 0 0 0 15 && \
-   #HugePageTest $huge_file_name 0 1024 16 16 && \
+   HugePageTest $huge_file_name 0 1024 16 16 && \
    HugePage_Decompress_Test $compressed_with_qzip_file 1024 1024 16 17 && \
    HugePage_Decompress_Test $compressed_with_qzip_file 1024 1024 0 18 && \
    HugePage_Decompress_Test $compressed_with_qzip_file 0 1024 0 19 && \
@@ -233,7 +233,7 @@ if HugePageTest $sample_file_name 1024 1024 16 1 && \
    HugePage_Decompress_Test $compressed_with_qzip_file 0 0 16 21 && \
    HugePage_Decompress_Test $compressed_with_qzip_file 1024 0 0 22 && \
    HugePage_Decompress_Test $compressed_with_qzip_file 0 0 0 23 && \
-   #HugePage_Decompress_Test $compressed_with_qzip_file 0 1024 16 24 && \
+   HugePage_Decompress_Test $compressed_with_qzip_file 0 1024 16 24 && \
    HugePageTest_with_0_byte_file 1024 1024 16 25 && \
    HugePageTest_with_0_byte_file 1024 1024 0 26 && \
    HugePageTest_with_0_byte_file 0 1024 0 27 && \
@@ -241,7 +241,7 @@ if HugePageTest $sample_file_name 1024 1024 16 1 && \
    HugePageTest_with_0_byte_file 0 0 16 29 && \
    HugePageTest_with_0_byte_file 1024 0 0 30 && \
    HugePageTest_with_0_byte_file 0 0 0 31 && \
-   #HugePageTest_with_0_byte_file 0 1024 16 32 && \
+   HugePageTest_with_0_byte_file 0 1024 16 32 && \
    HugePageTest $small_file_name 1024 1024 16 33 && \
    HugePageTest $small_file_name 1024 1024 0 34 && \
    HugePageTest $small_file_name 0 1024 0 35 && \
@@ -249,15 +249,15 @@ if HugePageTest $sample_file_name 1024 1024 16 1 && \
    HugePageTest $small_file_name 0 0 16 37 && \
    HugePageTest $small_file_name 1024 0 0 38 && \
    HugePageTest $small_file_name 0 0 0 39 && \
-   #HugePageTest $small_file_name 0 1024 16 40 && \
+   HugePageTest $small_file_name 0 1024 16 40 && \
    HugePageTest $compressed_with_tar_file 1024 1024 16 41 && \
    HugePageTest $compressed_with_tar_file 1024 1024 0 42 && \
    HugePageTest $compressed_with_tar_file 0 1024 0 43 && \
    HugePageTest $compressed_with_tar_file 1024 0 16 44 && \
    HugePageTest $compressed_with_tar_file 0 0 16 45 && \
    HugePageTest $compressed_with_tar_file 1024 0 0 46 && \
-   HugePageTest $compressed_with_tar_file 0 0 0 47
-   #HugePageTest $compressed_with_tar_file 0 1024 16 48
+   HugePageTest $compressed_with_tar_file 0 0 0 47 && \
+   HugePageTest $compressed_with_tar_file 0 1024 16 48
 then
     echo "HugePage memory test PASSED"
 else
