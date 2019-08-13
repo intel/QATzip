@@ -1109,54 +1109,10 @@ then
 fi
 
 #test for fork resource check
-function fork_resource_check_test()
-{
-    DVR_OPT="-C0 -D1 -P1 -L"
-    if $DRV_FILE $DVR_OPT > /dev/null
-        then
-          echo -e "\nInstall upstream driver OK :)\n"
-        else
-          echo "Install upstream driver FAILED!!! :("
-          return 1
-    fi
-
-    $test_main -m 21 > forkResourceCheckTestlog 2>&1
-    cat forkResourceCheckTestlog
-
-    DVR_OPT="-L"
-    if $DRV_FILE $DVR_OPT > /dev/null
-        then
-          echo -e "\nInstall upstream driver OK :)\n"
-        else
-          echo "Install upstream driver FAILED!!! :("
-          return 1
-    fi
-
-    packageId_parent=$(cat forkResourceCheckTestlog | grep "packageId in parent process" | awk '{print $6}')
-    packageId_child=$(cat forkResourceCheckTestlog | grep "packageId in child process" | awk '{print $6}')
-    number_huge_pages_parent=$(cat forkResourceCheckTestlog | grep "number_huge_pages in parent process" | awk '{print $8}')
-    number_huge_pages_child=$(cat forkResourceCheckTestlog | grep "number_huge_pages in child process" | awk '{print $8}')
-
-    rm -f forkResourceCheckTestlog
-    #check resources: instance and hugepage
-    if [[ $(echo "$packageId_parent == 0" | bc) = 1 && \
-          $(echo "$packageId_child == 1" | bc) = 1 && \
-          $(echo "$number_huge_pages_parent == 1792" | bc) = 1 && \
-          $(echo "$number_huge_pages_child == 1536" | bc) = 1 ]]
-    then
-        return 0
-    else
-        return 1
-    fi
-}
-
-echo "fork resource check test START"
-if fork_resource_check_test
+echo "test for fork resource check"
+if ! ${BASEDIR}/run_test_fork_resource_check.sh
 then
-   echo "fork resource check test PASSED"
-else
-   echo "fork resource check test FAILED!!!"
-   exit 2
+    exit 2
 fi
 
 #test for qzip compressing with -O options

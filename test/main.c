@@ -3470,8 +3470,8 @@ void *forkResourceCheck(void *arg)
     if (pid > 0) {
         QZ_PRINT("After qzInit, qz_init_status in parent process is %d\n",
                  g_process.qz_init_status);
-        QZ_PRINT("packageId in parent process is %d\n",
-                 g_process.qz_inst[0].instance_info.physInstId.packageId);
+        QZ_PRINT("instID in parent process is %s\n",
+                 g_process.qz_inst[0].instance_info.instID);
         hp_params_fd = open(MAX_HUGEPAGE_FILE, O_RDONLY);
         if (hp_params_fd < 0) {
             QZ_ERROR("Open %s failed\n", MAX_HUGEPAGE_FILE);
@@ -3509,8 +3509,8 @@ void *forkResourceCheck(void *arg)
             }
             QZ_PRINT("After qzInit, qz_init_status in child process is %d\n",
                      g_process.qz_init_status);
-            QZ_PRINT("packageId in child process is %d\n",
-                     g_process.qz_inst[0].instance_info.physInstId.packageId);
+            QZ_PRINT("instID in child process is %s\n",
+                     g_process.qz_inst[0].instance_info.instID);
         }
         hp_params_fd = open(MAX_HUGEPAGE_FILE, O_RDONLY);
         if (hp_params_fd < 0) {
