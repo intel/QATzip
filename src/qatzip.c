@@ -1861,9 +1861,7 @@ static void *doDecompressIn(void *in)
             src_avail_len -= (qzGzipHeaderSz() + src_send_sz + stdGzipFooterSz());
             dest_avail_len -= dest_receive_sz;
 
-            if (dest_pinned) {
-                dest_ptr += dest_receive_sz;
-            }
+            dest_ptr += dest_receive_sz;
 
             src_ptr += (src_send_sz + stdGzipFooterSz());
             remaining -= (src_send_sz + stdGzipFooterSz());

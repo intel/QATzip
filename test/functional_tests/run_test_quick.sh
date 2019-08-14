@@ -1153,5 +1153,10 @@ else
 fi
 $DRIVER_DIR/adf_ctl up
 
+echo "test for decom combined_file"
+if ! ${BASEDIR}/run_test_decompress_combined_file.sh
+then
+    exit 2
+fi
 
 exit 0
