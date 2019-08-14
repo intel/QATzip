@@ -2355,6 +2355,15 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz)
     if (last_chunk_sz) {
         dest_sz += ((9 * last_chunk_sz + 7) / 8) + QZ_SKID_PAD_SZ + qz_header_footer_sz;
     }
+
+    if (0 == src_sz) {
+        dest_sz = QZ_COMPRESSED_SZ_OF_EMPTY_FILE;
+    }
+
+    if (dest_sz <= src_sz) {
+        dest_sz = 0;
+    }
+
     QZ_DEBUG("src_sz is %u, dest_sz is %u\n", src_sz, (unsigned int)dest_sz);
 
     return dest_sz;

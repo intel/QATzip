@@ -872,7 +872,8 @@ int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
  *         src_sz     Input data length in byte.
  *
  * @retval dest_sz    Max compressed data output length in byte.
- *                    When src_sz equal to 0, the return value is 0.
+ *                    When src_sz equal to 0, the return value is QZ_COMPRESSED_SZ_OF_EMPTY_FILE(34).
+ *                    When integer overflow happens, the return value is 0.
  *
  * @pre
  *      None
@@ -886,6 +887,7 @@ int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
  *
  *****************************************************************************/
 #define QZ_SKID_PAD_SZ 48
+#define QZ_COMPRESSED_SZ_OF_EMPTY_FILE 34
 unsigned int qzMaxCompressedLength(unsigned int src_sz);
 
 /**
