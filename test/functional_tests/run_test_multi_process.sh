@@ -41,7 +41,7 @@ test_main="${BASEDIR}/../test "
 echo "Using Huge Pages Test"
 
 #***********************************************************************************
-#    set max_huge_pages to 10 (sufficent hugepage for test_main -m 4 with one thread)
+#    set max_huge_pages to 8 (sufficent hugepage for test_main -m 4 with one thread)
 #    Use test_main -m 4 to start one process with two thread
 #    The first thread use hugepage
 #    The second thread has insufficent hugepage
@@ -55,7 +55,7 @@ function run_with_hugepage()
 
     echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
-    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=10 max_huge_pages_per_process=10
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=8 max_huge_pages_per_process=8
 
     $test_main -m 4 -D "both" -t 2 > usehugepagelog 2>&1
 
