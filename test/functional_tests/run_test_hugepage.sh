@@ -77,8 +77,8 @@ function HugePageTest()
     cp -f $test_file_path/$test_file_name ./
     orig_checksum=`md5sum $test_file_name | awk '{print $1}' | head -1`
 
-    if $test_qzip $test_file_name -o $test_file_name-compressed && \
-       $test_qzip -d -k "$test_file_name-compressed.gz"
+    if $test_qzip $test_file_name -o $test_file_name-compressed  > HugePageHWTestlog_compressed 2>&1 && \
+       $test_qzip -d -k "$test_file_name-compressed.gz" > HugePageHWTestlog_decompressed 2>&1
     then
         echo "(De)Compress $test_file_name OK";
         rc=0
@@ -86,6 +86,36 @@ function HugePageTest()
         echo "(De)Compress $test_file_name FAILED";
         rc=1
     fi
+    sw_compressed=$(grep "QZ_NO_HW" HugePageHWTestlog_compressed)
+    sw_decompressed=$(grep "QZ_NO_HW" HugePageHWTestlog_decompressed)
+    Num=$(($test_case %8))
+    if [[ $Num == 0 && -n $sw_compressed ]]
+    then
+        echo "Test_case $test_case compressed without HW PASSED."
+        rc=0
+    elif [[ $Num -ne 0 && -z $sw_compressed ]]
+    then
+        echo "Test_case $test_case compressed with HW PASSED."
+        rc=0
+    else
+        echo "Test_case $test_case compressed FAILED"
+        rc=1
+    fi
+    if [[ $Num == 0 && -n $sw_decompressed ]]
+    then
+        echo "Test_case $test_case decompressed without HW PASSED."
+        rc=0
+    elif [[ $Num -ne 0 && -z $sw_decompressed ]]
+    then
+        echo "Test_case $test_case decompressed with HW PASSED."
+        rc=0
+    else
+        echo "Test_case $test_case decompressed FAILED"
+        rc=1
+    fi
+
+    rm -f HugePageHWTestlog_compressed
+    rm -f HugePageHWTestlog_decompressed
 
     new_checksum=`md5sum $test_file_name-compressed | awk '{print $1}' | head -1`
 
@@ -141,7 +171,7 @@ function HugePage_Decompress_Test()
 
     cp -f $test_file_path/$test_file_name ./
 
-    if $test_qzip -d $test_file_name -o $decompressed_file
+    if $test_qzip -d $test_file_name -o $decompressed_file  > HugePageHWTestlog_decompressed 2>&1
     then
         echo "(De)Compress $test_file_name OK";
         rc=0
@@ -150,10 +180,41 @@ function HugePage_Decompress_Test()
         rc=1
     fi
 
+    sw_decompressed=$(grep "QZ_NO_HW" HugePageHWTestlog_decompressed)
+    Num=$(($test_case %8))
+    if [[ $Num == 0 && -n $sw_decompressed ]]
+    then
+        echo "Test_case $test_case decompressed without HW PASSED."
+        rc=0
+    elif [[ $Num -ne 0 && -z $sw_decompressed ]]
+    then
+        echo "Test_case $test_case decompressed with HW PASSED."
+        rc=0
+    else
+        echo "Test_case $test_case decompressed FAILED"
+        rc=1
+    fi
+    rm -f HugePageHWTestlog_decompressed
+
     orig_checksum=`md5sum $decompressed_file | awk '{print $1}' | head -1`
 
-    $test_qzip $decompressed_file
+    $test_qzip $decompressed_file  > HugePageHWTestlog_compressed 2>&1
     gzip -d $test_file_name
+    sw_compressed=$(grep "QZ_NO_HW" HugePageHWTestlog_compressed)
+    Num=$(($test_case %8))
+    if [[ $Num == 0 && -n $sw_compressed ]]
+    then
+        echo "Test_case $test_case compressed without HW PASSED."
+        rc=0
+    elif [[ $Num -ne 0 && -z $sw_compressed ]]
+    then
+        echo "Test_case $test_case compressed with HW PASSED."
+        rc=0
+    else
+        echo "Test_case $test_case compressed FAILED"
+        rc=1
+    fi
+    rm -f HugePageHWTestlog_compressed
 
     new_checksum=`md5sum $decompressed_file | awk '{print $1}' | head -1`
 
@@ -164,6 +225,7 @@ function HugePage_Decompress_Test()
     fi
 
     rm $decompressed_file
+
 
     echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
@@ -191,15 +253,45 @@ function HugePageTest_with_0_byte_file()
 
     echo "" > $test_file
 
-    $test_qzip $test_file -o $out_file        #compress
-    $test_qzip $out_file.gz -d -o $test_file  #decompress
+    $test_qzip $test_file -o $out_file     > HugePageHWTestlog_compressed 2>&1   #compress
+    $test_qzip $out_file.gz -d -o $test_file > HugePageHWTestlog_decompressed 2>&1 #decompress
 
-    if [ "" == "$(cat $test_file)" ]; then
+    if [ "" == "$(cat $test_file)" ];then
         echo "size 0 file compress/decompress test OK :)"
     else
         echo "size 0 file compress/decompress test FAILED!!! :("
         rc=1
     fi
+
+    sw_compressed=$(grep "QZ_NO_HW" HugePageHWTestlog_compressed)
+    sw_decompressed=$(grep "QZ_NO_HW" HugePageHWTestlog_decompressed)
+    Num=$(($test_case %8))
+    if [[ $Num == 0 && -n $sw_compressed ]]
+    then
+        echo "Test_case $test_case compressed without HW PASSED."
+        rc=0
+    elif [[ $Num -ne 0 && -z $sw_compressed ]]
+    then
+        echo "Test_case $test_case compressed with HW PASSED."
+        rc=0
+    else
+        echo "Test_case $test_case compressed FAILED"
+        rc=1
+    fi
+    if [[ $Num == 0 && -n $sw_decompressed ]]
+    then
+        echo "Test_case $test_case decompressed without HW PASSED."
+        rc=0
+    elif [[ $Num -ne 0 && -z $sw_decompressed ]]
+    then
+        echo "Test_case $test_case decompressed with HW PASSED."
+        rc=0
+    else
+        echo "Test_case $test_case decompressed FAILED"
+        rc=1
+    fi
+    rm -f HugePageHWTestlog_compressed
+    rm -f HugePageHWTestlog_decompressed
 
     echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
