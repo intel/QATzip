@@ -41,6 +41,7 @@
 #include <assert.h>
 #include <sys/time.h>
 #include <bits/types.h>
+#include <stdio.h>
 
 #include "cpa.h"
 #include "cpa_dc.h"
@@ -55,6 +56,13 @@
  * Process address space name described in the config file for this device.
  */
 const char *g_dev_tag = "SHIM";
+
+const char *out_type_var = "qz_out_type";
+const char *out_count_var = "qz_out_count";
+char *out_type_val_s;
+char *out_count_val_s;
+int out_type_val = -1; 	// 0 for usleep, 1 for loop
+int out_count_val = -1; 
 
 #define INTER_SZ(src_sz)          (2 * (src_sz))
 #define DEST_SZ(src_sz)           (((9 * (src_sz)) / 8) + 1024)
@@ -208,34 +216,35 @@ done:
 
 static int qzGrabInstance(int hint)
 {
-    int i, rc;
+    int i, j, rc, f;
 
     if (QZ_NONE == g_process.qz_init_status) {
         return -1;
     }
 
+	hint++;
     if (hint >= g_process.num_instances) {
-        hint = g_process.num_instances - 1;
-    }
-
-    if (hint < 0) {
         hint = 0;
     }
 
-    /*check hint first*/
-    rc = __sync_lock_test_and_set(&(g_process.qz_inst[hint].lock), 1);
-    if (0 == rc) {
-        return hint;
+    if (hint < 0) {
+        hint = g_process.num_instances-1;
     }
 
     /*otherwise loop through all of them*/
-    for (i = 0; i < g_process.num_instances; i++) {
-        rc = __sync_lock_test_and_set(&(g_process.qz_inst[i].lock), 1);
-        if (0 ==  rc) {
-            return i;
-        }
-    }
 
+	f = 0;
+	for ( j = 0; j < 100; j++ )
+	{
+		for (i = 0; i < g_process.num_instances; i++) {
+			if( f == 0 ){ i = hint; f = 1; } ;
+			rc = __sync_lock_test_and_set(&(g_process.qz_inst[i].lock), 1);
+			if (0 ==  rc) {
+				return i;
+			}
+		}
+
+	}
     return -1;
 }
 
@@ -1133,7 +1142,7 @@ static void *doCompressOut(void *in)
 
         /*Poll for responses*/
         good = 0;
-        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 1);
+        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 0);
         if (unlikely(CPA_STATUS_FAIL == sts)) {
             QZ_ERROR("Error in DcPoll: %d\n", sts);
             sess->thd_sess_stat = QZ_FAIL;
@@ -1348,8 +1357,50 @@ static void *doCompressOut(void *in)
         }
 
         if (good == 0) {
+			if ( out_type_val == -1 )	// not initied
+			{
+				out_type_val_s = getenv( out_type_var );
+				if ( out_type_val_s == NULL )
+				{
+					out_type_val = 0;	// usleep
+				}	
+				else
+				{
+					out_type_val = atoi( out_type_val_s );
+					if ( out_type_val < 0 || out_type_val > 1 ) out_type_val = 0;
+				}
+			}
+			if ( out_count_val == -1 )	// not initied
+			{
+				out_count_val_s = getenv( out_count_var );
+				if ( out_count_val_s == NULL )
+				{
+					out_count_val = 1;
+				}	
+				else
+				{
+					out_count_val = atoi( out_count_val_s );
+					if ( out_count_val < 0 || out_count_val > 100 ) out_count_val = 10;
+				}
+			}
+		
             QZ_DEBUG("comp sleep for %u usec...\n", qz_sess->sess_params.poll_sleep);
-            usleep(qz_sess->sess_params.poll_sleep);
+			if ( out_type_val == 0 )
+			{
+				usleep(out_count_val);
+				// usleep(qz_sess->sess_params.poll_sleep);
+			}
+			else
+			{
+				int i,k;
+				for ( i = 0; i < out_count_val; i++ )
+				{
+					k = i << 3;
+					i = k;
+					i  = i >> 3;
+				}
+			}
+				
             sleep_cnt++;
         }
 
@@ -1932,7 +1983,7 @@ static void *doDecompressOut(void *in)
     while (!done) {
         /*Poll for responses*/
         good = 0;
-        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 1);
+        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 0);
         if (unlikely(CPA_STATUS_FAIL == sts)) {
             QZ_ERROR("Error in DcPoll: %d\n", sts);
             sess->thd_sess_stat = QZ_FAIL;
@@ -2023,8 +2074,50 @@ static void *doDecompressOut(void *in)
         }
 
         if (good == 0) {
-            QZ_DEBUG("decomp sleep for %u usec...\n", qz_sess->sess_params.poll_sleep);
-            usleep(qz_sess->sess_params.poll_sleep);
+			if ( out_type_val == -1 )	// not initied
+			{
+				out_type_val_s = getenv( out_type_var );
+				if ( out_type_val_s == NULL )
+				{
+					out_type_val = 0;	// usleep
+				}	
+				else
+				{
+					out_type_val = atoi( out_type_val_s );
+					if ( out_type_val < 0 || out_type_val > 1 ) out_type_val = 0;
+				}
+			}
+			if ( out_count_val == -1 )	// not initied
+			{
+				out_count_val_s = getenv( out_count_var );
+				if ( out_count_val_s == NULL )
+				{
+					out_count_val = 1;
+				}	
+				else
+				{
+					out_count_val = atoi( out_count_val_s );
+					if ( out_count_val < 0 || out_count_val > 100 ) out_count_val = 10;
+				}
+			}
+		
+            QZ_DEBUG("comp sleep for %u usec...\n", qz_sess->sess_params.poll_sleep);
+			if ( out_type_val == 0 )
+			{
+				usleep(out_count_val);
+				// usleep(qz_sess->sess_params.poll_sleep);
+			}
+			else
+			{
+				int i,k;
+				for ( i = 0; i < out_count_val; i++ )
+				{
+					k = i << 3;
+					i = k;
+					i  = i >> 3;
+				}
+			}
+				
             sleep_cnt++;
         }
     }
