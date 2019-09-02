@@ -39,8 +39,9 @@ set -e
 test_qzip=${QZ_ROOT}/utils/qzip
 test_file_path="/opt/compressdata"
 sample_file_name="calgary"
+big_file_name="calgary.2G"
 
-function decom_combined_file()
+function decom_combined_file1()
 {
     local test_file_name=$1
     cp -f $test_file_path/$test_file_name ./
@@ -63,8 +64,37 @@ function decom_combined_file()
     return 0
 }
 
+#Qzip should be able to decompress files whose length
+#of the last few bytes of the first 512Mb data is not
+#enough for a Gzip header with QZ extension.
+function decom_combined_file2()
+{
+    local test_file_name1=$1
+    local test_file_name2=$2
+    cp -f $test_file_path/$test_file_name1 ./
+    cp -f $test_file_path/$test_file_name2 ./
+    split -b 1371159690 $test_file_name1
+    $test_qzip xaa
+    $test_qzip $test_file_name2
+    cat xaa.gz $test_file_name2.gz > file.gz
+    gzip -cd file.gz > file_gzip
+    $test_qzip -d file.gz -o file_qzip
+    OLDMD5=`md5sum file_gzip | awk '{print $1}'`
+    NEWMD5=`md5sum file_qzip | awk '{print $1}'`
+    rm -f $test_file_name1 file_gzip file_qzip xab xaa.gz $test_file_name2.gz
+    echo "old md5" $OLDMD5
+    echo "new md5" $NEWMD5
+    if [[ $NEWMD5 != $OLDMD5 ]]
+    then
+        return 1
+    fi
+
+    return 0
+}
+
 echo "decom combined_file test START"
-if decom_combined_file $sample_file_name
+if decom_combined_file1 $sample_file_name &&
+   decom_combined_file2 $big_file_name $sample_file_name
 then
    echo "decom combined_file test PASSED"
 else

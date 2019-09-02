@@ -1650,6 +1650,14 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         return QZ_BUF_ERROR;
     }
 
+    if ((src_avail_len < qzGzipHeaderSz() &&
+         QZ_DEFLATE_GZIP_EXT == qz_sess->sess_params.data_fmt) ||
+        (src_avail_len < stdGzipHeaderSz() &&
+         QZ_DEFLATE_GZIP == qz_sess->sess_params.data_fmt)) {
+        QZ_DEBUG("checkHeader: incomplete source buffer\n");
+        return QZ_DATA_ERROR;
+    }
+
     if (1 == qz_sess->force_sw) {
         return QZ_FORCE_SW;
     }
