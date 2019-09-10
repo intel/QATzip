@@ -46,10 +46,9 @@ declare -a thd_cnt verify algorithm swBack
 thd_cnt=("1" "2" "16" "100")
 algorithm=("deflate" "snappy" "lz4")
 
-declare -a compLevel huffmanType pollSleep hwBuffSz
+declare -a compLevel huffmanType hwBuffSz
 compLevel=("1" "6" "9")
 huffmanType=("static" "dynamic")
-pollSleep=("0" "1000")
 
 #2K 16K 64K
 hwBuffSz=("$((2*1024))" "$((64*1024))")
@@ -141,14 +140,12 @@ function test_mode1()
   echo -e "\nTest Mode 1" && echo -e "Test Mode 1\n" >> $RESULT_FILE
   for thd_count in "${thd_cnt[@]}"; do
     for huffman in "${huffmanType[@]}"; do
-      for interval in "${pollSleep[@]}"; do
-          arg="-m 1 -t $thd_count -T $huffman -P $interval"
+      arg="-m 1 -t $thd_count -T $huffman"
           if ! test_res=$($run_main $arg 2>&1); then
               echo $test_res; exit 1
           fi
           echo -e "Run $strip_dir_main $arg $(show_test_result "$test_res")"
           echo -e "Run $run_main $arg\n$test_res" >> $RESULT_FILE
-      done
     done
   done
 }
@@ -198,12 +195,11 @@ function test_mode4()
 
   for thd_count in "${thd_cnt[@]}" ; do
     for complv in "${compLevel[@]}"; do
-      for pollSp in "${pollSleep[@]}"; do
-        for hwSz in "${hwBuffSz[@]}"; do
+      for hwSz in "${hwBuffSz[@]}"; do
           for huffman in "${huffmanType[@]}"; do
             for verify in "-v" ""; do
               for dir in "${direction[@]}"; do
-                arg="-m 4 -t $thd_count -L $complv -P $pollSp -C $hwSz"
+                arg="-m 4 -t $thd_count -L $complv -C $hwSz"
                 arg+=" -T $huffman $verify -D $dir"
 
                 if [ ! -z $input_file  ] ; then
@@ -223,7 +219,6 @@ function test_mode4()
             done
           done
         done
-      done
     done
   done
 }

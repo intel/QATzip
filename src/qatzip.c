@@ -41,6 +41,9 @@
 #include <assert.h>
 #include <sys/time.h>
 #include <bits/types.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
 
 #include "cpa.h"
 #include "cpa_dc.h"
@@ -56,12 +59,20 @@
  */
 const char *g_dev_tag = "SHIM";
 
+const unsigned int g_polling_interval[] = { 10, 30, 60, 100, 200, 400, 600,
+                                            1000, 2000, 4000, 8000, 16000,
+                                            32000, 64000
+                                          };
+
 #define INTER_SZ(src_sz)          (2 * (src_sz))
 #define msleep(x)                 usleep((x) * 1000)
 
 #define QZ_INIT_FAIL(rc)          (QZ_PARAMS == rc     || \
                                    QZ_NOSW_NO_HW == rc || \
                                    QZ_FAIL == rc)
+#define POLLING_LIST_NUM          (sizeof(g_polling_interval) \
+                                    / sizeof(unsigned int))
+#define MAX_GRAB_RETRY            (10)
 
 #define IS_DEFLATE(fmt)  (QZ_DEFLATE_RAW == (fmt))
 #define IS_DEFLATE_OR_GZIP(fmt) \
@@ -75,7 +86,6 @@ QzSessionParams_T g_sess_params_default = {
     .data_fmt          = QZ_DATA_FORMAT_DEFAULT,
     .comp_lvl          = QZ_COMP_LEVEL_DEFAULT,
     .comp_algorithm    = QZ_COMP_ALGOL_DEFAULT,
-    .poll_sleep        = QZ_POLL_SLEEP_DEFAULT,
     .max_forks         = QZ_MAX_FORK_DEFAULT,
     .sw_backup         = QZ_SW_BACKUP_DEFAULT,
     .hw_buff_sz        = QZ_HW_BUFF_SZ,
@@ -207,34 +217,34 @@ done:
 
 static int qzGrabInstance(int hint)
 {
-    int i, rc;
+    int i, j, rc, f;
 
     if (QZ_NONE == g_process.qz_init_status) {
         return -1;
     }
 
+    hint++;
     if (hint >= g_process.num_instances) {
-        hint = g_process.num_instances - 1;
-    }
-
-    if (hint < 0) {
         hint = 0;
     }
 
-    /*check hint first*/
-    rc = __sync_lock_test_and_set(&(g_process.qz_inst[hint].lock), 1);
-    if (0 == rc) {
-        return hint;
+    if (hint < 0) {
+        hint = g_process.num_instances - 1;
     }
 
     /*otherwise loop through all of them*/
-    for (i = 0; i < g_process.num_instances; i++) {
-        rc = __sync_lock_test_and_set(&(g_process.qz_inst[i].lock), 1);
-        if (0 ==  rc) {
-            return i;
-        }
-    }
 
+    f = 0;
+    for (j = 0; j < MAX_GRAB_RETRY; j++) {
+        for (i = 0; i < g_process.num_instances; i++) {
+            if (f == 0) { i = hint; f = 1; } ;
+            rc = __sync_lock_test_and_set(&(g_process.qz_inst[i].lock), 1);
+            if (0 ==  rc) {
+                return i;
+            }
+        }
+
+    }
     return -1;
 }
 
@@ -815,6 +825,7 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
     qz_sess->inst_hint = -1;
     qz_sess->seq = 0;
     qz_sess->seq_in = 0;
+    qz_sess->polling_idx = 0;
     if (NULL == params) {
         /*right now this always succeeds*/
         (void)qzGetDefaults(&(qz_sess->sess_params));
@@ -1055,7 +1066,7 @@ static void *doCompressIn(void *in)
                                     (void *)(tag));
             if (unlikely(CPA_STATUS_RETRY == rc)) {
                 g_process.qz_inst[i].num_retries++;
-                usleep(qz_sess->sess_params.poll_sleep);
+                usleep(g_polling_interval[qz_sess->polling_idx]);
             }
 
             if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
@@ -1113,9 +1124,11 @@ err_exit:
 /* The internal function to g_process the comrpession response
  * from the QAT hardware
  */
+
 static void *doCompressOut(void *in)
 {
     int i = 0, j = 0;
+
     int good = -1;
     CpaDcRqResults *resl;
     CpaStatus sts;
@@ -1132,7 +1145,7 @@ static void *doCompressOut(void *in)
 
         /*Poll for responses*/
         good = 0;
-        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 1);
+        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 0);
         if (unlikely(CPA_STATUS_FAIL == sts)) {
             QZ_ERROR("Error in DcPoll: %d\n", sts);
             sess->thd_sess_stat = QZ_FAIL;
@@ -1346,12 +1359,18 @@ static void *doCompressOut(void *in)
             }
         }
 
-        if (good == 0) {
-            QZ_DEBUG("comp sleep for %u usec...\n", qz_sess->sess_params.poll_sleep);
-            usleep(qz_sess->sess_params.poll_sleep);
-            sleep_cnt++;
-        }
+        if (0 == good) {
+            qz_sess->polling_idx = (qz_sess->polling_idx >= POLLING_LIST_NUM - 1) ?
+                                   (POLLING_LIST_NUM - 1) : (qz_sess->polling_idx + 1);
 
+            QZ_DEBUG("comp sleep for %d usec...\n",
+                     g_polling_interval[qz_sess->polling_idx]);
+            usleep(g_polling_interval[qz_sess->polling_idx]);
+            sleep_cnt++;
+        } else {
+            qz_sess->polling_idx = (qz_sess->polling_idx == 0) ? (0) :
+                                   (qz_sess->polling_idx - 1);
+        }
     }
 
     QZ_DEBUG("Comp sleep_cnt: %u\n", sleep_cnt);
@@ -1866,7 +1885,7 @@ static void *doDecompressIn(void *in)
                 QZ_DEBUG("mw>> %s():  DcDecompressData() rc = %d\n", __func__, rc);
                 if (unlikely(CPA_STATUS_RETRY == rc)) {
                     g_process.qz_inst[i].num_retries++;
-                    usleep(qz_sess->sess_params.poll_sleep);
+                    usleep(g_polling_interval[qz_sess->polling_idx]);
                 }
 
                 if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
@@ -1953,7 +1972,7 @@ static void *doDecompressOut(void *in)
     while (!done) {
         /*Poll for responses*/
         good = 0;
-        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 1);
+        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 0);
         if (unlikely(CPA_STATUS_FAIL == sts)) {
             QZ_ERROR("Error in DcPoll: %d\n", sts);
             sess->thd_sess_stat = QZ_FAIL;
@@ -2044,10 +2063,17 @@ static void *doDecompressOut(void *in)
             done = (qz_sess->last_submitted) && (qz_sess->processed == qz_sess->submitted);
         }
 
-        if (good == 0) {
-            QZ_DEBUG("decomp sleep for %u usec...\n", qz_sess->sess_params.poll_sleep);
-            usleep(qz_sess->sess_params.poll_sleep);
+        if (0 == good) {
+            qz_sess->polling_idx = (qz_sess->polling_idx >= POLLING_LIST_NUM - 1) ?
+                                   (POLLING_LIST_NUM - 1) : (qz_sess->polling_idx + 1);
+
+            QZ_DEBUG("decomp sleep for %d usec...\n",
+                     g_polling_interval[qz_sess->polling_idx]);
+            usleep(g_polling_interval[qz_sess->polling_idx]);
             sleep_cnt++;
+        } else {
+            qz_sess->polling_idx = (qz_sess->polling_idx == 0) ? (0) :
+                                   (qz_sess->polling_idx - 1);
         }
     }
 

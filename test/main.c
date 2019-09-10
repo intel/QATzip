@@ -3574,7 +3574,6 @@ done:
     "    -L comp_lvl           1 - 9\n"                                         \
     "    -O data_fmt           deflate | gzip | gzipext\n"                      \
     "    -T huffmanType        static | dynamic\n"                              \
-    "    -P poll_sleep         0 means disable thread polling\n"                \
     "    -r req_cnt_thrshold   max inflight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
     "    -h                    Print this help message\n"
@@ -3619,7 +3618,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:P:i:l:e:s:r:B:O:S:vh";
+    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:vh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -3720,13 +3719,6 @@ int main(int argc, char *argv[])
                 g_params_th.huffman_hdr = QZ_DYNAMIC_HDR;
             } else {
                 QZ_ERROR("Error huffman arg: %s\n", optarg);
-                return -1;
-            }
-            break;
-        case 'P':
-            g_params_th.poll_sleep = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
-            if (*stop != '\0' || errno) {
-                QZ_ERROR("Error sleepInterval arg: %s\n", optarg);
                 return -1;
             }
             break;

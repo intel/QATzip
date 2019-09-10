@@ -180,6 +180,7 @@ typedef struct QzSess_S {
     unsigned long *crc32;
     unsigned int last;
     unsigned int single_thread;
+    unsigned int polling_idx;
 
     z_stream *deflate_strm;
     DeflateState_T deflate_stat;

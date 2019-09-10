@@ -284,8 +284,6 @@ typedef struct QzSessionParams_S {
     /**<Compression level 1..9 */
     unsigned char  comp_algorithm;
     /**<Compress/decompression algorithms */
-    unsigned int  poll_sleep;
-    /**<nanosleep between poll [0..1000] 0 means no sleep */
     unsigned int  max_forks;
     /**<maximum forks permitted in the current thread.  */
     /**<0 means no forking permitted */
