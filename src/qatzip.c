@@ -59,8 +59,8 @@
  */
 const char *g_dev_tag = "SHIM";
 
-const unsigned int g_polling_interval[] = { 10, 30, 60, 100, 200, 400, 600,
-                                            1000, 2000, 4000, 8000, 16000,
+const unsigned int g_polling_interval[] = { 10, 20, 30, 60, 100, 200, 400,
+                                            600, 1000, 2000, 4000, 8000, 16000,
                                             32000, 64000
                                           };
 
@@ -223,13 +223,8 @@ static int qzGrabInstance(int hint)
         return -1;
     }
 
-    hint++;
-    if (hint >= g_process.num_instances) {
+    if (hint >= g_process.num_instances || hint < 0) {
         hint = 0;
-    }
-
-    if (hint < 0) {
-        hint = g_process.num_instances - 1;
     }
 
     /*otherwise loop through all of them*/
