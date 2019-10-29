@@ -54,6 +54,7 @@ static QzPageTable_T g_qz_page_table = {{{0}}};
 static pthread_mutex_t g_qz_table_lock = PTHREAD_MUTEX_INITIALIZER;
 static int g_table_init = 0;
 static __thread unsigned char *g_a;
+extern processData_T g_process;
 
 void *doUserMemset(void *const ptr, unsigned char filler,
                    const unsigned int count)
@@ -154,6 +155,10 @@ static void qzMemDestory(void)
 
 void *qzMalloc(size_t sz, int numa, int pinned)
 {
+    int status;
+    QzSession_T temp_sess;
+    qzMemSet(&temp_sess, 0, sizeof(QzSession_T));
+
     if (0 == g_table_init) {
         if (0 != pthread_mutex_lock(&g_qz_table_lock)) {
             return NULL;
@@ -173,6 +178,17 @@ void *qzMalloc(size_t sz, int numa, int pinned)
         if (0 == pinned) {
             QZ_DEBUG("regular malloc\n");
             g_a = malloc(sz);
+        } else if (1 == pinned && QZ_NONE == g_process.qz_init_status) {
+            status = qzInit(&temp_sess, 1);
+            if (QZ_OK != status && QZ_DUPLICATE != status && QZ_NO_HW != status &&
+                QZ_NOSW_NO_HW != status) {
+                QZ_ERROR("QAT init failed with error: %d\n", status);
+                exit(status);
+            }
+            g_a = qaeMemAllocNUMA(sz, numa, 64);
+            if (NULL != g_a) {
+                qzMemRegAddr(g_a, sz);
+            }
         }
     } else {
         qzMemRegAddr(g_a, sz);

@@ -452,6 +452,10 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         if (unlikely(0 != pthread_mutex_unlock(&g_lock))) {
             return QZ_FAIL;
         }
+        if (g_process.sw_backup != sw_backup) {
+            g_process.sw_backup = sw_backup;
+        }
+
         return QZ_DUPLICATE;
     }
 
