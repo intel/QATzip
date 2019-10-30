@@ -85,6 +85,7 @@ function HugePageTest()
     else
         echo "(De)Compress $test_file_name FAILED";
         rc=1
+	return $rc
     fi
     sw_compressed=$(grep "QZ_NO_HW" HugePageHWTestlog_compressed)
     sw_decompressed=$(grep "QZ_NO_HW" HugePageHWTestlog_decompressed)
@@ -100,6 +101,7 @@ function HugePageTest()
     else
         echo "Test_case $test_case compressed FAILED"
         rc=1
+	return $rc
     fi
     if [[ $Num == 0 && -n $sw_decompressed ]]
     then
@@ -112,6 +114,7 @@ function HugePageTest()
     else
         echo "Test_case $test_case decompressed FAILED"
         rc=1
+	return $rc
     fi
 
     rm -f HugePageHWTestlog_compressed
@@ -123,6 +126,7 @@ function HugePageTest()
     then
         echo "Checksum mismatch, hugepage test FAILED."
         rc=1
+	return $rc
     fi
 
     rm $test_file_name-compressed
@@ -134,6 +138,7 @@ function HugePageTest()
     else
         echo "Decompress $test_file_name-compressed.gz with gzip FAILED."
         rc=1
+	return $rc
     fi
 
     echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
@@ -178,6 +183,7 @@ function HugePage_Decompress_Test()
     else
         echo "(De)Compress $test_file_name FAILED";
         rc=1
+	return $rc
     fi
 
     sw_decompressed=$(grep "QZ_NO_HW" HugePageHWTestlog_decompressed)
@@ -193,6 +199,7 @@ function HugePage_Decompress_Test()
     else
         echo "Test_case $test_case decompressed FAILED"
         rc=1
+	return $rc
     fi
     rm -f HugePageHWTestlog_decompressed
 
@@ -213,6 +220,7 @@ function HugePage_Decompress_Test()
     else
         echo "Test_case $test_case compressed FAILED"
         rc=1
+	return $rc
     fi
     rm -f HugePageHWTestlog_compressed
 
@@ -222,6 +230,7 @@ function HugePage_Decompress_Test()
     then
         echo "Checksum mismatch, hugepage test FAILED."
         rc=1
+	return $rc
     fi
 
     rm $decompressed_file
@@ -261,6 +270,7 @@ function HugePageTest_with_0_byte_file()
     else
         echo "size 0 file compress/decompress test FAILED!!! :("
         rc=1
+	return $rc
     fi
 
     sw_compressed=$(grep "QZ_NO_HW" HugePageHWTestlog_compressed)
@@ -277,6 +287,7 @@ function HugePageTest_with_0_byte_file()
     else
         echo "Test_case $test_case compressed FAILED"
         rc=1
+	return $rc
     fi
     if [[ $Num == 0 && -n $sw_decompressed ]]
     then
@@ -289,6 +300,7 @@ function HugePageTest_with_0_byte_file()
     else
         echo "Test_case $test_case decompressed FAILED"
         rc=1
+	return $rc
     fi
     rm -f HugePageHWTestlog_compressed
     rm -f HugePageHWTestlog_decompressed
