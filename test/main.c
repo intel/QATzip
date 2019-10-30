@@ -2602,18 +2602,22 @@ void *qzInitPcieCountCheck(void *thd_arg)
     if (rc != QZ_OK && rc != QZ_DUPLICATE) {
         QZ_ERROR("qzInit1 error. rc = %d\n", rc);
     }
-    QZ_DEBUG("qzInit1 done. rc = %d, g_process.pcie_count = %d\n", rc,
-             g_process.pcie_count);
+
+    QZ_DEBUG("qzInit1 done. rc = %d, g_process.qat_available = %d\n", rc,
+             g_process.qat_available);
 
     qzClose(&g_session_th[tid]);
-    QZ_DEBUG("qzClose done. g_process.pcie_count = %d\n", g_process.pcie_count);
+
+    QZ_DEBUG("qzClose done. g_process.qat_available = %d\n",
+             g_process.qat_available);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
     if (rc != QZ_OK && rc != QZ_DUPLICATE) {
         QZ_ERROR("qzInit2 error. rc = %d\n", rc);
     }
-    QZ_DEBUG("qzInit2 done. rc = %d, g_process.pcie_count = %d\n", rc,
-             g_process.pcie_count);
+
+    QZ_DEBUG("qzInit2 done. rc = %d, g_process.qat_available = %d\n", rc,
+             g_process.qat_available);
 
     if (qzGetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
@@ -3589,7 +3593,7 @@ static int qz_do_g_process_Check(void)
     if (g_process.qz_init_status == QZ_OK &&
         g_process.sw_backup == 1 &&
         (g_process.num_instances == 12 || g_process.num_instances == 4) &&
-        (g_process.pcie_count == 3 || g_process.pcie_count == 1)) {
+        g_process.qat_available == CPA_TRUE) {
         return QZ_OK;
     } else {
         return QZ_FAIL;

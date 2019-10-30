@@ -132,7 +132,7 @@ typedef struct ProccesData_S {
     CpaInstanceHandle *dc_inst_handle;
     QzInstance_T *qz_inst;
     Cpa16U num_instances;
-    Cpa32U pcie_count;
+    char qat_available;
 } processData_T;
 
 typedef enum {
@@ -278,7 +278,9 @@ int qz_sessParamsCheck(QzSessionParams_T *params);
 
 unsigned char getSwBackup(QzSession_T *sess);
 
+#ifdef ADF_PCI_API
 extern CpaStatus icp_adf_get_numDevices(Cpa32U *);
+#endif
 
 int initStream(QzSession_T *sess, QzStream_T *strm);
 

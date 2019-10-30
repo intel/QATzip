@@ -97,7 +97,7 @@ QzSessionParams_T g_sess_params_default = {
 
 processData_T g_process = {
     .qz_init_status = QZ_NONE,
-    .pcie_count = -1
+    .qat_available = QZ_NONE
 };
 pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -361,7 +361,7 @@ static void stopQat(void)
 reset:
     g_process.num_instances = (Cpa16U)0;
     g_process.qz_init_status = QZ_NONE;
-    g_process.pcie_count = -1;
+    g_process.qat_available = QZ_NONE;
 }
 
 static void exitFunc(void)
@@ -424,6 +424,9 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     unsigned int instance_found = 0;
     static unsigned int waiting = 0;
     static unsigned int wait_cnt = 0;
+#ifdef ADF_PCI_API
+    Cpa32U pcie_count;
+#endif
 
     if (unlikely(sess == NULL)) {
         return QZ_PARAMS;
@@ -433,7 +436,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         return QZ_PARAMS;
     }
 
-    if (0 == g_process.pcie_count ||
+    if (CPA_FALSE == g_process.qat_available ||
         QZ_OK == g_process.qz_init_status) {
         return QZ_DUPLICATE;
     }
@@ -464,15 +467,29 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     init_timers();
     g_process.sw_backup = sw_backup;
 
-    status = icp_adf_get_numDevices(&g_process.pcie_count);
+#ifdef SAL_DEV_API
+    g_process.qat_available = icp_sal_userIsQatAvailable();
+    if (CPA_FALSE == g_process.qat_available) {
+        QZ_ERROR("Error no hardware, switch to SW if permitted\n");
+        BACKOUT;
+    }
+#else
+    status = icp_adf_get_numDevices(&pcie_count);
     if (CPA_STATUS_SUCCESS != status) {
-        g_process.pcie_count = 0;
+        g_process.qat_available = CPA_FALSE;
     }
 
-    if (0 == g_process.pcie_count) {
+    if (pcie_count >= 1) {
+        g_process.qat_available = CPA_TRUE;
+    } else {
+        g_process.qat_available = CPA_FALSE;
+    }
+
+    if (CPA_FALSE == g_process.qat_available) {
         QZ_ERROR("Error no hardware, switch to SW if permitted\n", status);
         BACKOUT;
     }
+#endif
 
     status = icp_sal_userStartMultiProcess(getSectionName(), CPA_FALSE);
     if (CPA_STATUS_SUCCESS != status) {

@@ -52,8 +52,6 @@ EXTRA_CFLAGS = $(QAT_INCLUDE) $(USDM_INCLUDE)   \
                -I$(top_builddir)/include \
                -I$(top_builddir)/src
 
-LIBADD = -lqat_s -lusdm_drv_s -lz -lpthread
-
 default: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED) qzip
 all: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED) qzip test
 

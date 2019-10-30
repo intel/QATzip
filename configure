@@ -285,11 +285,18 @@ if test -z ${ICP_ROOT}
 then
   :
 else
-  if [ -f "$ICP_ROOT/build/libusdm_drv_s.so" ] || \
-     [ -f "$ICP_BUILD_OUTPUT/libusdm_drv_s.so" ]; then
+  if [ -f "$ICP_ROOT/build/libusdm.so" ] || \
+     [ -f "$ICP_BUILD_OUTPUT/libusdm.so" ]; then
+    USDM_LIB_NAME=usdm
     QAT_CFLAGS="$USDM_INCLUDE"
+    LIBADD='-lqat -lusdm -lz -lpthread'
+  elif [ -f "$ICP_ROOT/build/libusdm_drv_s.so" ] || \
+       [ -f "$ICP_BUILD_OUTPUT/libusdm_drv_s.so" ]; then
+    USDM_LIB_NAME=usdm_drv_s
+    QAT_CFLAGS="$USDM_INCLUDE"
+    LIBADD='-lqat_s -lusdm_drv_s -lz -lpthread'
   else
-    echo "QATzip requires libusdm_drv_s.so to build."
+    echo "QATzip requires libusdm.so or libusdm_drv_s.so to build."
     exit_conf
   fi
 fi
@@ -302,7 +309,7 @@ int main(void){
 _QZEOF
 
 
-if ${CC} $testfile.c -lusdm_drv_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+if ${CC} $testfile.c -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
 then :
   echo "Checking for usdm library... OK"
 else
@@ -316,11 +323,14 @@ if test -z ${ICP_ROOT}
 then
   :
 else
-  if [ -f "$ICP_ROOT/build/libqat_s.so" ] || \
-     [ -f "$ICP_BUILD_OUTPUT/libqat_s.so" ]; then
-    :
+  if [ -f "$ICP_ROOT/build/libqat.so" ] || \
+     [ -f "$ICP_BUILD_OUTPUT/libqat.so" ]; then
+    QAT_LIB_NAME=qat
+  elif [ -f "$ICP_ROOT/build/libqat_s.so" ] || \
+       [ -f "$ICP_BUILD_OUTPUT/libqat_s.so" ]; then
+    QAT_LIB_NAME=qat_s
   else
-    echo "QATzip requires libqat_s.so to build."
+    echo "QATzip requires libqat.so or libqat_s.so to build."
     exit_conf
   fi
 fi
@@ -337,7 +347,7 @@ int main(void){
 _QZEOF
 
 [[ ! -z $ICP_ROOT ]] && QAT_CFLAGS+=" $QAT_INCLUDE";
-if ${CC} $testfile.c -lqat_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+if ${CC} $testfile.c -l${QAT_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
 then :
   echo "Checking for qat library... OK"
 else
@@ -346,7 +356,19 @@ else
 fi
 
 # checks for QAT driver version
-cat >$testfile.c <<_QZEOF
+cat >${testfile}1.c <<_QZEOF
+#include <cpa.h>
+#include <cpa_dc.h>
+#include <icp_sal_poll.h>
+#include <icp_sal_user.h>
+
+int main(void){
+  icp_sal_userIsQatAvailable();
+  return 0;
+}
+_QZEOF
+
+cat >${testfile}2.c <<_QZEOF
 #include <cpa.h>
 #include <cpa_dc.h>
 #include <icp_sal_poll.h>
@@ -358,9 +380,13 @@ int main(void){
 }
 _QZEOF
 
-[[ ! -z $ICP_ROOT ]] && QAT_CFLAGS+=" $QAT_INCLUDE";
-if ${CC} $testfile.c -lqat_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+if ${CC} ${testfile}1.c -l${QAT_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
 then :
+  CFLAGS+=" -DSAL_DEV_API"
+  echo "Checking for QAT driver version... OK"
+elif ${CC} ${testfile}2.c -l${QAT_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+then :
+  CFLAGS+=" -DADF_PCI_API"
   echo "Checking for QAT driver version... OK"
 else
   echo "QAT driver version is too low. Please use qat1.7.l.4.1.0 or higher."
@@ -512,6 +538,7 @@ AR='"$AR"'\
 LN_S='"$LN_S"'\
 RM='"$RM"'\
 INSTALL='"$INSTALL"'\
+LIBADD='"$LIBADD"'\
 '> Makefile
 
 exit_conf
