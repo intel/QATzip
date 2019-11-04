@@ -59,7 +59,7 @@
  */
 const char *g_dev_tag = "SHIM";
 
-const unsigned int g_polling_interval[] = { 10, 20, 30, 60, 100, 200, 400,
+const unsigned int g_polling_interval[] = { 10, 10, 20, 30, 60, 100, 200, 400,
                                             600, 1000, 2000, 4000, 8000, 16000,
                                             32000, 64000
                                           };
