@@ -212,17 +212,42 @@ cpah_array=("$ICP_ROOT/quickassist/include/cpa.h"
             "$ICP_ROOT/quickassist/lookaside/access_layer/include/icp_sal_poll.h"
             "$ICP_ROOT/quickassist/lookaside/access_layer/include/icp_sal_user.h"
             "$ICP_ROOT/quickassist/utilities/libusdm_drv/qae_mem.h")
-cpah_sys_array=("cpa.h" "cpa_dc.h" "icp_sal_poll.h"
-                "icp_sal_user.h" "qae_mem.h")
 
+cat >$testfile.c <<_QZEOF
+#include <cpa.h>
+#include <cpa_dc.h>
+#include <icp_sal_poll.h>
+#include <icp_sal_user.h>
+#include <qae_mem.h>
+int main(void){
+  return 0;
+}
+_QZEOF
+
+qat_local_include=/usr/local/include/qat
+qat_system_include=/usr/include/qat
+oot_rpm_install=/opt/intel/QAT/quickassist
+oot_rpm_include="-I${oot_rpm_install}/include -I${oot_rpm_install}/include/dc"
+oot_rpm_include="$oot_rpm_include -I${oot_rpm_install}/lookaside/access_layer/include"
+oot_rpm_include="$oot_rpm_include -I${oot_rpm_install}/utilities/libusdm_drv"
 if test -z $ICP_ROOT; then
-  for header in "${cpah_sys_array[@]}"; do
-    if check_sys_header_files $header; then
-      :
-    else
-      exit_conf
-    fi
-  done
+  if ${CC} -I${qat_local_include} $testfile.c 2>/dev/null; then :
+    QAT_INCLUDE="-I${qat_local_include}"
+  elif ${CC} -I${qat_system_include} $testfile.c 2>/dev/null; then :
+    QAT_INCLUDE="-I${qat_system_include}"
+  else ${CC} ${oot_rpm_include} $testfile.c 2>/dev/null
+    QAT_INCLUDE="${oot_rpm_include}"
+  fi
+  if [ -n "$QAT_INCLUDE" ] ; then :
+    echo "Checking for cpa.h... OK"
+    echo "Checking for cpa_dc.h... OK"
+    echo "Checking for icp_sal_poll.h... OK"
+    echo "Checking for icp_sal_user.h... OK"
+    echo "Checking for qae_mem.h... OK"
+  else
+    echo "Checking for cpa.h... Failed"
+    exit_conf
+  fi
 else
   for header in "${cpah_array[@]}"; do
     if test -r $header; then
@@ -270,9 +295,12 @@ else
   exit_conf
 fi
 
+local_lib_path=/usr/local/lib
 # set QAT link path
 if test -z $ICP_ROOT; then
-  unset QAT_LDFLAGS QAT_CFLAGS
+  QAT_LDFLAGS="-L$local_lib_path"
+  export LD_LIBRARY_PATH="$local_lib_path:$LD_LIBRARY_PATH"
+  LDFLAGS="$LDFLAGS $QAT_LDFLAGS"
 else
   [[ ! -z "$ICP_BUILD_OUTPUT" ]] && QAT_LDFLAGS="-L$ICP_BUILD_OUTPUT -Wl,-R$ICP_BUILD_OUTPUT" || \
                                     QAT_LDFLAGS="-L$ICP_ROOT/build -Wl,-R$ICP_ROOT/build"
@@ -281,24 +309,8 @@ fi
 
 # usdm library
 # checks for the usdm library existence
-if test -z ${ICP_ROOT}
-then
-  :
-else
-  if [ -f "$ICP_ROOT/build/libusdm.so" ] || \
-     [ -f "$ICP_BUILD_OUTPUT/libusdm.so" ]; then
-    USDM_LIB_NAME=usdm
-    QAT_CFLAGS="$USDM_INCLUDE"
-    LIBADD='-lqat -lusdm -lz -lpthread'
-  elif [ -f "$ICP_ROOT/build/libusdm_drv_s.so" ] || \
-       [ -f "$ICP_BUILD_OUTPUT/libusdm_drv_s.so" ]; then
-    USDM_LIB_NAME=usdm_drv_s
-    QAT_CFLAGS="$USDM_INCLUDE"
-    LIBADD='-lqat_s -lusdm_drv_s -lz -lpthread'
-  else
-    echo "QATzip requires libusdm.so or libusdm_drv_s.so to build."
-    exit_conf
-  fi
+if test -n "${ICP_ROOT}"; then
+  QAT_CFLAGS="$USDM_INCLUDE"
 fi
 
 cat >$testfile.c <<_QZEOF
@@ -308,32 +320,22 @@ int main(void){
 }
 _QZEOF
 
-
-if ${CC} $testfile.c -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+if ${CC} $testfile.c -lusdm $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
 then :
   echo "Checking for usdm library... OK"
+  USDM_LIB_NAME=usdm
+  LIBADD='-lqat -lusdm -lz -lpthread'
+elif ${CC} $testfile.c -lusdm_drv_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+then :
+  echo "Checking for usdm library... OK"
+  USDM_LIB_NAME=usdm_drv_s
+  LIBADD='-lqat_s -lusdm_drv_s -lz -lpthread'
 else
   echo "Checking for usdm library... Failed"
   exit_conf
 fi
 
 # qat library
-# checks for the qat library existence
-if test -z ${ICP_ROOT}
-then
-  :
-else
-  if [ -f "$ICP_ROOT/build/libqat.so" ] || \
-     [ -f "$ICP_BUILD_OUTPUT/libqat.so" ]; then
-    QAT_LIB_NAME=qat
-  elif [ -f "$ICP_ROOT/build/libqat_s.so" ] || \
-       [ -f "$ICP_BUILD_OUTPUT/libqat_s.so" ]; then
-    QAT_LIB_NAME=qat_s
-  else
-    echo "QATzip requires libqat.so or libqat_s.so to build."
-    exit_conf
-  fi
-fi
 cat >$testfile.c <<_QZEOF
 #include <cpa.h>
 #include <cpa_dc.h>
@@ -346,10 +348,15 @@ int main(void){
 }
 _QZEOF
 
-[[ ! -z $ICP_ROOT ]] && QAT_CFLAGS+=" $QAT_INCLUDE";
-if ${CC} $testfile.c -l${QAT_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+QAT_CFLAGS+=" $QAT_INCLUDE";
+if ${CC} $testfile.c -lqat $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
 then :
   echo "Checking for qat library... OK"
+  QAT_LIB_NAME=qat
+elif ${CC} $testfile.c -lqat_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+then :
+  echo "Checking for qat library... OK"
+  QAT_LIB_NAME=qat_s
 else
   echo "Checking for qat library... Failed"
   exit_conf
@@ -519,10 +526,13 @@ else
   exit_conf
 fi
 
+if [ -n "${ICP_ROOT}" ]; then
+  QAT_INCLUDE="$QAT_INCLUDE $USDM_INCLUDE"
+fi
+
 # Update Makefile
 line=`grep "^#.*POSSIBILITY" Makefile.init -n|cut -d: -f1`
 sed  < Makefile.init ''$((line+=3))'a \
-ICP_ROOT='"$ICP_ROOT"'\
 bindir='"$bindir"'\
 staticlib_dir='"$staticlib_dir"'\
 sharedlib_dir='"$sharedlib_dir"'\
@@ -539,6 +549,7 @@ LN_S='"$LN_S"'\
 RM='"$RM"'\
 INSTALL='"$INSTALL"'\
 LIBADD='"$LIBADD"'\
+QAT_INCLUDE='"$QAT_INCLUDE"'\
 '> Makefile
 
 exit_conf

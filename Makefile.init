@@ -43,12 +43,7 @@ QATZIP_MAN = QATzip-man.pdf
 QZIP_UTIL = qzip
 CODE_FORMATTING_BIN   = $(top_builddir)/test/code_format_tests/format.sh
 
-QAT_INCLUDE  ?= -I$(ICP_ROOT)/quickassist/include    \
-                -I$(ICP_ROOT)/quickassist/include/dc \
-                -I$(ICP_ROOT)/quickassist/lookaside/access_layer/include
-USDM_INCLUDE ?= -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv
-
-EXTRA_CFLAGS = $(QAT_INCLUDE) $(USDM_INCLUDE)   \
+EXTRA_CFLAGS = $(QAT_INCLUDE) \
                -I$(top_builddir)/include \
                -I$(top_builddir)/src
 
