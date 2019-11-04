@@ -55,6 +55,13 @@ extern"C" {
 #endif
 
 #include <string.h>
+
+/**
+ * define lib version
+ */
+#define QATZIP_VERSION "1.0.1"
+
+
 /**
  *****************************************************************************
  *

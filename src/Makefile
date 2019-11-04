@@ -38,14 +38,14 @@ LIB_SOURCES = qatzip.c qatzip_counter.c qatzip_gzip.c \
 
 OBJECTS = $(foreach file,$(LIB_SOURCES),$(file:.c=.o))
 
-LDFLAGS += -shared -Wl,-soname,$(QATZIP_LIB_SHARED)
+LDFLAGS += -shared -Wl,-soname,$(QATZIP_LIB_SHARED).$(VER_M)
 LIB_STATIC_FLAGS = rcs
 
 all: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED)
 
 # Create the shared library
 $(QATZIP_LIB_SHARED): $(OBJECTS)
-	$(CC) $^ -o $@ $(LDFLAGS) $(LIBADD)
+	$(CC) $^ -o $@.${VER} $(LDFLAGS) $(LIBADD)
 
 # Create the static library
 $(QATZIP_LIB_STATIC): $(OBJECTS)

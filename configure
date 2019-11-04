@@ -46,6 +46,11 @@ LN_S='ln -s'
 RM='rm -f'
 INSTALL='install'
 
+# extract version numbers from qatzip.h
+VER=`sed -n -e '/VERSION "/s/.*"\(.*\)".*/\1/p' < include/qatzip.h`
+VER_M=`sed -n -e '/VERSION "/s/.*"\([0-9]*\)\\..*/\1/p' < include/qatzip.h`
+
+
 function exit_conf()
 {
   rm -f qztest* qzlib*
@@ -109,6 +114,8 @@ exit 0 ;;
         sharedlib_dir=$qz_val; shift;;
     --staticlib-dir):
         staticlib_dir=$qz_val; shift;;
+    --libdir):
+        lib_dir=$qz_val; shift;;
     --includedir):
         includedir=$qz_val; shift;;
     --mandir):
@@ -128,6 +135,7 @@ done
 bindir=${bindir:-$prefix/bin}
 staticlib_dir=${staticlib_dir:-$prefix/lib64}
 sharedlib_dir=${sharedlib_dir:-$prefix/lib64}
+lib_dir=${lib_dir:-$prefix/lib64}
 includedir=${includedir:-$prefix/include}
 mandir=${mandir:-$prefix/share/man}
 
@@ -302,8 +310,8 @@ if test -z $ICP_ROOT; then
   export LD_LIBRARY_PATH="$local_lib_path:$LD_LIBRARY_PATH"
   LDFLAGS="$LDFLAGS $QAT_LDFLAGS"
 else
-  [[ ! -z "$ICP_BUILD_OUTPUT" ]] && QAT_LDFLAGS="-L$ICP_BUILD_OUTPUT -Wl,-R$ICP_BUILD_OUTPUT" || \
-                                    QAT_LDFLAGS="-L$ICP_ROOT/build -Wl,-R$ICP_ROOT/build"
+  [[ ! -z "$ICP_BUILD_OUTPUT" ]] && QAT_LDFLAGS="-L$ICP_BUILD_OUTPUT" || \
+                                    QAT_LDFLAGS="-L$ICP_ROOT/build"
   LDFLAGS="$LDFLAGS $QAT_LDFLAGS"
 fi
 
@@ -349,11 +357,11 @@ int main(void){
 _QZEOF
 
 QAT_CFLAGS+=" $QAT_INCLUDE";
-if ${CC} $testfile.c -lqat $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+if ${CC} $testfile.c -lqat -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
 then :
   echo "Checking for qat library... OK"
   QAT_LIB_NAME=qat
-elif ${CC} $testfile.c -lqat_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+elif ${CC} $testfile.c -lqat_s -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
 then :
   echo "Checking for qat library... OK"
   QAT_LIB_NAME=qat_s
@@ -387,11 +395,11 @@ int main(void){
 }
 _QZEOF
 
-if ${CC} ${testfile}1.c -l${QAT_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+if ${CC} ${testfile}1.c -l${QAT_LIB_NAME} -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
 then :
   CFLAGS+=" -DSAL_DEV_API"
   echo "Checking for QAT driver version... OK"
-elif ${CC} ${testfile}2.c -l${QAT_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
+elif ${CC} ${testfile}2.c -l${QAT_LIB_NAME} -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
 then :
   CFLAGS+=" -DADF_PCI_API"
   echo "Checking for QAT driver version... OK"
@@ -536,9 +544,12 @@ sed  < Makefile.init ''$((line+=3))'a \
 bindir='"$bindir"'\
 staticlib_dir='"$staticlib_dir"'\
 sharedlib_dir='"$sharedlib_dir"'\
+lib_dir='"$lib_dir"'\
 includedir='"$includedir"'\
 mandir='"$mandir"'\
 top_builddir='"$top_builddir"'\
+VER='"$VER"'\
+VER_M='"$VER_M"'\
 \
 MAKE='"$MAKE"'\
 CC='"$CC"'\

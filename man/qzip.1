@@ -1,0 +1,55 @@
+.TH QZIP 1 local
+.SH NAME
+qzip \- compress or decompress with qat acceleration
+.SH SYNOPSIS
+.ll +8
+.B qzip
+.RB [ " \-AdfhHkLCro " ]
+[
+.I "name \&..."
+]
+.ll -8
+.br
+.SH DESCRIPTION
+QATzip is a user space library which builds on top of the Intel QuickAssist
+Technology user space library, to provide extended accelerated compression and
+decompression services by offloading the actual compression and decompression
+request(s) to the Intel Chipset Series. QATzip produces data using the standard
+gzip format (RFC1952) with extended headers. The data can be decompressed with a
+compliant gzip implementation. QATzip is design to take full advantage of the
+performance provided by Intel&reg; QuickAssist Technology.
+
+.SH OPTIONS
+.TP
+.B \-A --algorithm
+set algorithm type, currently only support deflate
+.TP
+.B \-d --decompress
+decompress
+.TP
+.B \-f --force
+force overwrite of output file and compress links
+.TP
+.B \-h --help
+give this help
+.TP
+.B \-H --huffmanhdr
+set huffman header type
+.TP
+.B \-k --keep
+Keep (don't delete) input files during compression or decompression.
+.TP
+.B \-L --level
+set compression level
+.TP
+.B \-C --chunksz
+set chunk size
+.TP
+.B \-r
+set max inflight request number
+.TP
+.B \-o
+set output file name
+
+.SH COPYRIGHT
+Copyright(c) 2007-2019 Intel Corporation. All rights reserved.
