@@ -183,7 +183,7 @@ void *qzMalloc(size_t sz, int numa, int pinned)
             if (QZ_OK != status && QZ_DUPLICATE != status && QZ_NO_HW != status &&
                 QZ_NOSW_NO_HW != status) {
                 QZ_ERROR("QAT init failed with error: %d\n", status);
-                exit(status);
+                return NULL;
             }
             g_a = qaeMemAllocNUMA(sz, numa, 64);
             if (NULL != g_a) {

@@ -45,7 +45,8 @@ all: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED)
 
 # Create the shared library
 $(QATZIP_LIB_SHARED): $(OBJECTS)
-	$(CC) $^ -o $@.${VER} $(LDFLAGS) $(LIBADD)
+	$(CC) $^ -o $@.$(VER) $(LDFLAGS) $(LIBADD)
+	$(LN_S) -f $@.$(VER) $@
 
 # Create the static library
 $(QATZIP_LIB_STATIC): $(OBJECTS)
@@ -57,5 +58,6 @@ $(OBJECTS): %.o: %.c
 
 clean:
 	$(RM) *.o $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED)
+	$(RM) $(QATZIP_LIB_SHARED) $(QATZIP_LIB_SHARED).$(VER)
 
 .PHONY: all clean
