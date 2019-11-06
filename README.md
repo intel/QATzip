@@ -61,7 +61,8 @@ platforms that have acceleration devices and non-accelerated platforms.
 * Automatic recovery from hardware compression failure.
 * Provide streaming interface of compression and decompression to achieve better compression
 ratio and throughput for data sets that are submitted piecemeal.
-* 'qzip' utility support compression from regular file, pipeline and block device.
+* 'qzip' utility supports compression from regular file, pipeline and block device.
+* For starndard GZIP format, try hardware decompression 1st before switch to software decompression.
 
 ## Hardware Requirements
 

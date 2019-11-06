@@ -34,11 +34,9 @@
  ***************************************************************************/
 
 static char const *const g_license_msg[] = {
-    "Copyright (C) 2018 Intel Corporation.",
+    "Copyright (C) 2019 Intel Corporation.",
     0
 };
-
-static char const *const g_version_str = "v1.0.0";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -538,7 +536,7 @@ static void version()
 {
     char const *const *p = g_license_msg;
 
-    QZ_PRINT("%s %s\n", g_program_name, g_version_str);
+    QZ_PRINT("%s v%s\n", g_program_name, QATZIP_VERSION);
     while (*p) {
         QZ_PRINT("%s\n", *p++);
     }
