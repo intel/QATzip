@@ -47,6 +47,7 @@ all: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED)
 $(QATZIP_LIB_SHARED): $(OBJECTS)
 	$(CC) $^ -o $@.$(VER) $(LDFLAGS) $(LIBADD)
 	$(LN_S) -f $@.$(VER) $@
+	$(LN_S) -f $@.$(VER) $@.$(VER_M)
 
 # Create the static library
 $(QATZIP_LIB_STATIC): $(OBJECTS)
