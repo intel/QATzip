@@ -63,6 +63,7 @@ platforms that have acceleration devices and non-accelerated platforms.
 ratio and throughput for data sets that are submitted piecemeal.
 * 'qzip' utility supports compression from regular file, pipeline and block device.
 * For starndard GZIP format, try hardware decompression 1st before switch to software decompression.
+* Enable adaptive polling mechanism to save CPU usage in stress mode.
 
 ## Hardware Requirements
 
