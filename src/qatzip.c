@@ -2409,17 +2409,29 @@ int qzGetDefaults(QzSessionParams_T *defaults)
     return QZ_OK;
 }
 
-unsigned int qzMaxCompressedLength(unsigned int src_sz)
+unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
 {
     unsigned int dest_sz = 0;
     unsigned int qz_header_footer_sz = qzGzipHeaderSz() + stdGzipFooterSz();
+    QzSess_T *qz_sess = NULL;
+    signed long int chunk_sz = 0;
+    unsigned int chunk_cnt = 0;
+    unsigned int max_chunk_sz = 0;
+    unsigned int last_chunk_sz = 0;
 
-    unsigned int chunk_cnt = src_sz / QZ_HW_BUFF_SZ;
-    unsigned int max_chunk_sz = ((9 * QZ_HW_BUFF_SZ + 7) / 8) + QZ_SKID_PAD_SZ +
-                                qz_header_footer_sz;
+    if (NULL == sess || NULL == sess->internal) {
+        chunk_sz = QZ_HW_BUFF_SZ;
+    } else {
+        qz_sess = (QzSess_T *)sess->internal;
+        chunk_sz = qz_sess->sess_params.hw_buff_sz;
+    }
+
+    chunk_cnt = src_sz / chunk_sz;
+    max_chunk_sz = ((9 * chunk_sz + 7) / 8) + QZ_SKID_PAD_SZ +
+                   qz_header_footer_sz;
     dest_sz =  max_chunk_sz * chunk_cnt;
+    last_chunk_sz = src_sz % chunk_sz;
 
-    unsigned int last_chunk_sz = src_sz % QZ_HW_BUFF_SZ;
     if (last_chunk_sz) {
         dest_sz += ((9 * last_chunk_sz + 7) / 8) + QZ_SKID_PAD_SZ + qz_header_footer_sz;
     }

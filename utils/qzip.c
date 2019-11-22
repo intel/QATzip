@@ -305,7 +305,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     }
     src_buffer_size = (src_file_size > SRC_BUFF_LEN) ? SRC_BUFF_LEN : src_file_size;
     if (is_compress) {
-        dst_buffer_size = qzMaxCompressedLength(src_buffer_size);
+        dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
     } else { /* decompress */
         dst_buffer_size = src_buffer_size * g_bufsz_expansion_ratio[ratio_idx++];
     }
@@ -576,7 +576,7 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
 
     src_buffer_size = SRC_BUFF_LEN;
     if (is_compress) {
-        dst_buffer_size = qzMaxCompressedLength(src_buffer_size);
+        dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
     } else { /* decompress */
         dst_buffer_size = src_buffer_size * g_bufsz_expansion_ratio[ratio_idx++];
     }
