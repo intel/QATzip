@@ -46,7 +46,7 @@ function decom_combined_file1()
     local test_file_name=$1
     cp -f $test_file_path/$test_file_name ./
     $test_qzip -k $test_file_name -o file1
-    $test_qzip $test_file_name -o file2
+    $test_qzip -C 262144 $test_file_name -o file2
     cat file1.gz file2.gz > file.gz
     rm -f file1.gz file2.gz
     gzip -cd file.gz > file_gzip
