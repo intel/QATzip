@@ -217,6 +217,9 @@ static int doProcessBuffer(QzSession_T *sess,
         /* Do actual work */
         if (is_compress) {
             ret = qzCompress(sess, src, src_len, dst, &dst_len, 1);
+            if (QZ_BUF_ERROR == ret && 0 == *src_len) {
+                done = 1;
+            }
         } else {
             ret = qzDecompress(sess, src, src_len, dst, &dst_len);
 
