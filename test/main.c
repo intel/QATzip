@@ -65,8 +65,6 @@
 #define MAX_NUMA_NODE       8
 
 #define ARRAY_LEN(arr)      (sizeof(arr) / sizeof((arr)[0]))
-#define INTER_SZ(src_sz)    (2 * (src_sz))
-#define DEST_SZ(src_sz)     (((9 * (src_sz)) / 8) + 1024)
 #define KB                  (1024)
 #define MB                  (KB * KB)
 
