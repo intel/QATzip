@@ -77,7 +77,7 @@ thread=4
 echo > result_comp
 for((numProc_comp = 0; numProc_comp < $process; numProc_comp ++))
 do
-    $QZ_ROOT/test/test -m 4 -l 1000 -t 4 -D comp >> result_comp 2>&1  &
+    $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D comp >> result_comp 2>&1  &
 done
 wait
 compthroughput=`awk '{sum+=$8} END{print sum}' result_comp`
