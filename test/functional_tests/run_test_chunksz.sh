@@ -36,11 +36,17 @@
 #! /bin/bash
 set -e
 
+readonly BASEDIR=$(cd `dirname $0`; pwd)
+test_file_path="/opt/compressdata"
+test_file="calgary.1G"
+test_file_compressed="calgary.1G.gz"
 test_qzip=${QZ_ROOT}/utils/qzip
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
+
 echo "run test chunksz"
 #get the type of QAT hardware
 platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
+cp $test_file_path/$test_file .
 if [ $platform != "37c8" ]
 then
     platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
@@ -63,11 +69,11 @@ then
       echo "Install upstream driver with NumberDcInstances = 8 FAILED!!! :("
       exit 1
     fi
-    $test_qzip -C 262144 /opt/compressdata/calgary.1G > /dev/null 2>&1
-    taskset -c 2 $test_qzip -d -C 262144 /opt/compressdata/calgary.1G.gz > log_chunksztest
+    $test_qzip -C 262144 $test_file > /dev/null 2>&1
+    taskset -c 2 $test_qzip -d -C 262144 $test_file_compressed > log_chunksztest
     throught_hardware=$(cat log_chunksztest | grep Throughput | awk '{print $2}')
-    $test_qzip -C 262144 /opt/compressdata/calgary.1G > /dev/null 2>&1
-    taskset -c 2 $test_qzip -d -C 65536  /opt/compressdata/calgary.1G.gz > log_chunksztest
+    $test_qzip -C 262144 $test_file > /dev/null 2>&1
+    taskset -c 2 $test_qzip -d -C 65536  $test_file_compressed > log_chunksztest
     throught_software=$(cat log_chunksztest | grep Throughput | awk '{print $2}')
     rm -f log_chunksztest
 elif [ $platform = "DH895XCC" ]
@@ -81,15 +87,15 @@ then
       echo "Install upstream driver with NumberDcInstances = 8 FAILED!!! :("
       exit 1
     fi
-    $test_qzip -C 262144 /opt/compressdata/calgary.1G > /dev/null 2>&1
-    taskset -c 2 $test_qzip -d -C 262144 /opt/compressdata/calgary.1G.gz > log_chunksztest
+    $test_qzip -C 262144 $test_file > /dev/null 2>&1
+    taskset -c 2 $test_qzip -d -C 262144 $test_file_compressed > log_chunksztest
     throught_hardware=$(cat log_chunksztest | grep Throughput | awk '{print $2}')
-    $test_qzip -C 262144 /opt/compressdata/calgary.1G > /dev/null 2>&1
-    taskset -c 2 $test_qzip -d -C 65536  /opt/compressdata/calgary.1G.gz > log_chunksztest
+    $test_qzip -C 262144 $test_file > /dev/null 2>&1
+    taskset -c 2 $test_qzip -d -C 65536  $test_file_compressed > log_chunksztest
     throught_software=$(cat log_chunksztest | grep Throughput | awk '{print $2}')
     rm -f log_chunksztest
 fi
-
+rm -f $test_file
 #deterimine if this test passed
 echo "throught_hardware=$throught_hardware"
 echo "throught_software=$throught_software"
