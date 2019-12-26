@@ -199,7 +199,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
     if (NULL == strm->opaque) {
         rc = initStream(sess, strm);
-        if (QZ_FAIL == rc) {
+        if (QZ_OK != rc) {
             goto done;
         }
     }
@@ -361,7 +361,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
     if (NULL == strm->opaque) {
         rc = initStream(sess, strm);
-        if (QZ_FAIL == rc) {
+        if (QZ_OK != rc) {
             goto done;
         }
     }

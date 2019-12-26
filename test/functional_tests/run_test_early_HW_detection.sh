@@ -67,7 +67,8 @@ function early_HW_detection_service_down_test()
         rc=1
     fi
 
-    error_Key=$(grep "QZ_NOSW_NO_HW" EarlyHWDetectionTestlog)
+    #error_Key=$(grep "QZ_NOSW_NO_HW" EarlyHWDetectionTestlog)
+    error_Key=$(grep "\-101" EarlyHWDetectionTestlog)
     rm -f EarlyHWDetectionTestlog
 
     if [[ -z $error_Key ]]

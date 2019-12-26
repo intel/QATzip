@@ -173,22 +173,20 @@ void *qzMalloc(size_t sz, int numa, int pinned)
         }
     }
 
+    if (1 == pinned && QZ_NONE == g_process.qz_init_status) {
+        status = qzInit(&temp_sess, 1);
+        if (QZ_OK != status && QZ_DUPLICATE != status && QZ_NO_HW != status &&
+            QZ_NOSW_NO_HW != status) {
+            QZ_ERROR("QAT init failed with error: %d\n", status);
+            return NULL;
+        }
+    }
+
     g_a = qaeMemAllocNUMA(sz, numa, 64);
     if (NULL == g_a) {
         if (0 == pinned) {
             QZ_DEBUG("regular malloc\n");
             g_a = malloc(sz);
-        } else if (1 == pinned && QZ_NONE == g_process.qz_init_status) {
-            status = qzInit(&temp_sess, 1);
-            if (QZ_OK != status && QZ_DUPLICATE != status && QZ_NO_HW != status &&
-                QZ_NOSW_NO_HW != status) {
-                QZ_ERROR("QAT init failed with error: %d\n", status);
-                return NULL;
-            }
-            g_a = qaeMemAllocNUMA(sz, numa, 64);
-            if (NULL != g_a) {
-                qzMemRegAddr(g_a, sz);
-            }
         }
     } else {
         qzMemRegAddr(g_a, sz);
