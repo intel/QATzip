@@ -1678,6 +1678,7 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
     long src_send_sz, dest_recv_sz;
     StdGzF_T *qzFooter = NULL;
     int isEndWithFooter = 0;
+    QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
 
     if ((src_avail_len <= 0) || (dest_avail_len <= 0)) {
         QZ_DEBUG("checkHeader: insufficient %s buffer length\n",
@@ -1685,10 +1686,7 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         return QZ_BUF_ERROR;
     }
 
-    if ((src_avail_len < qzGzipHeaderSz() &&
-         QZ_DEFLATE_GZIP_EXT == qz_sess->sess_params.data_fmt) ||
-        (src_avail_len < stdGzipHeaderSz() &&
-         QZ_DEFLATE_GZIP == qz_sess->sess_params.data_fmt)) {
+    if (src_avail_len < outputHeaderSz(data_fmt)) {
         QZ_DEBUG("checkHeader: incomplete source buffer\n");
         return QZ_DATA_ERROR;
     }
@@ -1697,7 +1695,7 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         return QZ_FORCE_SW;
     }
 
-    if (QZ_DEFLATE_GZIP == qz_sess->sess_params.data_fmt) {
+    if (QZ_DEFLATE_GZIP == data_fmt) {
         qzFooter = (StdGzF_T *)(findStdGzipFooter(src_ptr, src_avail_len));
         hdr->extra.qz_e.dest_sz = (unsigned char *)qzFooter - src_ptr -
                                   stdGzipHeaderSz();
@@ -1714,7 +1712,7 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
     if ((src_send_sz > DEST_SZ(qz_sess->sess_params.hw_buff_sz)) ||
         (dest_recv_sz > qz_sess->sess_params.hw_buff_sz)) {
         if (1 == qz_sess->sess_params.sw_backup) {
-            if (QZ_DEFLATE_GZIP == qz_sess->sess_params.data_fmt &&
+            if (QZ_DEFLATE_GZIP == data_fmt &&
                 1 == isEndWithFooter) {
                 return QZ_LOW_DEST_MEM;
             }
@@ -1725,7 +1723,8 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         }
     }
 
-    if (src_send_sz > src_avail_len) {
+    if (src_send_sz + outputHeaderSz(data_fmt) + outputFooterSz(data_fmt) >
+        src_avail_len) {
         QZ_DEBUG("checkHeader: incomplete source buffer\n");
         return QZ_DATA_ERROR;
     } else if (dest_recv_sz > dest_avail_len) {
