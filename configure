@@ -140,7 +140,7 @@ includedir=${includedir:-$prefix/include}
 mandir=${mandir:-$prefix/share/man}
 
 # try to build 32 or 64 bit system binary
-if test 'x'$build = $build'x'; then :
+if test 'x'$build = $build'x'; then
   CFLAGS+=" -m`getconf LONG_BIT`"
 fi
 
@@ -155,7 +155,7 @@ cat >$testfile.c <<_QZEOF
 #include <$1>
 _QZEOF
 
-  if ${CC} -c $testfile.c 2>/dev/null ; then :
+  if ${CC} -c $testfile.c 2>/dev/null ; then
     echo "Checking for $1... OK"
     return 0
   else
@@ -200,8 +200,8 @@ else
 fi
 
 # check for ICP_ROOT
-if ! test -z ${ICP_ROOT}; then :
-  if test -d ${ICP_ROOT}/quickassist; then :
+if ! test -z ${ICP_ROOT}; then
+  if test -d ${ICP_ROOT}/quickassist; then
     echo "Checking for ICP_ROOT:$ICP_ROOT... OK"
   else
     echo "Checking for ICP_ROOT... failed"
@@ -239,14 +239,14 @@ oot_rpm_include="-I${oot_rpm_install}/include -I${oot_rpm_install}/include/dc"
 oot_rpm_include="$oot_rpm_include -I${oot_rpm_install}/lookaside/access_layer/include"
 oot_rpm_include="$oot_rpm_include -I${oot_rpm_install}/utilities/libusdm_drv"
 if test -z $ICP_ROOT; then
-  if ${CC} -I${qat_local_include} $testfile.c 2>/dev/null; then :
+  if ${CC} -I${qat_local_include} $testfile.c 2>/dev/null; then
     QAT_INCLUDE="-I${qat_local_include}"
-  elif ${CC} -I${qat_system_include} $testfile.c 2>/dev/null; then :
+  elif ${CC} -I${qat_system_include} $testfile.c 2>/dev/null; then
     QAT_INCLUDE="-I${qat_system_include}"
-  else ${CC} ${oot_rpm_include} $testfile.c 2>/dev/null
+  elif ${CC} ${oot_rpm_include} $testfile.c 2>/dev/null; then
     QAT_INCLUDE="${oot_rpm_include}"
   fi
-  if [ -n "$QAT_INCLUDE" ] ; then :
+  if [ -n "$QAT_INCLUDE" ] ; then
     echo "Checking for cpa.h... OK"
     echo "Checking for cpa_dc.h... OK"
     echo "Checking for icp_sal_poll.h... OK"
@@ -254,6 +254,7 @@ if test -z $ICP_ROOT; then
     echo "Checking for qae_mem.h... OK"
   else
     echo "Checking for cpa.h... Failed"
+    echo "QATzip need cpa.h to build."
     exit_conf
   fi
 else
@@ -279,7 +280,7 @@ int main(void){
 }
 _QZEOF
 
-if ${CC} $testfile.c -lpthread 2>/dev/null ; then :
+if ${CC} $testfile.c -lpthread 2>/dev/null ; then
   echo "Checking for pthread library... OK"
 else
   echo "Checking for pthread library... Failed"
@@ -296,7 +297,7 @@ int main(void){
 }
 _QZEOF
 
-if ${CC} $testfile.c -lz 2>/dev/null ; then :
+if ${CC} $testfile.c -lz 2>/dev/null ; then
   echo "Checking for zlib library... OK"
 else
   echo "Checking for zlib library... Failed"
@@ -329,12 +330,12 @@ int main(void){
 _QZEOF
 
 if ${CC} $testfile.c -lusdm $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
-then :
+then
   echo "Checking for usdm library... OK"
   USDM_LIB_NAME=usdm
   LIBADD='-lqat -lusdm -lz -lpthread'
 elif ${CC} $testfile.c -lusdm_drv_s $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
-then :
+then
   echo "Checking for usdm library... OK"
   USDM_LIB_NAME=usdm_drv_s
   LIBADD='-lqat_s -lusdm_drv_s -lz -lpthread'
@@ -358,11 +359,11 @@ _QZEOF
 
 QAT_CFLAGS+=" $QAT_INCLUDE";
 if ${CC} $testfile.c -lqat -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
-then :
+then
   echo "Checking for qat library... OK"
   QAT_LIB_NAME=qat
 elif ${CC} $testfile.c -lqat_s -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
-then :
+then
   echo "Checking for qat library... OK"
   QAT_LIB_NAME=qat_s
 else
@@ -396,11 +397,11 @@ int main(void){
 _QZEOF
 
 if ${CC} ${testfile}1.c -l${QAT_LIB_NAME} -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
-then :
+then
   CFLAGS+=" -DSAL_DEV_API"
   echo "Checking for QAT driver version... OK"
 elif ${CC} ${testfile}2.c -l${QAT_LIB_NAME} -l${USDM_LIB_NAME} $QAT_LDFLAGS $QAT_CFLAGS 2>/dev/null;
-then :
+then
   CFLAGS+=" -DADF_PCI_API"
   echo "Checking for QAT driver version... OK"
 else
@@ -423,7 +424,7 @@ int main(void) {
    print_err("%s", "hello qatzip\n");return 0;
 }
 _QZEOF
-if ${CC} $testfile.c 2>/dev/null; then :
+if ${CC} $testfile.c 2>/dev/null; then
   echo "Checking for vfprintf function... OK"
 else
   echo "Checking for vfprintf function... Failed"
@@ -438,7 +439,7 @@ int main(void) {
   fclose(null);
 }
 _QZEOF
-if ${CC} $testfile.c 2>/dev/null; then :
+if ${CC} $testfile.c 2>/dev/null; then
   echo "Checking for stand file API... OK"
 else
   echo "Checking for stand file API... Failed"
@@ -453,7 +454,7 @@ int main(void) {
   return strtoul(ptr,NULL,0);
 }
 _QZEOF
-if ${CC} $testfile.c 2>/dev/null; then :
+if ${CC} $testfile.c 2>/dev/null; then
   echo "Checking for strtoul API... OK"
 else
   echo "Checking for strtoul API... Failed"
@@ -470,7 +471,7 @@ int main(void) {
   return atexit(&hello);
 }
 _QZEOF
-if ${CC} $testfile.c 2>/dev/null; then :
+if ${CC} $testfile.c 2>/dev/null; then
   echo "Checking for atexit API... OK"
 else
   echo "Checking for atexit API... Failed"
@@ -486,7 +487,7 @@ int main(int argc, char *argv[]) {
   return getopt_long(argc, argv, ptr);
 }
 _QZEOF
-if ${CC} $testfile.c 2>/dev/null; then :
+if ${CC} $testfile.c 2>/dev/null; then
   echo "Checking for getopt_long API... OK"
 else
   echo "Checking for getopt_long API... Failed"
@@ -501,7 +502,7 @@ int main(void) {
   return gettimeofday(&s, &e);
 }
 _QZEOF
-if ${CC} $testfile.c 2>/dev/null; then :
+if ${CC} $testfile.c 2>/dev/null; then
   echo "Checking for gettimeofday API... OK"
 else
   echo "Checking for gettimeofday API... Failed"
@@ -518,7 +519,7 @@ _QZEOF
 
 # check for build static library
 if ${CC} -c $libfile.c 2>/dev/null && \
-   ${AR} r $libfile.a $libfile.o 2>/dev/null; then :
+   ${AR} r $libfile.a $libfile.o 2>/dev/null; then
   echo "Checking for build static library... OK"
 else
   echo "Checking for build static library... Failed"
@@ -527,7 +528,7 @@ fi
 
 # check for build shared library
 if ${CC} -fPIC -c $libfile.c 2>/dev/null && \
-   ${CC} -shared $libfile.o -o $libfile.so 2>/dev/null; then :
+   ${CC} -shared $libfile.o -o $libfile.so 2>/dev/null; then
   echo "Checking for build shared library... OK"
 else
   echo "Checking for build shared library... Failed"
