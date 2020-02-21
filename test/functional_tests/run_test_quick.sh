@@ -469,6 +469,8 @@ function switch_to_sw_failover_in_insufficent_HP()
     current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
     echo 8 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
 
+    sleep 5
+
     for service in 'comp' 'decomp'
     do
        if $test_main -m 4 -D $service ; then
@@ -494,6 +496,8 @@ function resume_hw_comp_when_insufficent_HP()
     echo -e "\n\nInsufficent huge page for 2 processes"
     cat /proc/meminfo | grep "HugePages_Total\|HugePages_Free"
 
+    sleep 5
+
     for proc in `seq 1 2`; do
         $test_qzip random-3m.txt -k &
     done
@@ -508,6 +512,8 @@ function resume_hw_comp_when_insufficent_HP()
     echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
+
+    sleep 5
 
     cat /proc/meminfo | grep "HugePages_Total\|HugePages_Free"
     echo; echo
@@ -633,6 +639,8 @@ function minAllocatedMemoryTest1()
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1 max_huge_pages_per_process=1
 
+    sleep 5
+
     cp -f $test_file_path/$test_file_name ./
     orig_checksum=`md5sum $test_file_name`
 
@@ -683,6 +691,8 @@ function minAllocatedMemoryTest2()
     echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=1
+
+    sleep 5
 
     cp -f $test_file_path/$test_file_name ./
     orig_checksum=`md5sum $test_file_name`
@@ -794,7 +804,9 @@ function none_QAT_stream_compress_decompress_test()
     echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
 
-   if $test_main -m 11 -i $test_file_name && \
+    sleep 5
+
+    if $test_main -m 11 -i $test_file_name && \
         $test_main -m 12 -i "$test_file_name.gz"
     then
         echo "(De)Compress $test_file_name OK";

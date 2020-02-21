@@ -129,6 +129,8 @@ function early_HW_detection_service_hugepage0_test()
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=0 max_huge_pages_per_process=0
 
+    sleep 5
+
     if $test_main -m 9 -B 0
     then
         echo "Hugepage = 0 test PASSED"
@@ -164,6 +166,8 @@ function early_HW_detection_service_up_hugepage0_test()
     echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=0 max_huge_pages_per_process=0
+
+    sleep 5
 
     if $test_main -m 9 -i $test_file_name -D "both"
     then

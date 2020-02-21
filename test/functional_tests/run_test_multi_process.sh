@@ -57,6 +57,8 @@ function run_with_hugepage()
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=8 max_huge_pages_per_process=8
 
+    sleep 5
+
     $test_main -m 4 -D "both" -t 2 > usehugepagelog 2>&1
 
     if [ $? -ne 0 ]
@@ -103,6 +105,8 @@ function run_with_kernel_mem()
     echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=14 max_huge_pages_per_process=14
+
+    sleep 5
 
     echo "start first process"
     $test_main -m 4 -D "both" -t 2 -l 1000 &

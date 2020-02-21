@@ -68,7 +68,7 @@ service qat_service restart
 echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
 rmmod usdm_drv
 insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=24
-
+sleep 5
 
 #Perform performance test
 echo "Perform performance test"

@@ -74,6 +74,8 @@ function HugePageTest()
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$test_hp max_huge_pages_per_process=$test_hpp
 
+    sleep 5
+
     cp -f $test_file_path/$test_file_name ./
     orig_checksum=`md5sum $test_file_name | awk '{print $1}' | head -1`
 
