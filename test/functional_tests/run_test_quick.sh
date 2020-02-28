@@ -860,20 +860,9 @@ fi
 function configuration_file_test()
 {
     echo "QAT driver configuration file configurable section name test 1 start ..."
-    platformInfo=`lspci | grep Co-processor | awk '{print $6}' | head -1`
-    if [ $platformInfo == "37c8" ]; then
-        platform="MULTI"
-    else
-        platformInfo=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-        if [ $platformInfo == "C62x" ]; then
-            platform="MULTI"
-        elif [ $platformInfo == "DH895XCC" ]; then
-            platform="SIGNAL"
-        else
-            echo "Unsupport Platform: `lspci | grep Co-processor` "
-            exit 1
-        fi
-    fi
+    $QZ_TOOL/get_platform/get_platforminfo.sh
+    platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
+    echo "platform=$platform"
     numberOfCPM=`lspci | grep Co-processor | wc -l`
 
     dd if=/dev/urandom of=random.tmp bs=1M count=1;
@@ -881,11 +870,13 @@ function configuration_file_test()
 
     #Change to CFTEST
     for ((i = 0; i < $numberOfCPM; i++)); do
-      if [ "$platform" == "MULTI" ]; then
-        sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/c6xx_dev$i.conf
-      else
-        sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/dh895xcc_dev$i.conf
-      fi
+        if [[ $platform = "37c8" || $platform = "C62x" ]]; then
+            sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/c6xx_dev$i.conf
+        elif [ $platform == "DH895XCC" ]; then
+            sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/dh895xcc_dev$i.conf
+        elif [ $platform == "C3000" ]; then
+            sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/c3xxx_dev$i.conf
+        fi
     done
     service qat_service restart
 
@@ -920,11 +911,13 @@ function configuration_file_test()
     #Change back to SHIM
     export QATZIP_SECTION_NAME="SHIM"
     for ((i = 0; i < $numberOfCPM; i++)); do
-      if [ "$platform" == "MULTI" ]; then
-        sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c6xx_dev$i.conf
-      else
-        sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/dh895xcc_dev$i.conf
-      fi
+        if [[ $platform = "37c8" || $platform = "C62x" ]]; then
+            sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c6xx_dev$i.conf
+        elif [ $platform == "DH895XCC" ]; then
+            sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/dh895xcc_dev$i.conf
+        elif [ $platform == "C3000" ]; then
+            sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c3xxx_dev$i.conf
+        fi
     done
     service qat_service restart
     rm -f random.tmp
@@ -939,20 +932,9 @@ function configuration_file_test()
 function configuration_file_test_software_compress()
 {
     echo "QAT driver configuration file configurable section name test 2 start ..."
-    platformInfo=`lspci | grep Co-processor | awk '{print $6}' | head -1`
-    if [ $platformInfo == "37c8" ]; then
-        platform="MULTI"
-    else
-        platformInfo=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-        if [ $platformInfo == "C62x" ]; then
-            platform="MULTI"
-        elif [ $platformInfo == "DH895XCC" ]; then
-            platform="SIGNAL"
-        else
-            echo "Unsupport Platform: `lspci | grep Co-processor` "
-            exit 1
-        fi
-    fi
+    $QZ_TOOL/get_platform/get_platforminfo.sh
+    platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
+    echo "platform=$platform"
     numberOfCPM=`lspci | grep Co-processor | wc -l`
 
     dd if=/dev/urandom of=random.tmp bs=1M count=1;
@@ -989,11 +971,13 @@ function configuration_file_test_software_compress()
     #Change back to SHIM
     export QATZIP_SECTION_NAME="SHIM"
     for ((i = 0; i < $numberOfCPM; i++)); do
-      if [ "$platform" == "MULTI" ]; then
-        sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c6xx_dev$i.conf
-      else
-        sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/dh895xcc_dev$i.conf
-      fi
+        if [[ $platform = "37c8" || $platform = "C62x" ]]; then
+            sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c6xx_dev$i.conf
+        elif [ $platform == "DH895XCC" ]; then
+            sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/dh895xcc_dev$i.conf
+        elif [ $platform == "C3000" ]; then
+            sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c3xxx_dev$i.conf
+        fi
     done
     service qat_service restart
     rm -f random.tmp

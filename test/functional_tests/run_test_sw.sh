@@ -38,21 +38,14 @@
 test_main=${QZ_ROOT}/test/test
 echo "test for hw down sw up and down start"
 #get the type of QAT hardware
-platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
-if [ $platform != "37c8" ]
-then
-    platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-    if [ $platform != "C62x" ]
-    then
-        platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-        if [ $platform != "DH895XCC" ]
-        then
-            echo "Unsupport Platform: `lspci | grep Co-processor` "
-            exit 1
-        fi
-    fi
-fi
+$QZ_TOOL/get_platform/get_platforminfo.sh
+platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
 echo "platform=$platform"
+if [ $platform == "C3000" ]
+then
+    echo "The SW test case does not need to run on C3000 platform!"
+    exit 0
+fi
 #hw down
 $ICP_BUILD_OUTPUT/adf_ctl down
 

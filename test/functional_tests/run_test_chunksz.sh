@@ -44,20 +44,19 @@ test_qzip=${QZ_ROOT}/utils/qzip
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
 
 echo "run test chunksz"
+
 #get the type of QAT hardware
-platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
-cp $test_file_path/$test_file .
-if [ $platform != "37c8" ]
-then
-    platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-    if [[ $platform != "DH895XCC" && $platform != "C62x" ]]
-    then
-        echo "Unsupport Platform: `lspci | grep Co-processor` "
-        exit 1
-    fi
-fi
+$QZ_TOOL/get_platform/get_platforminfo.sh
+platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
 echo "platform=$platform"
 
+if [ $platform == "C3000" ]
+then
+    echo "The chunksz test case does not need to run on C3000 platform!"
+    exit 0
+fi
+
+cp $test_file_path/$test_file .
 if [[ $platform = "37c8" || $platform = "C62x" ]]
 then
     DVR_OPT="-D8 -P1 -L"

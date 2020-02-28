@@ -39,31 +39,22 @@ test_main=${QZ_ROOT}/test/test
 echo "No hardware in platform Test"
 echo "test for qzInitPcieCountCheck start"
 #get the type and device of QAT hardware
-platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
 device1=`lspci | grep Co-processor | awk '{print $1}' | sed -n '1p'`
 device2=`lspci | grep Co-processor | awk '{print $1}' | sed -n '2p'`
 device3=`lspci | grep Co-processor | awk '{print $1}' | sed -n '3p'`
 echo "device:$device1  $device2  $device3"
 
-if [ $platform != "37c8" ]
-then
-    platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-    if [ $platform != "C62x" ]
-    then
-        platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-        if [ $platform != "DH895XCC" ]
-        then
-            echo "Unsupport Platform: `lspci | grep Co-processor` "
-            exit 1
-        fi
-    fi
-fi
+$QZ_TOOL/get_platform/get_platforminfo.sh
+platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
 echo "platform=$platform"
 
 #Unbind the device from driver
 if [ $platform == "DH895XCC" ]
 then
     echo "0000:$device1" > /sys/bus/pci/drivers/dh895xcc/unbind
+elif [ $platform == "C3000" ]
+then
+    echo "0000:$device1" > /sys/bus/pci/drivers/c3xxx/unbind
 else
     echo "0000:$device1" > /sys/bus/pci/drivers/c6xx/unbind
     echo "0000:$device2" > /sys/bus/pci/drivers/c6xx/unbind
@@ -85,6 +76,9 @@ echo "qzinit2_status=$qzinit2_status"
 if [ $platform == "DH895XCC" ]
 then
     echo "0000:$device1" > /sys/bus/pci/drivers/dh895xcc/bind
+elif [ $platform == "C3000" ]
+then
+    echo "0000:$device1" > /sys/bus/pci/drivers/c3xxx/bind
 else
     echo "0000:$device1" > /sys/bus/pci/drivers/c6xx/bind
     echo "0000:$device2" > /sys/bus/pci/drivers/c6xx/bind

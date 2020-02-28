@@ -40,16 +40,8 @@ test_main=${QZ_ROOT}/test/test
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
 echo "run test threadsafety"
 #get the type of QAT hardware
-platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
-if [ $platform != "37c8" ]
-then
-    platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-    if [[ $platform != "DH895XCC" && $platform != "C62x" ]]
-    then
-        echo "Unsupport Platform: `lspci | grep Co-processor` "
-        exit 1
-    fi
-fi
+$QZ_TOOL/get_platform/get_platforminfo.sh
+platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
 echo "platform=$platform"
 
 # Install upstream driver
@@ -75,7 +67,7 @@ then
     wait
     passed_count=`cat log_threadsafety | grep -c "Check g_process PASSED"`
     rm -f log_threadsafety
-elif [ $platform = "DH895XCC" ]
+elif [[ $platform = "DH895XCC" || $platform = "C3000" ]]
 then
     echo > log_threadsafety
     for((numProc = 0; numProc < 8; numProc ++))

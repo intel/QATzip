@@ -40,17 +40,14 @@ test_main=${QZ_ROOT}/test/test
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
 
 #get the type of QAT hardware
-platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
-if [ $platform != "37c8" ]
-then
-    platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
-    if [[ $platform != "DH895XCC" && $platform != "C62x" ]]
-    then
-        echo "Unsupport Platform: `lspci | grep Co-processor` "
-        exit 1
-    fi
-fi
+$QZ_TOOL/get_platform/get_platforminfo.sh
+platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
 echo "platform=$platform"
+if [ $platform == "C3000" ]
+then
+    echo "The threading test case does not need to run on C3000 platform!"
+    exit 0
+fi
 
 #get the performance data of 8 instances(hw), 12 threads, 4 to SW
 echo "Test 8 instances(hw), 12 threads, 4 to SW"
