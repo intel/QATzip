@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_hugepage.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
 test_qzip="${BASEDIR}/../../utils/qzip "
 test_file_path="/opt/compressdata"
@@ -370,5 +370,5 @@ else
     echo "HugePage memory test FAILED!!! :(";
     exit 1
 fi
-
+echo "***QZ_ROOT run_test_hugepage.sh end"
 exit 0

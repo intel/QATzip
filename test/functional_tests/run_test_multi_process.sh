@@ -34,7 +34,7 @@
 #**************************************************************************
 
 #! /bin/bash
-
+echo "***QZ_ROOT run_test_multi_process.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
 test_main="${BASEDIR}/../test "
 #Using Huge Pages test
@@ -168,5 +168,5 @@ else
     echo "Using Huge Pages test FAILED!!! :(";
     exit 1
 fi
-
+echo "***QZ_ROOT run_test_multi_process.sh end"
 exit 0

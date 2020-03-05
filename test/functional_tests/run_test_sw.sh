@@ -35,6 +35,7 @@
 #! /bin/bash
 
 #set -e
+echo "***QZ_ROOT run_test_sw.sh start"
 test_main=${QZ_ROOT}/test/test
 echo "test for hw down sw up and down start"
 #get the type of QAT hardware
@@ -94,10 +95,11 @@ then
     echo -e "hw down sw down run test PASSED:)\n"
 #hw up
     $ICP_BUILD_OUTPUT/adf_ctl up
-    exit 0
 else
     echo "hw down sw down run test FAILED!!! :("
 #hw up
     $ICP_BUILD_OUTPUT/adf_ctl up
     exit 1
 fi
+echo "***QZ_ROOT run_test_sw.sh end"
+exit 0

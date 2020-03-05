@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_threading.sh start"
 test_main=${QZ_ROOT}/test/test
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
 
@@ -116,5 +116,5 @@ else
     echo "run test 1 instances(hw), 12 threads, 11 to SW FAILED!!! :("
     exit 1
 fi
-
+echo "***QZ_ROOT run_test_threading.sh end"
 exit 0

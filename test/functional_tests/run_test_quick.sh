@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_quick.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
 test_qzip="${BASEDIR}/../../utils/qzip "
 test_main="${BASEDIR}/../test "
@@ -73,6 +73,9 @@ else
     exit 1
 fi
 
+#clear test file
+rm -f ${test_file}
+
 # 1.2 SW Compression and Decompress
 if [ -d  $ICP_ROOT/CRB_modules ];
 then
@@ -95,6 +98,9 @@ fi
 
 $DRIVER_DIR/adf_ctl up
 
+#clear test file
+rm -f ${test_file}
+
 # 1.3 check sw  compatibility with extra flag
 head -c $((4*1024*1024)) /dev/urandom | od -x > $test_file
 gzip $test_file
@@ -116,6 +122,9 @@ else
     exit 1
 fi
 
+#clear test file
+rm -f ${test_file}
+
 # 1.5 QAT pipe & redirection Compress and Decompress
 echo $test_str > $test_file
 cat $test_file | $test_qzip > $out_file.gz         #compress
@@ -129,7 +138,7 @@ else
 fi
 
 #clear test file
-rm -f ${test_file}.gz ${test_file}
+rm -f ${out_file}.gz ${test_file}
 
 # 1.6 QAT SW pipe & redirection Compression and Decompress
 if [ -d  $ICP_ROOT/CRB_modules ];
@@ -154,7 +163,7 @@ fi
 $DRIVER_DIR/adf_ctl up
 
 #clear test file
-rm -f ${test_file}.gz ${test_file}
+rm -f ${out_file}.gz ${test_file}
 
 # 1.7 Check QAT SW pipe & redirection compatibility with extra flag
 head -c $((4*1024*1024)) /dev/urandom | od -x > $test_file
@@ -205,10 +214,11 @@ else
 fi
 
 #clear test file
-rm -f ${test_file}.gz ${test_file}
+rm -f ${out_file}.gz ${test_file}
 
 function testOn3MBRandomDataFile()
 {
+    echo "testOn3MBRandomDataFile"
     dd if=/dev/urandom of=random-3m.txt bs=3M count=1;
     $test_main -m 4 -t 3 -l 8 -i random-3m.txt;
     rc=`echo $?`;
@@ -218,6 +228,7 @@ function testOn3MBRandomDataFile()
 
 function inputFileTest()
 {
+    echo "inputFileTest"
     local test_file_name=$1
     local comp_level=$2
     local req_cnt_thrshold=$3
@@ -255,12 +266,13 @@ function inputFileTest()
         echo "Checksum mismatch, input file test failed."
         rc=1
     fi
-
+    rm -f $test_file_name
     return $rc
 }
 
 function inputFileTest_pipe_redirection()
 {
+    echo "inputFileTest_pipe_redirection"
     local test_file_name=$1
     local comp_level=$2
     local req_cnt_thrshold=$3
@@ -297,12 +309,13 @@ function inputFileTest_pipe_redirection()
         echo "Checksum mismatch, input file test failed."
         rc=1
     fi
-
+    rm -f $test_file_name $test_file_name.gz
     return $rc
 }
 
 function decompressFileTest()
 {
+    echo "decompressFileTest"
     local test_file_name=$1
     local output_file_name=`echo $test_file_name | cut -d '.' -f 1`
 
@@ -340,12 +353,13 @@ function decompressFileTest()
         echo "Checksum mismatch, decompress file test failed."
         rc=1
     fi
-
+    rm -f $output_file_name.gzip $output_file_name.qzip
     return $rc
 }
 
 function qzipCompatibleTest()
 {
+    echo "qzipCompatibleTest"
     local test_file_name=$1
     if [ ! -f "$test_file_path/$test_file_name" ]
     then
@@ -372,13 +386,14 @@ function qzipCompatibleTest()
         echo "Checksum mismatch, qzip compatible test failed."
         rc=1
     fi
-
+    rm -f $test_file_name
     return $rc
 }
 
 #Compress with streaming API and valide with gunzip
 function streamingCompressFileTest()
 {
+    echo "streamingCompressFileTest"
     local test_file_name=$1
     local fmt_list="gzipext"
     local rc=0
@@ -417,13 +432,14 @@ function streamingCompressFileTest()
             break 1;
         fi
     done
-
+    rm -f $test_file_name
     return $rc
 }
 
 #Decompress with streaming API and valide with gunzip
 function streamingDecompressFileTest()
 {
+    echo "streamingDecompressFileTest"
     local test_file_name=$1
     local rc=0
     local suffix="decomp"
@@ -459,13 +475,14 @@ function streamingDecompressFileTest()
     then
         break 1;
     fi
-
+    rm -f $test_file_name.gz $test_file_name.gz.$suffix
     return $rc
 }
 
 #insufficent huge page memory, switch to sw
 function switch_to_sw_failover_in_insufficent_HP()
 {
+    echo "switch_to_sw_failover_in_insufficent_HP"
     current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
     echo 8 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
 
@@ -488,6 +505,7 @@ function switch_to_sw_failover_in_insufficent_HP()
 #get available huge page memory while some processes has already swithed to the sw
 function resume_hw_comp_when_insufficent_HP()
 {
+    echo "resume_hw_comp_when_insufficent_HP"
     current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
     dd if=/dev/urandom of=random-3m.txt bs=100M count=1;
 
@@ -530,6 +548,7 @@ function resume_hw_comp_when_insufficent_HP()
 #block device compress test
 function blockDeviceTest()
 {
+    echo "blockDeviceTest"
     local block_device_test_file="block_device_file"
     local rc=0
 
@@ -624,6 +643,7 @@ fi
 echo "Mim allocated memory test"
 function minAllocatedMemoryTest1()
 {
+    echo "minAllocatedMemoryTest1"
     local test_file_name=$1
     local rc=0
 
@@ -667,7 +687,7 @@ function minAllocatedMemoryTest1()
         echo "Check error_Key is null, mim allocated memory test1 FAILED."
         rc=1
     fi
-
+    rm -f minAllocatedMemoryTestlog $test_file_name
     echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
@@ -677,6 +697,7 @@ function minAllocatedMemoryTest1()
 
 function minAllocatedMemoryTest2()
 {
+    echo "minAllocatedMemoryTest2"
     local test_file_name=$1
     local rc=0
 
@@ -720,7 +741,7 @@ function minAllocatedMemoryTest2()
         echo "Check error_Key is null, mim allocated memory test2 FAILED."
         rc=1
     fi
-
+    rm -f minAllocatedMemoryTestlog $test_file_name
     echo $current_num_HP > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
@@ -752,6 +773,7 @@ fi
 
 function none_QAT_stream_compress_decompress_test()
 {
+    echo "none_QAT_stream_compress_decompress_test"
     local test_file_name=$1
     local rc=0
 
@@ -833,7 +855,7 @@ function none_QAT_stream_compress_decompress_test()
     fi
 
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=$current_num_HP max_huge_pages_per_process=256
-
+    rm -f $test_file_name $test_file_name.gz $test_file_name.gz.decomp
     return $rc
 }
 
@@ -999,6 +1021,7 @@ fi
 
 function qzSWCompression_block_test()
 {
+    echo "qzSWCompression_block_test"
     $DRIVER_DIR/adf_ctl down
     if [ ! -f "$test_file_path/$sample_file_name" ]
     then
@@ -1047,6 +1070,7 @@ fi
 
 function qzCompressStream_with_pending_out_test()
 {
+    echo "qzCompressStream_with_pending_out_test"
     local test_file_name=$1
     cp -f $test_file_path/$test_file_name ./
     OLDMD5=`md5sum $test_file_name`
@@ -1074,6 +1098,7 @@ fi
 
 function decompress_test_with_large_file()
 {
+    echo "decompress_test_with_large_file"
     local test_file_name=$1
     cp -f $test_file_path/$test_file_name.gz ./
     OLDMD5=`md5sum $test_file_path/$test_file_name | awk '{print $1}'`
@@ -1115,6 +1140,7 @@ fi
 #test for qzip compressing with -O options
 function qzipCompressTest()
 {
+    echo "qzipCompressTest"
     local test_file_name=$1
     cp -f $test_file_path/$test_file_name ./
 
@@ -1155,5 +1181,5 @@ if ! ${BASEDIR}/run_test_decompress_combined_file.sh
 then
     exit 2
 fi
-
+echo "***QZ_ROOT run_test_quick.sh end"
 exit 0

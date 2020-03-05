@@ -36,7 +36,7 @@
 #! /bin/bash
 set -e
 readonly BASEDIR=$(readlink -f $(dirname $0))
-
+echo "***QZ_ROOT run_test_long.sh start"
 run_main="${BASEDIR}/../test "
 RESULT_DIR="$BASEDIR/results"
 RESULT_FILE="$RESULT_DIR/$(date +%Y%m%d)-$(date +%H:%M:%S)_res.txt"
@@ -303,5 +303,5 @@ if ! ${BASEDIR}/run_test_try_HW_decom_for_GZIP_header.sh
 then
     exit 1
 fi
-
+echo "***QZ_ROOT run_test_long.sh end"
 exit 0

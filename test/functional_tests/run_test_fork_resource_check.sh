@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_fork_resource_check.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
 test_main="${BASEDIR}/../test "
@@ -93,5 +93,5 @@ if fork_resource_check_test
        echo "fork resource check test FAILED!!!"
        exit 2
 fi
-
+echo "***QZ_ROOT run_test_fork_resource_check.sh end"
 exit 0

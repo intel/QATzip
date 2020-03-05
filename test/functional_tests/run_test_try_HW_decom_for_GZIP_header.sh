@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_try_HW_decom_for_GZIP_header.sh start"
 test_qzip=${QZ_ROOT}/utils/qzip
 test_file_path="/opt/compressdata"
 small_file_name="64kb_file.html"
@@ -95,5 +95,5 @@ else
    echo "try HW decom for GZIP header test FAILED!!!"
    exit 2
 fi
-
+echo "***QZ_ROOT run_test_try_HW_decom_for_GZIP_header.sh end"
 exit 0

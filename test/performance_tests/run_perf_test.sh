@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_perf_test.sh start"
 CURRENT_PATH=`dirname $(readlink -f "$0")`
 
 #get the type of QAT hardware
@@ -92,3 +92,4 @@ echo "decompthroughput=$decompthroughput Gbps"
 
 rm -f result_comp
 rm -f result_decomp
+echo "***QZ_ROOT run_perf_test.sh end"

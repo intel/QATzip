@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_early_HW_detection.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
 test_qzip="${BASEDIR}/../../utils/qzip "
 test_main="${BASEDIR}/../test "
@@ -46,6 +46,7 @@ sample_file_name="calgary"
 #Stop the service(adf_ctrl down), test_main -m 9 should return QZ_NOSW_NO_HW
 function early_HW_detection_service_down_test()
 {
+    echo "early_HW_detection_service_down_test"
     local test_file_name=$1
     local rc=0
 
@@ -85,6 +86,7 @@ function early_HW_detection_service_down_test()
 #Open the service ,test_main -m 9 -b should go to SW, decompress and compare the md5 of the two files
 function early_HW_detection_service_up_test()
 {
+    echo "early_HW_detection_service_up_test"
     local test_file_name=$1
     local rc=0
 
@@ -122,6 +124,7 @@ function early_HW_detection_service_up_test()
 #Open hw, set huge page to 0, test_main -m 9 should use HW
 function early_HW_detection_service_hugepage0_test()
 {
+    echo "early_HW_detection_service_hugepage0_test"
     local rc=0
 
     current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
@@ -150,6 +153,7 @@ function early_HW_detection_service_hugepage0_test()
 #Open hw, set huge page to 0,test_main -m 9 should go to HW, decompress and compare the md5 of the two files
 function early_HW_detection_service_up_hugepage0_test()
 {
+    echo "early_HW_detection_service_up_hugepage0_test"
     local test_file_name=$1
     local rc=0
 
@@ -205,5 +209,5 @@ else
     echo "Early HW detection test FAILED!!! :(";
     exit 1
 fi
-
+echo "***QZ_ROOT run_test_early_HW_detection.sh end"
 exit 0

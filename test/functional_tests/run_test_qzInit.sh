@@ -35,6 +35,7 @@
 #! /bin/bash
 
 #set -e
+echo "***QZ_ROOT run_test_qzInit.sh start"
 test_main=${QZ_ROOT}/test/test
 echo "No hardware in platform Test"
 echo "test for qzInitPcieCountCheck start"
@@ -92,9 +93,9 @@ adf_ctl status
 if [[ $qzinit1_status == 1  &&  $qzinit2_status == 1 ]]
 then
     echo -e "No hardware in platform Test PASSED."
-    exit 0
 else
     echo "No hardware in platform Test FAILED."
     exit 1
 fi
-
+echo "***QZ_ROOT run_test_qzInit.sh end"
+exit 0

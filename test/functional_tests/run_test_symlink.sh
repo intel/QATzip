@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_symlink.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
 test_qzip="${BASEDIR}/../../utils/qzip "
 test_file_path="/opt/compressdata"
@@ -86,5 +86,5 @@ else
     echo "Not Exist Symlink Test FAILED!!!"
     exit 1
 fi
-
+echo "***QZ_ROOT run_test_symlink.sh end"
 exit 0

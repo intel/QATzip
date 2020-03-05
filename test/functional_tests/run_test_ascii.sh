@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_ascii.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
 echo "Files that expand Test"
 test_qzip="${BASEDIR}/../../utils/qzip "
@@ -80,7 +80,7 @@ fi
 
 new_checksum=`md5sum $test_file_name`
 echo "new_checksum = $new_checksum";
-
+rm -f $test_file_name.gz $test_file_name
 if [[ $new_checksum != $orig_checksum ]]
 then
     echo "Checksum mismatch, Files that expand test FAILED."
@@ -88,5 +88,5 @@ then
 else
     echo "Checksum match, Files that expand test PASSED."
 fi
-
+echo "***QZ_ROOT run_test_ascii.sh end"
 exit 0

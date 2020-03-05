@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_decompress_combined_file.sh start"
 test_qzip=${QZ_ROOT}/utils/qzip
 test_file_path="/opt/compressdata"
 sample_file_name="calgary"
@@ -43,6 +43,7 @@ big_file_name="calgary.2G"
 
 function decom_combined_file1()
 {
+    echo "decom_combined_file1"
     local test_file_name=$1
     cp -f $test_file_path/$test_file_name ./
     $test_qzip -k $test_file_name -o file1
@@ -69,6 +70,7 @@ function decom_combined_file1()
 #enough for a Gzip header with QZ extension.
 function decom_combined_file2()
 {
+    echo "decom_combined_file2"
     local test_file_name1=$1
     local test_file_name2=$2
     cp -f $test_file_path/$test_file_name1 ./
@@ -101,5 +103,5 @@ else
    echo "decom combined_file test FAILED!!!"
    exit 2
 fi
-
+echo "***QZ_ROOT run_test_decompress_combined_file.sh end"
 exit 0

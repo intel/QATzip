@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_cnvr.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
 test_qzip="${BASEDIR}/../../utils/qzip "
 test_file_name="payload6"
@@ -92,4 +92,5 @@ for hwSz in "${hwChunkSz[@]}"; do
 done
 rm -f $test_file_name4M
 rm -f $test_file_name4M.gz
+echo "***QZ_ROOT run_test_cnvr.sh end"
 exit 0

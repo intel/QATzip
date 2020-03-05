@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_threadsafety.sh start"
 test_main=${QZ_ROOT}/test/test
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
 echo "run test threadsafety"
@@ -85,8 +85,9 @@ fi
 if [ $passed_count = "8" ]
 then
     echo -e "run test threadsafety PASSED:)\n"
-    exit 0
 else
     echo "run test threadsafety FAILED!!! :("
     exit 1
 fi
+echo "***QZ_ROOT run_test_threadsafety.sh end"
+exit 0

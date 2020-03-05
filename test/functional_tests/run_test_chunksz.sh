@@ -35,7 +35,7 @@
 
 #! /bin/bash
 set -e
-
+echo "***QZ_ROOT run_test_chunksz.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
 test_file_path="/opt/compressdata"
 test_file="calgary.1G"
@@ -109,8 +109,9 @@ elif [[ $platform = "DH895XCC" && \
       $(echo "$throught_software < 1218.8" | bc) = 1 ]]
 then
     echo -e "run test chunksz PASSED:)\n"
-    exit 0
 else
     echo "run test chunksz FAILED!!! :("
     exit 1
 fi
+echo "***QZ_ROOT run_test_chunksz.sh end"
+exit 0
