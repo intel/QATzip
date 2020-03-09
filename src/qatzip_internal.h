@@ -42,6 +42,11 @@ extern"C" {
 
 #include <zlib.h>
 
+/**
+ *  define lib version
+ */
+#define QATZIP_VERSION "1.0.2"
+
 #define SUCCESS              1
 #define FAILURE              0
 

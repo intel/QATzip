@@ -46,9 +46,9 @@ LN_S='ln -s'
 RM='rm -f'
 INSTALL='install'
 
-# extract version numbers from qatzip.h
-VER=`sed -n -e '/VERSION "/s/.*"\(.*\)".*/\1/p' < include/qatzip.h`
-VER_M=`sed -n -e '/VERSION "/s/.*"\([0-9]*\)\\..*/\1/p' < include/qatzip.h`
+# extract version numbers from qatzip_internal.h
+VER=`sed -n -e '/VERSION "/s/.*"\(.*\)".*/\1/p' < src/qatzip_internal.h`
+VER_M=`sed -n -e '/VERSION "/s/.*"\([0-9]*\)\\..*/\1/p' < src/qatzip_internal.h`
 
 
 function exit_conf()
