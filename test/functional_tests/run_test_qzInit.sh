@@ -56,6 +56,9 @@ then
 elif [ $platform == "C3000" ]
 then
     echo "0000:$device1" > /sys/bus/pci/drivers/c3xxx/unbind
+elif [ $platform == "270b" ]
+then
+    echo "0000:$device2" > /sys/bus/pci/drivers/c4xxx/unbind
 else
     echo "0000:$device1" > /sys/bus/pci/drivers/c6xx/unbind
     echo "0000:$device2" > /sys/bus/pci/drivers/c6xx/unbind
@@ -80,6 +83,9 @@ then
 elif [ $platform == "C3000" ]
 then
     echo "0000:$device1" > /sys/bus/pci/drivers/c3xxx/bind
+elif [ $platform == "270b" ]
+then
+    echo "0000:$device2" > /sys/bus/pci/drivers/c4xxx/bind
 else
     echo "0000:$device1" > /sys/bus/pci/drivers/c6xx/bind
     echo "0000:$device2" > /sys/bus/pci/drivers/c6xx/bind

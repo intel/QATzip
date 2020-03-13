@@ -59,6 +59,18 @@ function HugePageTest()
     local test_case=$5
     local rc=0
 
+    #Block by QATAPP-17279
+    #get the type of QAT hardware
+    $QZ_TOOL/get_platform/get_platforminfo.sh
+    platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
+    echo "platform=$platform"
+    if [[ $platform == "270b" && $test_file_name == $huge_file_name ]]
+    then
+        echo "Skip this case on CPM1.8 platform"
+        return 0
+    fi
+    #Block by QATAPP-17279
+
     current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
 
     echo "nr_hugepage=$nr_hugepages max_huge_pages=$test_hp max_huge_pages_per_process=$test_hpp"

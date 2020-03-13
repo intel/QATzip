@@ -51,7 +51,7 @@ fi
 $ICP_BUILD_OUTPUT/adf_ctl down
 
 
-if [[ ($platform == "37c8" || $platform == "C62x" || $platform == "DH895XCC")]]
+if [[ ( $platform == "37c8" || $platform == "C62x" || $platform == "DH895XCC" || $platform == "270b" )]]
 then
 #sw permitted
     $test_main -m 4 -O gzip -B 1 > resultsw 2>&1
@@ -68,7 +68,7 @@ if [[ ($platform == "37c8" || $platform == "C62x")&& \
        $(echo "$sw_throught_ave_software < 0.4" | bc) = 1 ]]
 then
     echo -e "hw down sw up run test PASSED:)\n"
-elif [[ $platform == "DH895XCC" && \
+elif [[ ($platform == "DH895XCC" || $platform == "270b") && \
        $qz_sw_status != 0 && \
        $(echo "$sw_throught_ave_software < 2.5" | bc) = 1 ]]
 then
@@ -80,7 +80,7 @@ else
     exit 1
  fi
 
-if [[ ($platform == "37c8" || $platform == "C62x" || $platform == "DH895XCC")]]
+if [[ ( $platform == "37c8" || $platform == "C62x" || $platform == "DH895XCC" || $platform == "270b" )]]
 then
 #sw not permitted
     $test_main -m 4 -B 0 > resultnosw 2>&1
@@ -89,7 +89,7 @@ then
 fi
 #deterimine if this test passed
 echo "qz_nosw_status=$qz_nosw_status"
-if [[ ($platform == "37c8" || $platform == "C62x" || $platform == "DH895XCC")&& \
+if [[ ( $platform == "37c8" || $platform == "C62x" || $platform == "DH895XCC" || $platform == "270b" )&& \
       $qz_nosw_status != 0 ]]
 then
     echo -e "hw down sw down run test PASSED:)\n"

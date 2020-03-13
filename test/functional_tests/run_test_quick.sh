@@ -898,6 +898,8 @@ function configuration_file_test()
             sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/dh895xcc_dev$i.conf
         elif [ $platform == "C3000" ]; then
             sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/c3xxx_dev$i.conf
+        elif [ $platform == "270b" ]; then
+            sed -i 's/^\[SHIM\]$/\[CFTEST\]/g' /etc/c4xxx_dev0.conf
         fi
     done
     service qat_service restart
@@ -939,6 +941,8 @@ function configuration_file_test()
             sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/dh895xcc_dev$i.conf
         elif [ $platform == "C3000" ]; then
             sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c3xxx_dev$i.conf
+        elif [ $platform == "270b" ]; then
+            sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c4xxx_dev0.conf
         fi
     done
     service qat_service restart
@@ -999,6 +1003,8 @@ function configuration_file_test_software_compress()
             sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/dh895xcc_dev$i.conf
         elif [ $platform == "C3000" ]; then
             sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c3xxx_dev$i.conf
+        elif [ $platform == "270b" ]; then
+            sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c4xxx_dev0.conf
         fi
     done
     service qat_service restart

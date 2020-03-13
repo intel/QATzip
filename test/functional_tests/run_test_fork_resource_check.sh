@@ -40,6 +40,18 @@ readonly BASEDIR=$(cd `dirname $0`; pwd)
 DRV_FILE=${QZ_TOOL}/install_drv/install_upstream.sh
 test_main="${BASEDIR}/../test "
 
+#Block by QATAPP-17271
+#get the type of QAT hardware
+$QZ_TOOL/get_platform/get_platforminfo.sh
+platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
+echo "platform=$platform"
+if [ $platform == "270b" ]
+then
+    echo "Skip this case on CPM1.8 platform"
+    exit 0
+fi
+#Block by QATAPP-17271
+
 #test for fork resource check
 function fork_resource_check_test()
 {

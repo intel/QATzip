@@ -61,6 +61,10 @@ elif [ $platform = "DH895XCC" ]
 then
     process=8
     \cp $CURRENT_PATH/config_file/dh895xcc/dh895xcc_dev0.conf /etc
+elif [ $platform = "270b" ]
+then
+    process=8
+    \cp $CURRENT_PATH/config_file/c4xxx/c4xxx_dev0.conf /etc
 fi
 service qat_service restart
 echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages

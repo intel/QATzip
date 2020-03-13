@@ -67,7 +67,7 @@ then
     wait
     passed_count=`cat log_threadsafety | grep -c "Check g_process PASSED"`
     rm -f log_threadsafety
-elif [[ $platform = "DH895XCC" || $platform = "C3000" ]]
+elif [[ $platform = "DH895XCC" || $platform = "C3000" || $platform = "270b" ]]
 then
     echo > log_threadsafety
     for((numProc = 0; numProc < 8; numProc ++))

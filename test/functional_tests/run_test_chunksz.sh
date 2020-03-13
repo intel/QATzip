@@ -56,6 +56,14 @@ then
     exit 0
 fi
 
+#Block by QATAPP-17268
+if [ $platform == "270b" ]
+then
+    echo "Skip this case on CPM1.8 platform"
+    exit 0
+fi
+#Block by QATAPP-17268
+
 cp $test_file_path/$test_file .
 if [[ $platform = "37c8" || $platform = "C62x" ]]
 then
@@ -75,7 +83,7 @@ then
     taskset -c 2 $test_qzip -d -C 65536  $test_file_compressed > log_chunksztest
     throught_software=$(cat log_chunksztest | grep Throughput | awk '{print $2}')
     rm -f log_chunksztest
-elif [ $platform = "DH895XCC" ]
+elif [[ $platform = "DH895XCC" || $platform = "270b" ]]
 then
     DVR_OPT="-D8 -P1"
     # Install upstream driver
@@ -104,7 +112,7 @@ if [[ ( $platform = "37c8" || $platform = "C62x" ) && \
 then
     echo -e "run test chunksz PASSED:)\n"
     exit 0
-elif [[ $platform = "DH895XCC" && \
+elif [[ ( $platform = "DH895XCC" || $platform = "270b" ) && \
       $(echo "$throught_hardware > 15718.3" | bc) = 1 && \
       $(echo "$throught_software < 1218.8" | bc) = 1 ]]
 then
