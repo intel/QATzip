@@ -56,6 +56,10 @@ extern"C" {
 
 #include <string.h>
 
+/**
+ *   define api version
+ */
+#define QATZIP_API_VERSION "1.0.0"
 
 /**
  *****************************************************************************
