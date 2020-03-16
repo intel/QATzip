@@ -3545,6 +3545,84 @@ done:
     pthread_exit((void *)NULL);
 }
 
+void *qzDecompressStreamWithBufferError(void *thd_arg)
+{
+    int rc;
+    unsigned char *src = NULL, *dest = NULL;
+    unsigned int src_sz, dest_sz;
+    QzStream_T decomp_strm = {0};
+    QzSessionParams_T params;
+    unsigned int last = 1;
+    TestArg_T *test_arg = (TestArg_T *)thd_arg;
+    const int gen_data = test_arg->gen_data;
+    const long tid = test_arg->thd_id;
+
+    QZ_DEBUG("Hello from qzDecompressStreamWithBufferError id %ld\n", tid);
+
+    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+        pthread_exit((void *)"qzInit failed");
+    }
+    QZ_DEBUG("qzInit  rc = %d\n", rc);
+
+    if (qzGetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: fail to get defulat params.\n");
+        goto done;
+    }
+    params.strm_buff_sz = QZ_STRM_BUFF_SZ_DEFAULT - 1;
+    if (qzSetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: set params fail with incorrect compress params.\n");
+        goto done;
+    }
+
+    //set by default configurations
+    rc = qzSetupSession(&g_session_th[tid], NULL);
+    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH && rc != QZ_NO_HW) {
+        pthread_exit((void *)"qzSetupSession failed");
+    }
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
+
+    if (gen_data) {
+        src_sz = QATZIP_MAX_HW_SZ;
+        dest_sz = QATZIP_MAX_HW_SZ;
+        src = qzMalloc(src_sz, 0, COMMON_MEM);
+        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
+    } else {
+        src = test_arg->src;
+        src_sz = test_arg->src_sz;
+        dest = test_arg->comp_out;
+        dest_sz = test_arg->comp_out_sz;
+    }
+
+    if (!src || !dest) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+
+    if (gen_data) {
+        QZ_DEBUG("Gen Data...\n");
+        genRandomData(src, src_sz);
+    }
+
+    /*dest_recv_sz > dest_avail_len*/
+    decomp_strm.in = src;
+    decomp_strm.out = dest;
+    decomp_strm.in_sz = src_sz;
+    decomp_strm.out_sz = dest_sz;
+    rc = qzDecompressStream(&g_session_th[tid], &decomp_strm, last);
+    assert(QZ_FAIL == rc);
+    rc = qzEndStream(&g_session_th[tid], &decomp_strm);
+
+done:
+    if (gen_data) {
+        qzFree(src);
+        qzFree(dest);
+    }
+
+    (void)qzTeardownSession(&g_session_th[tid]);
+    pthread_exit((void *)NULL);
+}
+
 #define USAGE_STRING                                                            \
     "Usage: %s [options]\n"                                                     \
     "\n"                                                                        \
@@ -3887,6 +3965,9 @@ int main(int argc, char *argv[])
         break;
     case 21:
         qzThdOps = forkResourceCheck;
+        break;
+    case 22:
+        qzThdOps = qzDecompressStreamWithBufferError;
         break;
     default:
         goto done;

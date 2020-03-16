@@ -1187,5 +1187,12 @@ if ! ${BASEDIR}/run_test_decompress_combined_file.sh
 then
     exit 2
 fi
+
+echo "test for decompressStream with buffer error"
+if ! ${BASEDIR}/run_test_decompressStream_with_BufferError.sh
+then
+    exit 2
+fi
+
 echo "***QZ_ROOT run_test_quick.sh end"
 exit 0

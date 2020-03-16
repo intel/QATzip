@@ -294,10 +294,10 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
                          stream_buf->buf_len);
                 copied_input = copied_input_last;
                 rc = QZ_FAIL;
+                goto done;
             } else {
                 rc = QZ_OK;
             }
-            goto done;
         }
 
         if (QZ_OK != rc) {
@@ -435,9 +435,16 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
                  input_len, output_len, strm->pending_in, strm->pending_out,
                  strm->in_sz, strm->out_sz);
         if (QZ_BUF_ERROR == rc) {
-            QZ_DEBUG("Recoverable buffer error occurs... \n");
-            rc = QZ_OK;
-            continue;
+            if (0 == input_len) {
+                QZ_ERROR("Error in qzDecompressStream, stream buf size = %u\n",
+                         stream_buf->buf_len);
+                copied_input = copied_input_last;
+                rc = QZ_FAIL;
+                goto done;
+            } else {
+                QZ_DEBUG("Recoverable buffer error occurs... \n");
+                rc = QZ_OK;
+            }
         }
 
         if (0 == strm->pending_in) {
