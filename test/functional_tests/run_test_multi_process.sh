@@ -40,18 +40,6 @@ test_main="${BASEDIR}/../test "
 #Using Huge Pages test
 echo "Using Huge Pages Test"
 
-#Block by QATAPP-17274
-#get the type of QAT hardware
-$QZ_TOOL/get_platform/get_platforminfo.sh
-platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
-echo "platform=$platform"
-if [ $platform == "270b" ]
-then
-    echo "Skip this case on CPM1.8 platform"
-    exit 0
-fi
-#Block by QATAPP-17274
-
 #***********************************************************************************
 #    set max_huge_pages to 8 (sufficent hugepage for test_main -m 4 with one thread)
 #    Use test_main -m 4 to start one process with two thread
@@ -111,6 +99,8 @@ function run_with_kernel_mem()
 {
     echo "run with kernel memory test"
     local rc=0
+
+    $QZ_TOOL/install_drv/install_upstream.sh -D 1 -P 2 -L
 
     current_num_HP=`awk '/HugePages_Total/ {print $NF}' /proc/meminfo`
 
