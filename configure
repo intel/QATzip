@@ -202,6 +202,7 @@ fi
 # check for ICP_ROOT
 if ! test -z ${ICP_ROOT}; then
   if test -d ${ICP_ROOT}/quickassist; then
+    ICP_ROOT=$(cd $ICP_ROOT; pwd)
     echo "Checking for ICP_ROOT:$ICP_ROOT... OK"
   else
     echo "Checking for ICP_ROOT... failed"
