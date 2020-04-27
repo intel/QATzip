@@ -71,7 +71,7 @@ for argument in "$@"; do
 
   case "$qz_opt" in
     -h | --help)
-cat <<\_QZEOF
+cat << _QZEOF
 
 Usage: $0 [OPTION]... [VAR=VALUE]...
 
