@@ -26,7 +26,7 @@ Technology user space library, to provide extended accelerated compression and
 decompression services by offloading the actual compression and decompression
 request(s) to the Intel&reg; Chipset Series. QATzip produces data using the standard
 gzip\* format (RFC1952) with extended headers. The data can be decompressed with a
-compliant gzip\* implementation. QATzip is design to take full advantage of the
+compliant gzip\* implementation. QATzip is designed to take full advantage of the
 performance provided by Intel&reg; QuickAssist Technology.
 
 ## Licensing
@@ -62,7 +62,7 @@ platforms that have acceleration devices and non-accelerated platforms.
 * Provide streaming interface of compression and decompression to achieve better compression
 ratio and throughput for data sets that are submitted piecemeal.
 * 'qzip' utility supports compression from regular file, pipeline and block device.
-* For starndard GZIP format, try hardware decompression 1st before switch to software decompression.
+* For standard GZIP format, try hardware decompression 1st before switch to software decompression.
 * Enable adaptive polling mechanism to save CPU usage in stress mode.
 
 ## Hardware Requirements
@@ -153,7 +153,7 @@ For more configure options, please run "./configure -h" for help
 
 The Intel&reg; QATzip comes with some example conf files to use with the Intel&reg; QAT Driver.
 The Intel&reg; QATzip will not function with the default Intel&reg; QAT Driver conf file because
-the default conf does not contain a[SHIM] section which the Intel&reg; QATzip requires by default.
+the default conf does not contain a [SHIM] section which the Intel&reg; QATzip requires by default.
 The default section name in the QATzip can be modified if required by setting the environment
 variable "QATZIP_SECTION_NAME".
 
@@ -175,7 +175,7 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 ```
 
 With current configuration, each PCI-e device in C6XX platform could support
-32 process in maximum.
+32 processes in maximum.
 
 **Enable QATzip For Non-root user**
 
@@ -223,7 +223,7 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 ```
 
 With current configuration, each PCI-e device in C6XX platform could support
-32 process in maximum
+32 processes in maximum
 
 **Set below environment variable as non-root user**
 
