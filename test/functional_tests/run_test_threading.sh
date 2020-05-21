@@ -119,7 +119,7 @@ echo "throught_ave_hardware=$throught_ave_hardware"
 echo "throught_ave_software=$throught_ave_software"
 if [[ ( $platform = "37c8" || $platform = "C62x" ) && \
       $(echo "$throught_ave_hardware > 17.3" | bc) = 1 && \
-      $(echo "$throught_ave_software < 0.15" | bc) = 1 ]]
+      $(echo "$throught_ave_software < 0.19" | bc) = 1 ]]
 then
    echo -e "run test 1 instances(hw), 12 threads, 11 to SW PASSED:)\n"
 elif [[ ( $platform = "DH895XCC" || $platform == "270b" ) && \
