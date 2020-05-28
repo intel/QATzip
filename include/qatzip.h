@@ -57,9 +57,34 @@ extern"C" {
 #include <string.h>
 
 /**
- *   define api version
- */
-#define QATZIP_API_VERSION "1.0.0"
+ *****************************************************************************
+ * @ingroup qatZip
+ *      QATZIP Major Version Number
+ * @description
+ *      The QATZIP API major version number. This number will be incremented
+ *      when significant churn to the API has occurred. The combination of the
+ *      major and minor number definitions represent the complete version number
+ *      for this interface.
+ *
+ *****************************************************************************/
+#define QATZIP_API_VERSION_NUM_MAJOR (1)
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *       QATZIP Minor Version Number
+ * @description
+ *      The QATZIP API minor version number. This number will be incremented
+ *      when minor changes to the API has occurred. The combination of the major
+ *      and minor number definitions represent the complete version number for
+ *      this interface.
+ *
+ *****************************************************************************/
+#define QATZIP_API_VERSION_NUM_MINOR (0)
+
+/* define a macro as an integer to test */
+#define QATZIP_API_VERSION    (QATZIP_API_VERSION_NUM_MAJOR * 10000 +      \
+                               QATZIP_API_VERSION_NUM_MINOR * 100)
 
 /**
  *****************************************************************************
