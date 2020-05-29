@@ -227,14 +227,12 @@ typedef enum QzDataFormat_E {
  *
  * @description
  *      This enumerated list identifies the checksum type for input/output
- *    data. A format can be CRC32, CRC64, Adler or none.
+ *    data. A format can be CRC32, Adler or none.
  *
  *****************************************************************************/
 typedef enum QzCrcType_E {
     QZ_CRC32 = 0,
     /**< CRC32 checksum */
-    QZ_CRC64,
-    /**< CRC64 checksum */
     QZ_ADLER,
     /**< Adler checksum */
     NONE
@@ -288,8 +286,6 @@ typedef enum QzCrcType_E {
 
 #define QZ_MAX_ALGORITHMS  ((int)255)
 #define QZ_DEFLATE         ((unsigned char)8)
-#define QZ_SNAPPY          ((unsigned char)'S')
-#define QZ_LZ4             ((unsigned char)'4')
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
@@ -1142,11 +1138,9 @@ typedef struct QzStream_S {
     unsigned int  pending_out;
     /**<Processed bytes held in QATZip */
     QzCrcType_T  crc_type;
-    /**<Checksum type in Adler, CRC32, CRC64 or none */
+    /**<Checksum type in Adler, CRC32 or none */
     unsigned int  crc_32;
     /**<Checksum value */
-    unsigned long long  crc_64;
-    /**<Checksum value for 64bit CRC*/
     unsigned long long  reserved;
     /**<CRC64 polynomial */
     void *opaque;
@@ -1172,7 +1166,7 @@ typedef struct QzStream_S {
  *
  *    This function will place completed compression blocks in the *out
  *    of QzStream_T structure and put checksum for compressed input data
- *    in crc32/crc64 of QzStream_T structure.
+ *    in crc32 of QzStream_T structure.
  *
  *    The caller must check the updated in_sz of QzStream_T.  This value will
  *    be the number of consumed bytes on exit.  The calling API may have to
@@ -1246,7 +1240,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *
  *    This function will place completed uncompression blocks in the *out
  *    of QzStream_T structure and put checksum for uncompressed data in
- *    crc32/crc64 of QzStream_T structure.
+ *    crc32 of QzStream_T structure.
  *
  *    The caller must check the updated in_sz of QzStream_T.  This value will
  *    be the number of consumed bytes on exit.  The calling API may have to

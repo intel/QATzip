@@ -94,7 +94,6 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
     strm->pending_in = 0;
     strm->pending_out = 0;
     strm->crc_32 = 0;
-    strm->crc_64 = 0;
     return QZ_OK;
 
 clear:
@@ -211,9 +210,6 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         goto end;
     }
     switch (strm->crc_type) {
-    case QZ_CRC64:
-        strm_crc = (unsigned long *)&strm->crc_64;
-        break;
     case QZ_CRC32:
     case QZ_ADLER:
     default:

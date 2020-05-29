@@ -44,7 +44,7 @@ strip_dir_main=$(echo $run_main | sed 's/\(.*\)\(test$\)/\2/')
 
 declare -a thd_cnt verify algorithm swBack
 thd_cnt=("1" "2" "16" "100")
-algorithm=("deflate" "snappy" "lz4")
+algorithm=("deflate")
 
 declare -a compLevel huffmanType hwBuffSz
 compLevel=("1" "6" "9")

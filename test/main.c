@@ -930,18 +930,6 @@ void *qzSetupParamFuncTest(void *arg)
         goto end;
     }
 
-    cus_params.comp_algorithm = QZ_SNAPPY;
-    if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
-        QZ_ERROR("FAILED: set params should fail with incorrect algorithm: %d.\n",
-                 cus_params.comp_algorithm);
-        goto end;
-    }
-
-    if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
-        goto end;
-    }
-
     cus_params.sw_backup = 2;
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect sw_backup: %d.\n",
@@ -3645,7 +3633,7 @@ done:
     "    -v                    verify, disabled by default\n"                   \
     "    -e init engine        enable | disable. enabled by default\n"          \
     "    -s init session       enable | disable. enabled by default\n"          \
-    "    -A comp_algorithm     deflate | snappy | lz4\n"                        \
+    "    -A comp_algorithm     deflate\n"                                       \
     "    -B swBack             0 means disable sw\n"                            \
     "                          1 means enable sw\n"                             \
     "    -C hw_buff_sz         default 64K\n"                                   \
@@ -3729,10 +3717,6 @@ int main(int argc, char *argv[])
         case 'A':
             if (strcmp(optarg, "deflate") == 0) {
                 g_params_th.comp_algorithm = QZ_DEFLATE;
-            } else if (strcmp(optarg, "snappy") == 0) {
-                g_params_th.comp_algorithm = QZ_SNAPPY;
-            } else if (strcmp(optarg, "lz4") == 0) {
-                g_params_th.comp_algorithm = QZ_LZ4;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;

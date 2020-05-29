@@ -691,10 +691,6 @@ int main(int argc, char **argv)
         case 'A':
             if (strcmp(optarg, "deflate") == 0) {
                 g_params_th.comp_algorithm = QZ_DEFLATE;
-            } else if (strcmp(optarg, "snappy") == 0) {
-                g_params_th.comp_algorithm = QZ_SNAPPY;
-            } else if (strcmp(optarg, "lz4") == 0) {
-                g_params_th.comp_algorithm = QZ_LZ4;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;
