@@ -45,4 +45,4 @@ qzip: qzip.o
 clean:
 	$(RM) *.o qzip
 
-.PHONY: all qzip clean
+.PHONY: all clean
