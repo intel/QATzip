@@ -470,11 +470,7 @@ int makeOutName(const char *in_name, const char *out_name,
  * parent directory. */
 void mkPath(char *path, const char *dirpath, char *file)
 {
-    size_t len;
-
-    len = strlen(dirpath);
-
-    if (len < MAX_PATH_LEN && strlen(file) < MAX_PATH_LEN - len) {
+    if (strlen(dirpath) + strlen(file) + 1 < MAX_PATH_LEN) {
         snprintf(path, MAX_PATH_LEN, "%s/%s", dirpath, file);
     } else {
         assert(0);
