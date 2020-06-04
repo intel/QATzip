@@ -32,61 +32,24 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  ***************************************************************************/
+#include "qzip.h"
 
 static char const *const g_license_msg[] = {
-    "Copyright (C) 2019 Intel Corporation.",
+    "Copyright (C) 2020 Intel Corporation.",
     0
 };
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
-#include <getopt.h>
-#include <limits.h>
-#include <assert.h>
-#include <dirent.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/ioctl.h>
-#include <linux/fs.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <qz_utils.h>
-#include <qatzip.h> /* new QATzip interface */
-#include <cpa_dc.h>
-#include <pthread.h>
-#include <qatzip_internal.h>
-
-
-/* Return codes from qzip */
-#define OK      0
-#define ERROR   1
-
-#define MAX_PATH_LEN   1024 /* max pathname length */
-#define SUFFIX ".gz"
-#define SFXLEN 3
-
-#define SRC_BUFF_LEN         (512 * 1024 * 1024)
-
-typedef struct RunTimeList_S {
-    struct timeval time_s;
-    struct timeval time_e;
-    struct RunTimeList_S *next;
-} RunTimeList_T;
-
 static char *g_program_name = NULL; /* program name */
 static int g_decompress = 0;        /* g_decompress (-d) */
-static int g_keep = 0;              /* keep (don't delete) input files */
+int g_keep = 0;                     /* keep (don't delete) input files */
 static QzSession_T g_sess;
 static QzSessionParams_T g_params_th = {(QzHuffmanHdr_T)0,};
 
 /* Estimate maximum data expansion after decompression */
-static const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
+const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-static char const g_short_opts[] = "A:H:L:C:r:o:O:dfhkV";
+static char const g_short_opts[] = "A:H:L:C:r:o:O:dfhkVR";
 static const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -99,13 +62,13 @@ static const struct option g_long_opts[] = {
     {"huffmanhdr", 1, 0, 'H'}, /* set huffman header type */
     {"level",      1, 0, 'L'}, /* set compression level */
     {"chunksz",    1, 0, 'C'}, /* set chunk size */
-    {"output",     1, 0, 'O'}, /* set output header format(gzip, gzipext)*/
+    {"output",     1, 0, 'O'}, /* set output header format(gzip, gzipext, 7z)*/
+    {"recursive",  0, 0, 'R'}, /* set recursive mode when compressing a
+                                  directory */
     { 0, 0, 0, 0 }
 };
 
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * 1024 * 1024 - 5 * 1024);
-static void processFile(QzSession_T *sess, const char *in_name,
-                        const char *out_name, int is_compress);
 
 static void tryHelp(void)
 {
@@ -118,7 +81,8 @@ static void help(void)
     static char const *const help_msg[] = {
         "Compress or uncompress FILEs (by default, compress FILES in-place).",
         "",
-        "Mandatory arguments to long options are mandatory for short options too.",
+        "Mandatory arguments to long options are mandatory for short options "
+        "too.",
         "",
         "  -A, --algorithm   set algorithm type",
         "  -d, --decompress  decompress",
@@ -129,8 +93,9 @@ static void help(void)
         "  -V, --version     display version number",
         "  -L, --level       set compression level",
         "  -C, --chunksz     set chunk size",
-        "  -O, --output      set output header format(gzip|gzipext)",
+        "  -O, --output      set output header format(gzip|gzipext|7z)",
         "  -r,               set max inflight request number",
+        "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
         "",
         "With no FILE, read standard input.",
@@ -156,8 +121,8 @@ void freeTimeList(RunTimeList_T *time_list)
     }
 }
 
-static void displayStats(RunTimeList_T *time_list,
-                         off_t insize, off_t outsize, int is_compress)
+void displayStats(RunTimeList_T *time_list,
+                  off_t insize, off_t outsize, int is_compress)
 {
     /* Calculate time taken (from begin to end) in micro seconds */
     unsigned long us_begin = 0;
@@ -166,23 +131,26 @@ static void displayStats(RunTimeList_T *time_list,
     RunTimeList_T *time_node = time_list;
 
     while (time_node) {
-        us_begin = time_node->time_s.tv_sec * 1000000 + time_node->time_s.tv_usec;
+        us_begin = time_node->time_s.tv_sec * 1000000 +
+                   time_node->time_s.tv_usec;
         us_end = time_node->time_e.tv_sec * 1000000 + time_node->time_e.tv_usec;
         us_diff += (us_end - us_begin);
         time_node = time_node->next;
     }
 
-    assert(0 != us_diff);
-    double size = (is_compress) ? insize : outsize;
-    double throughput = (size * CHAR_BIT) / us_diff; /* in MB (megabytes) */
-    double compressionRatio = ((double)insize) / ((double)outsize);
-    double spaceSavings = 1 - ((double)outsize) / ((double)insize);
+    if (insize) {
+        assert(0 != us_diff);
+        double size = (is_compress) ? insize : outsize;
+        double throughput = (size * CHAR_BIT) / us_diff; /* in MB (megabytes) */
+        double compressionRatio = ((double)insize) / ((double)outsize);
+        double spaceSavings = 1 - ((double)outsize) / ((double)insize);
 
-    QZ_PRINT("Time taken:    %9.3lf ms\n", us_diff / 1000);
-    QZ_PRINT("Throughput:    %9.3lf Mbit/s\n", throughput);
-    if (is_compress) {
-        QZ_PRINT("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
-        QZ_PRINT("Compression ratio: %.3lf : 1\n", compressionRatio);
+        QZ_PRINT("Time taken:    %9.3lf ms\n", us_diff / 1000);
+        QZ_PRINT("Throughput:    %9.3lf Mbit/s\n", throughput);
+        if (is_compress) {
+            QZ_PRINT("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
+            QZ_PRINT("Compression ratio: %.3lf : 1\n", compressionRatio);
+        }
     }
 }
 
@@ -249,7 +217,8 @@ static int doProcessBuffer(QzSession_T *sess,
             done = 1;
         }
         src += *src_len;
-        QZ_DEBUG("src_len is %u ,buf_remaining is %u\n", *src_len, buf_remaining);
+        QZ_DEBUG("src_len is %u ,buf_remaining is %u\n", *src_len,
+                 buf_remaining);
         *src_len = buf_remaining;
         dst_len = valid_dst_buf_len;
         bytes_written = 0;
@@ -300,17 +269,20 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                 perror(src_file_name);
                 exit(ERROR);
             }
-            src_file_size *= 512; /* size get via BLKGETSIZE is divided by 512 */
+            src_file_size *= 512;
+            /* size get via BLKGETSIZE is divided by 512 */
             close(src_fd);
         }
     } else {
         src_file_size = src_file_stat.st_size;
     }
-    src_buffer_size = (src_file_size > SRC_BUFF_LEN) ? SRC_BUFF_LEN : src_file_size;
+    src_buffer_size = (src_file_size > SRC_BUFF_LEN) ?
+                      SRC_BUFF_LEN : src_file_size;
     if (is_compress) {
         dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
     } else { /* decompress */
-        dst_buffer_size = src_buffer_size * g_bufsz_expansion_ratio[ratio_idx++];
+        dst_buffer_size = src_buffer_size *
+                          g_bufsz_expansion_ratio[ratio_idx++];
     }
 
     if (0 == src_file_size && is_compress) {
@@ -331,7 +303,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     do {
         if (read_more) {
             bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
-            QZ_PRINT("Reading input file %s (%u Bytes)\n", src_file_name, bytes_read);
+            QZ_PRINT("Reading input file %s (%u Bytes)\n", src_file_name,
+                     bytes_read);
         } else {
             bytes_read = file_remaining;
         }
@@ -359,10 +332,12 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                 }
 
                 free(dst_buffer);
-                dst_buffer_size = src_buffer_size * g_bufsz_expansion_ratio[ratio_idx++];
+                dst_buffer_size = src_buffer_size *
+                                  g_bufsz_expansion_ratio[ratio_idx++];
                 dst_buffer = malloc(dst_buffer_size);
                 if (NULL == dst_buffer) {
-                    QZ_ERROR("Fail to allocate destination buffer with size %u\n", dst_buffer_size);
+                    QZ_ERROR("Fail to allocate destination buffer with size "
+                             "%u\n", dst_buffer_size);
                     ret = ERROR;
                     goto exit;
                 }
@@ -430,6 +405,20 @@ int qatzipClose(QzSession_T *sess)
     return 0;
 }
 
+QzSuffix_T getSuffix(const char *filename)
+{
+
+    QzSuffix_T  s = E_SUFFIX_UNKNOWN;
+
+    size_t len = strlen(filename);
+    if (!strcmp(filename + (len - SFXLEN), SUFFIX_GZ)) {
+        s = E_SUFFIX_GZ;
+    } else if (!strcmp(filename + (len - SFXLEN), SUFFIX_7Z)) {
+        s = E_SUFFIX_7Z;
+    }
+    return s;
+}
+
 bool hasSuffix(const char *fname, int is_compress)
 {
     size_t len = strlen(fname);
@@ -438,10 +427,11 @@ bool hasSuffix(const char *fname, int is_compress)
         if (len < SFXLEN) {
             return 0;
         } else {
-            return !strcmp(fname + (len - SFXLEN), SUFFIX);
+            return !strcmp(fname + (len - SFXLEN), SUFFIX_GZ);
         }
     } else {
-        return len <= SFXLEN || !strcmp(fname + (len - SFXLEN), SUFFIX);
+        return len <= SFXLEN || !strcmp(fname + (len - SFXLEN), SUFFIX_GZ)
+               || !strcmp(fname + (len - SFXLEN), SUFFIX_7Z);
     }
 }
 
@@ -450,13 +440,17 @@ int makeOutName(const char *in_name, const char *out_name,
 {
     if (is_compress) {
         if (hasSuffix(in_name, is_compress)) {
-            QZ_ERROR("Warning: %s already has .gz suffix -- unchanged\n", in_name);
+            QZ_ERROR("Warning: %s already has .gz suffix -- unchanged\n",
+                     in_name);
             return -1;
         }
         /* add suffix */
-        snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name, SUFFIX);
+        snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
+                 SUFFIX_GZ);
     } else {
         if (!hasSuffix(in_name, is_compress)) {
+            QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz.\n",
+                     in_name);
             return -1;
         }
         /* remove suffix */
@@ -506,8 +500,8 @@ static void processDir(QzSession_T *sess, const char *in_name,
     }
 }
 
-static void processFile(QzSession_T *sess, const char *in_name,
-                        const char *out_name, int is_compress)
+void processFile(QzSession_T *sess, const char *in_name,
+                 const char *out_name, int is_compress)
 {
     int ret;
     struct stat fstat;
@@ -577,7 +571,8 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
     if (is_compress) {
         dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
     } else { /* decompress */
-        dst_buffer_size = src_buffer_size * g_bufsz_expansion_ratio[ratio_idx++];
+        dst_buffer_size = src_buffer_size *
+                          g_bufsz_expansion_ratio[ratio_idx++];
     }
 
     src_buffer = malloc(src_buffer_size);
@@ -588,8 +583,8 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
     read_more = 1;
     while (!feof(stdin)) {
         if (read_more) {
-            bytes_read = fread(src_buffer + pending_in, 1, src_buffer_size - pending_in,
-                               src_file);
+            bytes_read = fread(src_buffer + pending_in, 1,
+                               src_buffer_size - pending_in, src_file);
             if (0 == is_compress) {
                 bytes_read += pending_in;
                 bytes_input = bytes_read;
@@ -608,11 +603,12 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
             bytes_processed += bytes_read;
             if (0 != bytes_read) {
                 if (!is_compress && pending_in > 0) {
-                    memmove(src_buffer, src_buffer + bytes_read, src_buffer_size - bytes_read);
+                    memmove(src_buffer, src_buffer + bytes_read,
+                            src_buffer_size - bytes_read);
                 }
                 read_more = 1;
             } else if (QZ_BUF_ERROR == ret) {
-                //dest buffer not long enough
+                // dest buffer not long enough
                 if (ratio_limit == ratio_idx) {
                     QZ_ERROR("Could not expand more destination buffer\n");
                     ret = ERROR;
@@ -620,10 +616,12 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
                 }
 
                 free(dst_buffer);
-                dst_buffer_size = src_buffer_size * g_bufsz_expansion_ratio[ratio_idx++];
+                dst_buffer_size = src_buffer_size *
+                                  g_bufsz_expansion_ratio[ratio_idx++];
                 dst_buffer = malloc(dst_buffer_size);
                 if (NULL == dst_buffer) {
-                    QZ_ERROR("Fail to allocate destination buffer with size %u\n", dst_buffer_size);
+                    QZ_ERROR("Fail to allocate destination buffer with size "
+                             "%u\n", dst_buffer_size);
                     ret = ERROR;
                     goto exit;
                 }
@@ -655,11 +653,16 @@ exit:
 
 int main(int argc, char **argv)
 {
+    int ret = QZ_OK;
     int file_count; /* number of files to process */
     g_program_name = qzipBaseName(argv[0]);
     char *out_name = NULL;
     FILE *stream_out = NULL;
     int option_f = 0;
+    Qz7zItemList_T *the_list;
+    int is_good_7z = 0;
+    int is_dir_param = 0;
+    int recursive_mode = 0;
 
     if (qzGetDefaults(&g_params_th) != QZ_OK)
         return -1;
@@ -688,6 +691,9 @@ int main(int argc, char **argv)
             version();
             exit(OK);
             break;
+        case 'R':
+            recursive_mode = 1;
+            break;
         case 'A':
             if (strcmp(optarg, "deflate") == 0) {
                 g_params_th.comp_algorithm = QZ_DEFLATE;
@@ -711,6 +717,8 @@ int main(int argc, char **argv)
                 g_params_th.data_fmt = QZ_DEFLATE_GZIP;
             } else if (strcmp(optarg, "gzipext") == 0) {
                 g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
+            } else if (strcmp(optarg, "7z") == 0) {
+                g_params_th.data_fmt = QZ_DEFLATE_RAW;
             } else {
                 QZ_ERROR("Error gzip header format arg: %s\n", optarg);
                 return -1;
@@ -728,7 +736,8 @@ int main(int argc, char **argv)
             }
             break;
         case 'C':
-            g_params_th.hw_buff_sz = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            g_params_th.hw_buff_sz =
+                GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (*stop != '\0' || ERANGE == errno ||
                 g_params_th.hw_buff_sz > USDM_ALLOC_MAX_SZ / 2) {
                 printf("Error chunk size arg: %s\n", optarg);
@@ -736,8 +745,10 @@ int main(int argc, char **argv)
             }
             break;
         case 'r':
-            g_params_th.req_cnt_thrshold = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
-            if (*stop != '\0' || errno || g_params_th.req_cnt_thrshold > NUM_BUFF) {
+            g_params_th.req_cnt_thrshold =
+                GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            if (*stop != '\0' || errno ||
+                g_params_th.req_cnt_thrshold > NUM_BUFF) {
                 printf("Error request count threshold: %s\n", optarg);
                 return -1;
             }
@@ -766,17 +777,84 @@ int main(int argc, char **argv)
         exit(ERROR);
     }
     if (0 == file_count) {
-        if (isatty(fileno((FILE *)stdout)) && 0 == option_f && 0 == g_decompress) {
-            printf("qzip: compressed data not written to a terminal. Use -f to force compression.\n");
+        if (isatty(fileno((FILE *)stdout)) && 0 == option_f &&
+            0 == g_decompress) {
+            printf("qzip: compressed data not written to a terminal. "
+                   "Use -f to force compression.\n");
             printf("For help, type: qzip -h\n");
         } else {
             stream_out = stdout;
             stdout = freopen(NULL, "w", stdout);
             processStream(&g_sess, stdin, stream_out, g_decompress == 0);
         }
-    } else {
+    } else if (g_params_th.data_fmt == QZ_DEFLATE_RAW) { //compress into 7z
+        QZ_DEBUG("going to compress files into 7z archive ...\n");
+        if (qatzipSetup(&g_sess, &g_params_th)) {
+            fprintf(stderr, "qatzipSetup session failed\n");
+            exit(ERROR);
+        }
+
+        the_list = processInputParams(file_count, argv);
+        if (!the_list) {
+            exit(ERROR);
+        }
+        ret = qz7zCompress(&g_sess, the_list, out_name);
+        qz7zItemListDestroy(the_list);
+    } else {  // decompress from 7z; compress into gz; decompress from gz
         while (optind < argc) {
-            processFile(&g_sess, argv[optind++], out_name, g_decompress == 0);
+
+            QzSuffix_T  suffix = getSuffix(argv[optind]);
+
+            is_dir_param = checkDirectory(argv[optind]);
+
+            if (g_decompress && !is_dir_param &&
+                !hasSuffix(argv[optind], 0/* decompress */)) {
+                QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz.\n",
+                         argv[optind]);
+                exit(ERROR);
+            }
+
+            if (g_decompress) {
+
+                if (!recursive_mode)  {
+                    if (suffix == E_SUFFIX_7Z) {
+
+                        is_good_7z = check7zArchive(argv[optind]);
+                        if (is_good_7z < 0) {
+                            exit(ERROR);
+                        }
+
+                        if (file_count > 1) {
+                            fprintf(stderr, "only support decompressing ONE 7z "
+                                    "archive for ONE command!\n");
+                            exit(ERROR);
+                        }
+
+                        QZ_DEBUG(" this is a 7z archive, "
+                                 "going to decompress ... \n");
+                        g_params_th.data_fmt = QZ_DEFLATE_RAW;
+                        if (qatzipSetup(&g_sess, &g_params_th)) {
+                            fprintf(stderr, "qatzipSetup session  failed\n");
+                            exit(ERROR);
+                        }
+                        ret = qz7zDecompress(&g_sess, argv[optind++]);
+                    } else if (suffix == E_SUFFIX_GZ) {
+                        processFile(&g_sess, argv[optind++], out_name,
+                                    g_decompress == 0);
+                    } else {
+                        QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: "
+                                 "7z/gz.\n", argv[optind]);
+                        exit(ERROR);
+                    }
+                }  else {
+                    processFile(&g_sess, argv[optind++], out_name,
+                                g_decompress == 0);
+                }
+
+            } else { // compress
+                processFile(&g_sess, argv[optind++], out_name,
+                            g_decompress == 0);
+            }
         }
     }
 
@@ -784,5 +862,5 @@ int main(int argc, char **argv)
         exit(ERROR);
     }
 
-    return 0;
+    return ret;
 }
