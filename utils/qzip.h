@@ -97,12 +97,17 @@
 #define PROPERTY_ID_CTIME                          0x12
 #define PROPERTY_ID_ATIME                          0x13
 #define PROPERTY_ID_MTIME                          0x14
-#define PROPERTY_ID_WINATTRIBUTES                  0x15
+/* Support windows(low 16 bit) and unix(high 16 bit) */
+#define PROPERTY_ID_ATTRIBUTES                     0x15
 #define PROPERTY_ID_COMMENT                        0x16
 #define PROPERTY_ID_ENCODED_HEADER                 0x17
 #define PROPERTY_ID_STARTPOS                       0x18
 #define PROPERTY_ID_DUMMY                          0x19
 #define PROPERTY_CONTENT_DUMMY                     0x00
+
+#define FLAG_ATTR_DEFINED_SET                      0x01
+#define FLAG_ATTR_DEFINED_UNSET                    0x00
+#define FLAG_ATTR_EXTERNAL_UNSET                   0x00
 
 /* 7z format version */
 #define G_7ZHEADER_MAJOR_VERSION                   0x00
@@ -113,9 +118,9 @@
 #define QZ_FILELIST_DEFAULT_NUM_PER_NODE           1000
 
 /* archiveproperties develop ID */
-#define QZ7Z_DEVELOP_PREFIX                        0x3ful
-#define QZ7Z_DEVELOP_ID                            0x514154377aul
-#define QZ7Z_DEVELOP_SUBID                         0x0a01ul
+#define QZ7Z_DEVELOP_PREFIX             0x3ful
+#define QZ7Z_DEVELOP_ID                 ('Q'*1ul<<32|'A'<<24|'T'<<16|'7'<<8|'z')
+#define QZ7Z_DEVELOP_SUBID              0x0a01ul
 
 
 /* return codes from qzip */
@@ -146,11 +151,11 @@
 #define QZ7Z_ERR_HEADER_CRC           -219
 #define QZ7Z_ERR_TIMES                -220
 #define QZ7Z_ERR_SIG_HEADER_BROKEN    -221
+#define QZ7Z_ERR_READLINK             -222
 
 #define MAX_PATH_LEN   1024 /* max pathname length */
-#define SUFFIX_GZ ".gz"
-#define SUFFIX_7Z ".7z"
-#define SFXLEN 3
+#define SUFFIX_GZ      ".gz"
+#define SUFFIX_7Z      ".7z"
 
 typedef enum QzSuffix_E {
     E_SUFFIX_GZ,
@@ -278,8 +283,9 @@ typedef struct Qz7zFileItem_S {
     *fileName;   /* dynamic allocated memory for filename(pathname) */
     unsigned char   isDir;       /* 1byte */
     unsigned char   isEmpty;     /* 1byte */  /* is empty file */
+    unsigned char   isSymLink;   /* 1byte */  /* is symbol link */
     unsigned char   isAnti;      /* 1byte */  /* is anti file(on windows) */
-    unsigned char   reserved[5]; /* 5byte */
+    unsigned char   reserved[4]; /* 4byte */
     uint32_t        nameLength;  /* memory allocated length */
     size_t          size;        /* for file it's file's length*/
     uint32_t        crc;
@@ -593,7 +599,7 @@ Qz7zSignatureHeader_T *generateSignatureHeader(void);
 Qz7zEndHeader_T *generateEndHeader(Qz7zItemList_T *the_list,
                                    size_t compressed_size);
 
-void qzFreeEndHeader(Qz7zEndHeader_T *eheader);
+void qzFreeEndHeader(Qz7zEndHeader_T *eheader, int is_compress);
 
 void qzFreePropertyInfo(Qz7zArchiveProperty_T *info);
 void qzFreeStreamsInfo(Qz7zStreamsInfo_T *info);

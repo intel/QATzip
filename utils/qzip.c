@@ -407,39 +407,36 @@ int qatzipClose(QzSession_T *sess)
 
 QzSuffix_T getSuffix(const char *filename)
 {
-
     QzSuffix_T  s = E_SUFFIX_UNKNOWN;
-
     size_t len = strlen(filename);
-    if (!strcmp(filename + (len - SFXLEN), SUFFIX_GZ)) {
+    if (len >= strlen(SUFFIX_GZ) &&
+        !strcmp(filename + (len - strlen(SUFFIX_GZ)), SUFFIX_GZ)) {
         s = E_SUFFIX_GZ;
-    } else if (!strcmp(filename + (len - SFXLEN), SUFFIX_7Z)) {
+    } else if (len >= strlen(SUFFIX_7Z) &&
+               !strcmp(filename + (len - strlen(SUFFIX_7Z)), SUFFIX_7Z)) {
         s = E_SUFFIX_7Z;
     }
     return s;
 }
 
-bool hasSuffix(const char *fname, int is_compress)
+bool hasSuffix(const char *fname)
 {
     size_t len = strlen(fname);
-
-    if (is_compress) {
-        if (len < SFXLEN) {
-            return 0;
-        } else {
-            return !strcmp(fname + (len - SFXLEN), SUFFIX_GZ);
-        }
-    } else {
-        return len <= SFXLEN || !strcmp(fname + (len - SFXLEN), SUFFIX_GZ)
-               || !strcmp(fname + (len - SFXLEN), SUFFIX_7Z);
+    if (len >= strlen(SUFFIX_GZ) &&
+        !strcmp(fname + (len - strlen(SUFFIX_GZ)), SUFFIX_GZ)) {
+        return 1;
+    } else if (len >= strlen(SUFFIX_7Z) &&
+               !strcmp(fname + (len - strlen(SUFFIX_7Z)), SUFFIX_7Z)) {
+        return 1;
     }
+    return 0;
 }
 
 int makeOutName(const char *in_name, const char *out_name,
                 char *oname, int is_compress)
 {
     if (is_compress) {
-        if (hasSuffix(in_name, is_compress)) {
+        if (hasSuffix(in_name)) {
             QZ_ERROR("Warning: %s already has .gz suffix -- unchanged\n",
                      in_name);
             return -1;
@@ -448,7 +445,7 @@ int makeOutName(const char *in_name, const char *out_name,
         snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                  SUFFIX_GZ);
     } else {
-        if (!hasSuffix(in_name, is_compress)) {
+        if (!hasSuffix(in_name)) {
             QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz.\n",
                      in_name);
             return -1;
@@ -456,7 +453,7 @@ int makeOutName(const char *in_name, const char *out_name,
         /* remove suffix */
         snprintf(oname, MAX_PATH_LEN, "%s", out_name ? out_name : in_name);
         if (NULL == out_name) {
-            oname[strlen(in_name) - SFXLEN] = '\0';
+            oname[strlen(in_name) - strlen(SUFFIX_GZ)] = '\0';
         }
     }
 
@@ -807,8 +804,7 @@ int main(int argc, char **argv)
 
             is_dir_param = checkDirectory(argv[optind]);
 
-            if (g_decompress && !is_dir_param &&
-                !hasSuffix(argv[optind], 0/* decompress */)) {
+            if (g_decompress && !is_dir_param && !hasSuffix(argv[optind])) {
                 QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz.\n",
                          argv[optind]);
                 exit(ERROR);

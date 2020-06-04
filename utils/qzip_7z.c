@@ -49,7 +49,7 @@ static const char g_deflate_codecId[] = {
 };
 
 static const char g_property_data[] = {
-    0x51, 0x41, 0x54
+    'Q', 'A', 'T'
 };
 
 static uint64_t const extra_byte_boundary[] = {
@@ -406,9 +406,11 @@ static int doDecompressBuffer(QzSession_T *sess,
     int ret = QZ_FAIL;
     unsigned int done = 0;
     unsigned int buf_processed = 0;
-    unsigned int buf_remaining = *src_len;
+    unsigned int src_remain = *src_len;
     unsigned int output_len = 0;
     RunTimeList_T *time_node = time_list;
+    unsigned int src_remain_output = *dst_len;
+    unsigned int total = *dst_len;
 
     while (time_node->next) {
         time_node = time_node->next;
@@ -424,7 +426,7 @@ static int doDecompressBuffer(QzSession_T *sess,
         gettimeofday(&run_time->time_s, NULL);
 
         /* do actual work */
-        ret = qzDecompress(sess, src, src_len, dst, dst_len);
+        ret = qzDecompress(sess, src, src_len, dst, &src_remain_output);
 
         if (QZ_DATA_ERROR == ret ||
             (QZ_BUF_ERROR == ret && 0 == *src_len)) {
@@ -441,16 +443,20 @@ static int doDecompressBuffer(QzSession_T *sess,
 
         gettimeofday(&run_time->time_e, NULL);
 
+        *dst_len = src_remain_output;
         buf_processed += *src_len;
-        buf_remaining -= *src_len;
+        src_remain -= *src_len;
         output_len += *dst_len;
-        if (0 == buf_remaining) {
+        src_remain_output = total - output_len;
+        if (0 == src_remain) {
+            done = 1;
+        }
+        if (0 == src_remain_output) {
             done = 1;
         }
         src += *src_len;
-        QZ_DEBUG("src_len is %u ,buf_remaining is %u\n", *src_len,
-                 buf_remaining);
-        *src_len = buf_remaining;
+        QZ_DEBUG("src_len is %u ,src_remain is %u\n", *src_len, src_remain);
+        *src_len = src_remain;
     }
 
     *src_len = buf_processed;
@@ -510,10 +516,10 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
 
         for (int i = 0; i < non_empty_number; ++i) {
 
-            Qz7zFileItem_T *cur_file = list->items[1]->next->items[i];
+            Qz7zFileItem_T *cur_file = qzListGet(list->items[1], i);
             src_file_name = cur_file->fileName;
 
-            ret = stat(src_file_name, &src_file_stat);
+            ret = lstat(src_file_name, &src_file_stat);
             if (ret) {
                 QZ_ERROR("stat(): failed\n");
                 return QZ7Z_ERR_STAT;
@@ -566,10 +572,17 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                 is_last = (i == non_empty_number - 1) && (n_part_i++ == n_part);
 
                 if (read_more) {
-                    bytes_read = fread(src_buffer, 1, src_buffer_size,
-                                       src_file);
-                    QZ_PRINT("Reading input file %s (%u Bytes)\n",
-                             src_file_name, bytes_read);
+                    if (cur_file->isSymLink) {
+                        int size;
+                        size = readlink(cur_file->fileName, (char *)src_buffer,
+                                        src_buffer_size);
+                        bytes_read = size;
+                    } else {
+                        bytes_read = fread(src_buffer, 1, src_buffer_size,
+                                           src_file);
+                        QZ_PRINT("Reading input file %s (%u Bytes)\n",
+                                 src_file_name, bytes_read);
+                    }
                 } else {
                     bytes_read = file_remaining;
                 }
@@ -620,7 +633,11 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                     ret = ERROR;
                     goto exit;
                 } else {
-                    read_more = 1;
+                    if (cur_file->isSymLink) {
+                        read_more = 0;
+                    } else {
+                        read_more = 1;
+                    }
                 }
 
                 file_remaining -= bytes_read;
@@ -674,7 +691,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
 exit:
     freeTimeList(time_list_head);
     free(sheader);
-    qzFreeEndHeader(eheader);
+    qzFreeEndHeader(eheader, 1);
     fclose(dst_file);
 
     if (!g_keep && OK == ret) {
@@ -1036,6 +1053,40 @@ int readTimes(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
     return QZ7Z_OK;
 }
 
+int readAttributes(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
+{
+    unsigned char c;
+    uint64_t u64;
+    uint32_t attr;
+    size_t      nr;
+
+    u64 = getU64FromBytes(fp); // size
+    (void)u64;
+
+    c = readByte(fp); // AllAreDefined
+    if (c != 1) {
+        QZ_ERROR("Resolve Attributes: AllAreDefined is not 1. Exit. "
+                 "c = %d\n", c);
+        return QZ7Z_ERR_NOT_EXPECTED_CHAR;
+    }
+
+    c = readByte(fp); // External
+    if (c != 0) {
+        QZ_ERROR("Resolve Attributes: External is not 0. Exit. c = %d\n", c);
+        return QZ7Z_ERR_NOT_EXPECTED_CHAR;
+    }
+
+    for (int i = 0; i < num; ++i) {
+        nr = fread(&attr, sizeof(uint32_t), 1, fp);
+        if (nr < 1) {
+            QZ_ERROR("readAttributes: fread error\n");
+            return QZ7Z_ERR_READ_LESS;
+        }
+        (p + i)->attribute = attr;
+    }
+    return QZ7Z_OK;
+}
+
 Qz7zFilesInfo_Dec_T *qz7zResolveFilesInfo(FILE *fp)
 {
     int n;
@@ -1051,6 +1102,7 @@ Qz7zFilesInfo_Dec_T *qz7zResolveFilesInfo(FILE *fp)
 
     Qz7zFilesInfo_Dec_T *files = malloc(sizeof(Qz7zFilesInfo_Dec_T));
     CHECK_ALLOC_RETURN_VALUE(files)
+    memset(files, 0, sizeof(Qz7zFilesInfo_Dec_T));
 
     total_num = getU64FromBytes(fp);
     Qz7zFileItem_T *p = (Qz7zFileItem_T *)malloc(total_num * sizeof(
@@ -1121,14 +1173,8 @@ Qz7zFilesInfo_Dec_T *qz7zResolveFilesInfo(FILE *fp)
             readTimes(p, total_num, fp);
             break;
 
-        case PROPERTY_ID_WINATTRIBUTES:
-            u64 = getU64FromBytes(fp); // size
-            c = readByte(fp); // AllAreDefined
-            c = readByte(fp); // External
-
-            readNByte(u64 - 2, fp);
-            //FIXME: save atttributes
-            QZ_DEBUG("read n bytes to skip attribute\n");
+        case PROPERTY_ID_ATTRIBUTES:
+            if (readAttributes(p, total_num, fp) < 0) return NULL;
             break;
 
         case PROPERTY_ID_DUMMY:
@@ -1217,7 +1263,9 @@ Qz7zEndHeader_T *qz7zResolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader)
     }
 
     if (!has_archive_property) {
-        QZ_ERROR("This archive has no 'QAT7z' archive property.\n");
+        QZ_ERROR("ERROR: property 'QAT7z' not found\n");
+        QZ_ERROR("This archive is not compressed by QAT,");
+        QZ_ERROR("QAT only support 7z archive compressed by QAT\n");
         return NULL;
     }
 
@@ -1393,13 +1441,34 @@ void qzFreeFilesDecInfo(Qz7zFilesInfo_Dec_T *info)
     }
 }
 
-void qzFreeEndHeader(Qz7zEndHeader_T *h)
+void qzFreeEndHeader(Qz7zEndHeader_T *h, int is_compress)
 {
     qzFreePropertyInfo(h->propertyInfo);
     qzFreeStreamsInfo(h->streamsInfo);
-    qzFreeFilesInfo(h->filesInfo);
-    qzFreeFilesDecInfo(h->filesInfo_Dec);
+    if (is_compress) {
+        qzFreeFilesInfo(h->filesInfo);
+    } else {
+        qzFreeFilesDecInfo(h->filesInfo_Dec);
+    }
     free(h);
+}
+
+static int convertToSymlink(const char *name)
+{
+    FILE *file = fopen(name, "rb");
+    if (file) {
+        char buf[1000 + 1];
+        char *ret = fgets(buf, sizeof(buf) - 1, file);
+        fclose(file);
+        if (ret) {
+            int ir = unlink(name);
+            if (ir == 0) {
+                ir = symlink(buf, name);
+            }
+            return ir;
+        }
+    }
+    return -1;
 }
 
 static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
@@ -1411,11 +1480,11 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     unsigned int saved_dst_buffer_size = 0;
     off_t src_file_size = 0, dst_file_size = 0, file_remaining = 0;
     unsigned char *src_buffer = NULL;
+    unsigned char *src_buffer_orig = NULL;
     unsigned char *dst_buffer = NULL;
     FILE *src_file = NULL;
     FILE *dst_file = NULL;
     unsigned int bytes_read = 0;
-    unsigned long bytes_processed = 0;
     unsigned int ratio_idx = 0;
     const unsigned int ratio_limit =
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
@@ -1467,25 +1536,6 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     }
     fclose(src_file);
 
-    // merge
-    uint64_t folder_num = eheader->streamsInfo->codersInfo->numFolders;
-    Qz7zFileItem_T *file_items = eheader->filesInfo_Dec->items +
-                                 eheader->filesInfo_Dec->dir_num;
-    uint64_t g_i = 0; // index for global files
-
-    for (int i = 0; i < folder_num; ++i) {
-        uint64_t num_files_in_folder =
-            eheader->streamsInfo->substreamsInfo->numUnPackStreams[i];
-        uint64_t total_unPack_size =
-            eheader->streamsInfo->codersInfo->unPackSize[i];
-        for (int j = 0; j < num_files_in_folder - 1; ++g_i, ++j) {
-            (file_items + g_i)->size =
-                eheader->streamsInfo->substreamsInfo->unPackSize[j];
-            total_unPack_size -= (file_items + g_i)->size;
-        }
-        (file_items + g_i)->size = total_unPack_size;
-    }
-
     // decode the dir
     Qz7zFileItem_T *p = eheader->filesInfo_Dec->items;
     uint64_t dir_num = eheader->filesInfo_Dec->dir_num;
@@ -1493,8 +1543,27 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
     decompressEmptyfilesAndDirectories(eheader->filesInfo_Dec);
 
+    uint64_t file_index = 0;
     // decode the content
     if (eheader->streamsInfo) {
+
+        uint64_t folder_num = eheader->streamsInfo->codersInfo->numFolders;
+        Qz7zFileItem_T *file_items = eheader->filesInfo_Dec->items +
+                                     eheader->filesInfo_Dec->dir_num;
+
+        for (int i = 0; i < folder_num; ++i) {
+            uint64_t num_files_in_folder =
+                eheader->streamsInfo->substreamsInfo->numUnPackStreams[i];
+            uint64_t total_unPack_size =
+                eheader->streamsInfo->codersInfo->unPackSize[i];
+            for (int j = 0; j < num_files_in_folder - 1; ++file_index, ++j) {
+                (file_items + file_index)->size =
+                    eheader->streamsInfo->substreamsInfo->unPackSize[j];
+                total_unPack_size -= (file_items + file_index)->size;
+            }
+            (file_items + file_index)->size = total_unPack_size;
+        }
+
         ret = stat(src_file_name, &src_file_stat);
         if (ret) {
             perror(src_file_name);
@@ -1530,6 +1599,7 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
         src_buffer = malloc(src_buffer_size);
         CHECK_ALLOC_RETURN_VALUE(src_buffer)
+        src_buffer_orig = src_buffer;
         dst_buffer = malloc(dst_buffer_size);
         CHECK_ALLOC_RETURN_VALUE(dst_buffer)
         src_file = fopen(src_file_name, "r");
@@ -1554,11 +1624,13 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
         off_t          cur_offset;
         cur_offset = 0;
         int need_created = 1;
+        int file_read_processed_size = 0;
 
         do {
             is_last = (n_part_i++ == n_part);
 
             if (read_more) {
+                src_buffer = src_buffer_orig;
                 bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
                 QZ_PRINT("Reading input file %s (%u Bytes)\n", src_file_name,
                          bytes_read);
@@ -1570,94 +1642,119 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
             if (n_part > 1 && is_last) bytes_read -= sheader->nextHeaderSize;
 
-            ret = doDecompressBuffer(sess, src_buffer, &bytes_read, dst_buffer,
-                                     &dst_buffer_size, time_list_head, is_last);
+            int buffer_remaining = bytes_read;
+            do {
+                bytes_read = buffer_remaining;
+                ret = doDecompressBuffer(sess, src_buffer, &bytes_read,
+                                         dst_buffer, &dst_buffer_size,
+                                         time_list_head, is_last);
 
-            if (QZ_DATA_ERROR == ret || QZ_BUF_ERROR == ret) {
-                bytes_processed += bytes_read;
-                if (0 != bytes_read) {
-                    if (-1 == fseek(src_file, bytes_processed, SEEK_SET)) {
+                file_read_processed_size += bytes_read;
+                src_buffer += bytes_read;
+                buffer_remaining -= bytes_read;
+                if (QZ_DATA_ERROR == ret || QZ_BUF_ERROR == ret) {
+                    if (0 != bytes_read) {
+                        if (-1 == fseek(src_file, file_read_processed_size,
+                                        SEEK_SET)) {
+                            ret = ERROR;
+                            goto exit;
+                        }
+                        read_more = 1;
+                    } else if (QZ_BUF_ERROR == ret) {
+                        //dest buffer not long enough
+                        if (ratio_limit == ratio_idx) {
+                            QZ_ERROR("Could not expand more"
+                                     "destination buffer\n");
+                            ret = ERROR;
+                            goto exit;
+                        }
+
+                        free(dst_buffer);
+                        dst_buffer_size = src_buffer_size *
+                                          g_bufsz_expansion_ratio[ratio_idx++];
+                        dst_buffer = malloc(dst_buffer_size);
+                        if (NULL == dst_buffer) {
+                            QZ_ERROR("Fail to allocate destination buffer "
+                                     "with size %u\n", dst_buffer_size);
+                            ret = ERROR;
+                            goto exit;
+                        }
+
+                        read_more = 0;
+                    } else {
+                        // corrupt data
                         ret = ERROR;
                         goto exit;
                     }
-                    read_more = 1;
-                } else if (QZ_BUF_ERROR == ret) {
-                    //dest buffer not long enough
-                    if (ratio_limit == ratio_idx) {
-                        QZ_ERROR("Could not expand more destination buffer\n");
-                        ret = ERROR;
-                        goto exit;
-                    }
-
-                    free(dst_buffer);
-                    dst_buffer_size = src_buffer_size *
-                                      g_bufsz_expansion_ratio[ratio_idx++];
-                    dst_buffer = malloc(dst_buffer_size);
-                    if (NULL == dst_buffer) {
-                        QZ_ERROR("Fail to allocate destination buffer with "
-                                 "size %u\n", dst_buffer_size);
-                        ret = ERROR;
-                        goto exit;
-                    }
-
-                    read_more = 0;
-                } else {
-                    // corrupt data
+                } else if (QZ_OK != ret) {
+                    QZ_ERROR("Process file error: %d\n", ret);
                     ret = ERROR;
                     goto exit;
-                }
-            } else if (QZ_OK != ret) {
-                QZ_ERROR("Process file error: %d\n", ret);
-                ret = ERROR;
-                goto exit;
-            } else {
-                read_more = 1;
+                } else {
+                    read_more = 1;
 
-                unsigned int    dst_left;
-                unsigned char *dst_write;
-                size_t         n_written;
+                    unsigned int    dst_left;
+                    unsigned char *dst_write;
+                    size_t         n_written;
+                    struct stat    stat_info;
 
-                dst_write = dst_buffer;
-                dst_left = dst_buffer_size;
+                    dst_write = dst_buffer;
+                    dst_left = dst_buffer_size;
+                    dst_file_size += dst_buffer_size;
 
-                while (dst_left) {
+                    while (dst_left) {
 
-                    if (need_created) {
-                        dst_file = fopen((p + dir_num + i)->fileName, "w");
-                        fseek(dst_file, 0, SEEK_END);
-                        printf("open %s .. \n", (p + dir_num + i)->fileName);
-                    }
+                        if (need_created) {
+                            dst_file = fopen((p + dir_num + i)->fileName, "w");
+                            fseek(dst_file, 0, SEEK_END);
+                            QZ_PRINT("Create %s ...\n",
+                                     (p + dir_num + i)->fileName);
+                            lstat((p + dir_num + i)->fileName, &stat_info);
+                            stat_info.st_mode =
+                                ((p + dir_num + i)->attribute) >> 16;
+                        }
 
-                    if ((p + dir_num + i)->size - cur_offset <= dst_left) {
+                        if ((p + dir_num + i)->size - cur_offset <= dst_left) {
 
-                        if (cur_offset) {
                             n_written = fwrite(dst_write, 1,
                                                (p + dir_num + i)->size -
-                                               cur_offset, dst_file);
-                            cur_offset = 0;
-                            need_created = 1;
-                        } else {
-                            n_written = fwrite(dst_write, 1,
-                                               (p + dir_num + i)->size,
+                                               cur_offset,
                                                dst_file);
-                        }
-                        fclose(dst_file);
-                        dst_left -= n_written;
-                        dst_write += n_written;
-                        ++i;
-                    } else {
-                        need_created = 0;
-                        n_written = fwrite(dst_write, 1, dst_left, dst_file);
-                        dst_write = dst_buffer; /* points to the start of the
-                                                dest buffer to read more data */
-                        cur_offset += dst_left;
-                        break;
-                    }
-                }// end while
-                dst_buffer_size = saved_dst_buffer_size;
-            }
 
-            file_remaining -= bytes_read;
+                            if (n_written == (p + dir_num + i)->size -
+                                cur_offset) {
+                                fclose(dst_file);
+                                ++i;
+                                cur_offset = 0;
+                                need_created = 1;
+
+                                if (S_ISLNK(stat_info.st_mode)) {
+                                    convertToSymlink((p + dir_num + i)->
+                                                     fileName);
+                                }
+                            } else {
+                                cur_offset += n_written;
+                                need_created = 0;
+                            }
+                            dst_left -= n_written;
+                            dst_write += n_written;
+
+                        } else {
+                            need_created = 0;
+                            n_written = fwrite(dst_write, 1, dst_left,
+                                               dst_file);
+                            dst_write = dst_buffer; /* points to the start of
+                                                     the dest buffer to read
+                                                     more data */
+                            cur_offset += dst_left;
+                            break;
+                        }
+                    }// end while
+                    dst_buffer_size = saved_dst_buffer_size;
+                }
+            } while (buffer_remaining);
+
+            file_remaining -= file_read_processed_size;
         } while (file_remaining > 0);
 
     } else {
@@ -1673,16 +1770,22 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
         tb.modtime = p[i].mtime;
         utime(p[i].fileName, &tb);
     }
+
+    // restore the attribute
+    for (int i = 0; i < dir_num + fil_num; ++i) {
+        chmod(p[i].fileName, p->attribute >> 16);
+    }
+
     displayStats(time_list_head, src_file_size, dst_file_size,
                  0/* is_compress */);
 exit:
     freeTimeList(time_list_head);
     free(sheader);
-    qzFreeEndHeader(eheader);
+    qzFreeEndHeader(eheader, 0);
 
     if (eheader->streamsInfo) {
         fclose(src_file);
-        free(src_buffer);
+        free(src_buffer_orig);
         free(dst_buffer);
     }
     if (!g_keep && OK == ret) {
@@ -1788,6 +1891,27 @@ void qz7zItemListDestroy(Qz7zItemList_T *p)
     free(p);
 }
 
+uint32_t calculateSymCRC(char *filename, size_t n)
+{
+    uint32_t   crc = 0;
+    char       *buf;
+    buf = malloc(PATH_MAX + 1);
+    if (!buf) {
+        QZ_ERROR("oom\n");
+        return 0;
+    }
+
+    ssize_t size = readlink(filename, buf, PATH_MAX);
+    if ((unsigned int)size != (unsigned int)n) {
+        QZ_ERROR("readlink error\n");
+        return 0;
+    }
+    crc = crc32(crc, (unsigned char *)buf, n);
+
+    free(buf);
+    return crc;
+}
+
 Qz7zFileItem_T *qzFileItemCreate(char *f)
 {
     Qz7zFileItem_T *p = malloc(sizeof(Qz7zFileItem_T));
@@ -1805,11 +1929,15 @@ Qz7zFileItem_T *qzFileItemCreate(char *f)
         strcpy(p->fileName, f);
 
         struct stat buf;
-        if (stat(p->fileName, &buf) < 0) {
+        if (lstat(p->fileName, &buf) < 0) {
             QZ_ERROR("stat func error\n");
             return NULL;
         }
-        if (S_ISDIR(buf.st_mode)) {
+        if (S_ISLNK(buf.st_mode)) {
+            p->isSymLink = 1;
+            p->crc = calculateSymCRC(p->fileName, buf.st_size);
+            p->size = buf.st_size;
+        } else if (S_ISDIR(buf.st_mode)) {
             p->isDir = 1;
         } else {
             p->size = buf.st_size;
@@ -1820,6 +1948,8 @@ Qz7zFileItem_T *qzFileItemCreate(char *f)
         p->mtime_nano = buf.st_mtim.tv_nsec;
         p->atime = buf.st_atime;
         p->atime_nano = buf.st_atim.tv_nsec;
+        //p-7zip use 0x80000 as a unix file flag
+        p->attribute = buf.st_mode << 16 | (0x8000);
     }
     return p;
 }
@@ -1827,7 +1957,6 @@ Qz7zFileItem_T *qzFileItemCreate(char *f)
 #define QZ7Z_LIST_DEFAULT_NUM_PER_NODE  1000
 void qzListAdd(QzListHead_T *head, void **fi)
 {
-
     // let cur points to the first node
     QzListNode_T *cur = head->next;
     QzListNode_T *last = cur;
@@ -2079,6 +2208,7 @@ static Qz7zFilesInfo_T *generateFilesInfo(Qz7zItemList_T *the_list)
 {
     Qz7zFilesInfo_T *filesInfo = malloc(sizeof(Qz7zFilesInfo_T));
     CHECK_ALLOC_RETURN_VALUE(filesInfo)
+    memset(filesInfo, 0, sizeof(Qz7zFilesInfo_T));
 
     filesInfo->num = the_list->items[0]->total + the_list->items[1]->total;
     filesInfo->head[0] = the_list->items[0];
@@ -2424,6 +2554,31 @@ unsigned char *genNamesPart(QzListHead_T *head_dir, QzListHead_T *head_file,
     return buf;
 }
 
+uint32_t *genAttributes(QzListHead_T *head_dir, QzListHead_T *head_file)
+{
+    int i;
+    int k;
+    uint64_t n_dir = head_dir->total;
+    uint64_t n_file = head_file->total;
+    Qz7zFileItem_T *p;
+    uint32_t *buf;
+
+    buf = malloc(sizeof(((Qz7zFileItem_T *)0)->attribute) * (n_dir + n_file));
+    CHECK_ALLOC_RETURN_VALUE(buf)
+
+    k = 0;
+    for (i = 0; i < n_dir; ++i) {
+        p = (Qz7zFileItem_T *)qzListGet(head_dir, i);
+        buf[k++] = p->attribute;
+    }
+    for (i = 0; i < n_file; ++i) {
+        p = (Qz7zFileItem_T *)qzListGet(head_file, i);
+        buf[k++] = p->attribute;
+    }
+
+    return buf;
+}
+
 static int checkZerobyteFiles(Qz7zFilesInfo_T *files)
 {
     Qz7zFileItem_T *pfile;
@@ -2445,6 +2600,7 @@ size_t qz7zWriteFilesInfo(Qz7zFilesInfo_T *files, FILE *fp, uint32_t *crc)
     unsigned char *p;
     uint64_t total_size = 0;
     unsigned char *buf;
+    uint32_t *attributes;
     int has_zerobyte_file = 0;
 
     total_size += writeTag(PROPERTY_ID_FILESINFO, fp, crc);
@@ -2507,6 +2663,17 @@ size_t qz7zWriteFilesInfo(Qz7zFilesInfo_T *files, FILE *fp, uint32_t *crc)
         total_size += writeTime(win_time.low, fp, crc);
         total_size += writeTime(win_time.high, fp, crc);
     }
+
+    total_size += writeTag(PROPERTY_ID_ATTRIBUTES, fp, crc);
+    attributes = genAttributes(files->head[0], files->head[1]);
+    size = 2 + 4 * (n_emptystream + n_file);
+    total_size += writeNumber(size, fp, crc);
+    total_size += writeByte(FLAG_ATTR_DEFINED_SET, fp, crc);
+    total_size += writeByte(FLAG_ATTR_EXTERNAL_UNSET, fp, crc);
+    for (i = 0; i < n_emptystream + n_file; ++i) {
+        total_size += writeTime(attributes[i], fp, crc);
+    }
+    free(attributes);
 
     total_size += writeTag(PROPERTY_ID_END, fp, crc);
     return total_size;
@@ -2626,7 +2793,7 @@ int check7zArchive(const char *archive)
         return QZ7Z_ERR_OPEN;
     }
     n = fread(buf, 1, sizeof(buf), fp);
-    if (n < sizeof(buf)) return 0;
+    if (n < sizeof(buf)) return -1;
 
     if ((sig_wrong =
              memcmp(buf, g_header_signature, sizeof(g_header_signature)))) {
