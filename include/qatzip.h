@@ -54,6 +54,20 @@
 extern"C" {
 #endif
 
+/**
+ * These macros define how the project will be built
+ * QATZIP_LINK_DLL must be defined if linking the DLL
+ * QATZIP_BUILD_DLL must be defined when building a DLL
+ * No definition required if building the project as static library
+ */
+#if defined QATZIP_LINK_DLL
+#    define QATZIP_API __declspec(dllimport)
+#elif defined QATZIP_BUILD_DLL
+#    define QATZIP_API __declspec(dllexport)
+#else
+#    define QATZIP_API
+#endif
+
 #include <string.h>
 
 /**
@@ -475,7 +489,7 @@ typedef struct QzStatus_S {
  *      None
  *
  *****************************************************************************/
-int qzInit(QzSession_T *sess,  unsigned char sw_backup);
+QATZIP_API int qzInit(QzSession_T *sess,  unsigned char sw_backup);
 
 /**
  *****************************************************************************
@@ -536,7 +550,7 @@ int qzInit(QzSession_T *sess,  unsigned char sw_backup);
  *      None
  *
  *****************************************************************************/
-int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
+QATZIP_API int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
 
 /**
  *****************************************************************************
@@ -604,9 +618,9 @@ int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
  *      None
  *
  *****************************************************************************/
-int qzCompress(QzSession_T *sess, const unsigned char *src,
-               unsigned int *src_len, unsigned char *dest, unsigned int *dest_len,
-               unsigned int last);
+QATZIP_API int qzCompress(QzSession_T *sess, const unsigned char *src,
+                          unsigned int *src_len, unsigned char *dest,
+                          unsigned int *dest_len, unsigned int last);
 
 /**
  *****************************************************************************
@@ -676,9 +690,10 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
  *      None
  *
  *****************************************************************************/
-int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
-                  unsigned int *src_len, unsigned char *dest, unsigned int *dest_len,
-                  unsigned int last, unsigned long *crc);
+QATZIP_API int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
+                             unsigned int *src_len, unsigned char *dest,
+                             unsigned int *dest_len, unsigned int last,
+                             unsigned long *crc);
 
 /**
  *****************************************************************************
@@ -732,9 +747,9 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
  *      None
  *
  *****************************************************************************/
-int qzDecompress(QzSession_T *sess, const unsigned char *src,
-                 unsigned int *src_len, unsigned char *dest,
-                 unsigned int *dest_len);
+QATZIP_API int qzDecompress(QzSession_T *sess, const unsigned char *src,
+                            unsigned int *src_len, unsigned char *dest,
+                            unsigned int *dest_len);
 
 /**
  *****************************************************************************
@@ -777,7 +792,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
  *      None
  *
  *****************************************************************************/
-int qzTeardownSession(QzSession_T *sess);
+QATZIP_API int qzTeardownSession(QzSession_T *sess);
 
 /**
  *****************************************************************************
@@ -818,7 +833,7 @@ int qzTeardownSession(QzSession_T *sess);
  *      None
  *
  *****************************************************************************/
-int qzClose(QzSession_T *sess);
+QATZIP_API int qzClose(QzSession_T *sess);
 
 /**
  *****************************************************************************
@@ -880,7 +895,7 @@ int qzClose(QzSession_T *sess);
  *      None
  *
  *****************************************************************************/
-int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
+QATZIP_API int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
 
 /**
  *****************************************************************************
@@ -925,6 +940,7 @@ int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
  *****************************************************************************/
 #define QZ_SKID_PAD_SZ 48
 #define QZ_COMPRESSED_SZ_OF_EMPTY_FILE 34
+QATZIP_API
 unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess);
 
 /**
@@ -965,7 +981,7 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess);
  *      None
  *
  *****************************************************************************/
-int qzSetDefaults(QzSessionParams_T *defaults);
+QATZIP_API int qzSetDefaults(QzSessionParams_T *defaults);
 
 /**
  *****************************************************************************
@@ -1004,7 +1020,7 @@ int qzSetDefaults(QzSessionParams_T *defaults);
  *      None
  *
  *****************************************************************************/
-int qzGetDefaults(QzSessionParams_T *defaults);
+QATZIP_API int qzGetDefaults(QzSessionParams_T *defaults);
 
 /**
  *****************************************************************************
@@ -1046,7 +1062,7 @@ int qzGetDefaults(QzSessionParams_T *defaults);
  *      None
  *
  *****************************************************************************/
-void *qzMalloc(size_t sz, int numa, int force_pinned);
+QATZIP_API void *qzMalloc(size_t sz, int numa, int force_pinned);
 
 /**
  *****************************************************************************
@@ -1082,7 +1098,7 @@ void *qzMalloc(size_t sz, int numa, int force_pinned);
  *      None
  *
  *****************************************************************************/
-void qzFree(void *m);
+QATZIP_API void qzFree(void *m);
 
 /**
  *****************************************************************************
@@ -1122,7 +1138,7 @@ void qzFree(void *m);
  *      None
  *
  *****************************************************************************/
-int qzMemFindAddr(unsigned char *a);
+QATZIP_API int qzMemFindAddr(unsigned char *a);
 
 /**
  *****************************************************************************
@@ -1229,6 +1245,7 @@ typedef struct QzStream_S {
  *      None
  *
  *****************************************************************************/
+QATZIP_API
 int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
 
 /**
@@ -1305,6 +1322,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *      None
  *
  *****************************************************************************/
+QATZIP_API
 int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
 
 /**
@@ -1347,7 +1365,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *      None
  *
  *****************************************************************************/
-int qzEndStream(QzSession_T *sess, QzStream_T *strm);
+QATZIP_API int qzEndStream(QzSession_T *sess, QzStream_T *strm);
 
 #ifdef __cplusplus
 }
