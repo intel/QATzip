@@ -1,3 +1,6 @@
+#! /bin/bash
+set -e
+
 #***************************************************************************
 #
 #   BSD LICENSE
@@ -32,9 +35,6 @@
 #   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 #**************************************************************************
-
-#! /bin/bash
-set -e
 
 CURRENT_PATH=`dirname $(readlink -f "$0")`
 
