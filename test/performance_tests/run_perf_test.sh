@@ -36,6 +36,10 @@
 
 set -e
 echo "***QZ_ROOT run_perf_test.sh start"
+
+rm -f result_comp_stderr
+rm -f result_decomp_stderr
+
 CURRENT_PATH=`dirname $(readlink -f "$0")`
 
 #check whether test exists
@@ -85,7 +89,7 @@ thread=4
 echo > result_comp
 for((numProc_comp = 0; numProc_comp < $process; numProc_comp ++))
 do
-    $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D comp >> result_comp 2>&1  &
+    $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D comp >> result_comp 2>> result_comp_stderr &
 done
 wait
 compthroughput=`awk '{sum+=$8} END{print sum}' result_comp`
@@ -94,7 +98,7 @@ echo "compthroughput=$compthroughput Gbps"
 echo > result_decomp
 for((numProc_decomp = 0; numProc_decomp < $process; numProc_decomp ++))
 do
-    $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D decomp >> result_decomp 2>&1  &
+    $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D decomp >> result_decomp 2>> result_decomp_stderr &
 done
 wait
 decompthroughput=`awk '{sum+=$8} END{print sum}' result_decomp`
