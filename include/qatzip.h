@@ -62,9 +62,9 @@ extern"C" {
  *      QATZIP Major Version Number
  * @description
  *      The QATZIP API major version number. This number will be incremented
- *      when significant churn to the API has occurred. The combination of the
- *      major and minor number definitions represent the complete version number
- *      for this interface.
+ *    when significant changes to the API has occurred. The combination of the
+ *    major and minor number definitions represent the complete version number
+ *    for this interface.
  *
  *****************************************************************************/
 #define QATZIP_API_VERSION_NUM_MAJOR (1)
@@ -72,17 +72,17 @@ extern"C" {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *       QATZIP Minor Version Number
+ *      QATZIP Minor Version Number
  * @description
  *      The QATZIP API minor version number. This number will be incremented
- *      when minor changes to the API has occurred. The combination of the major
- *      and minor number definitions represent the complete version number for
- *      this interface.
+ *    when minor changes to the API has occurred. The combination of the major
+ *    and minor number definitions represent the complete version number for
+ *    this interface.
  *
  *****************************************************************************/
-#define QATZIP_API_VERSION_NUM_MINOR (0)
+#define QATZIP_API_VERSION_NUM_MINOR (1)
 
-/* define a macro as an integer to test */
+/* Define a macro as an integer to test */
 #define QATZIP_API_VERSION    (QATZIP_API_VERSION_NUM_MAJOR * 10000 +      \
                                QATZIP_API_VERSION_NUM_MINOR * 100)
 
@@ -91,7 +91,7 @@ extern"C" {
  *
  *  This API provides access to underlying compression functions in QAT
  *  hardware. The API supports an implementation that provides compression
- *  service in software if not all of the required resources are not available
+ *  service in software if not all of the required resources are available
  *  to execute the compression service in hardware.
  *
  *  The API supports threaded applications.
@@ -105,31 +105,31 @@ extern"C" {
  *  decompression functions. This results in several legal calling scenarios,
  *  described below.
  *
- *  Scenario 1 - all functions explicitly invoked by caller, with all arguments provided
+ *  Scenario 1 - All functions explicitly invoked by caller, with all arguments provided.
  *
- *  qzInit(&sess_c, sw_backup);
- *  qzSetupSession(&sess_c, &params);
+ *  qzInit(&sess, sw_backup);
+ *  qzSetupSession(&sess, &params);
  *  qzCompress(&sess, src, &src_len, dest, &dest_len, 1);
  *  qzDecompress(&sess, src, &src_len, dest, &dest_len);
  *  qzTeardownSession(&sess);
  *  qzClose(&sess);
  *
  *
- * Scenario 2 - initialization function called, setup function not invoked by caller.
- *               This scenario can be used to specify the sw_backup argument to
- *               qzInit.
+ * Scenario 2 - Initialization function called, setup function not invoked by caller.
+ *              This scenario can be used to specify the sw_backup argument to
+ *              qzInit.
  *
  *  qzInit(&sess, sw_backup);
  *  qzCompress(&sess, src, &src_len, dest, &dest_len, 1);
- *      calls  qzSetupSession(sess, NULL);
+ *      calls qzSetupSession(sess, NULL);
  *  qzTeardownSession(&sess);
  *  qzClose(&sess);
  *
  *
- * Scenario 3 - calling application simply invokes the actual qzCompress functions
+ * Scenario 3 - Calling application simply invokes the actual qzCompress functions.
  *
  *  qzCompress(&sess, src, &src_len, dest, &dest_len, 0);
- *      calls qzInit sess, 1);
+ *      calls qzInit(sess, 1);
  *      calls qzSetupSession(sess, NULL);
  *  qzCompress(&sess, src, &src_len, dest, &dest_len, 1);
  *
@@ -141,7 +141,7 @@ extern"C" {
  *  cleanup.
  *
  *  If a thread terminates without invoking tear down and close functions,
- *  memory and hardware are not cleanup until the application exits.
+ *  memory and hardware are not cleaned up until the application exits.
  *
  *****************************************************************************/
 /**
@@ -151,7 +151,7 @@ extern"C" {
  *
  * @description
  *      This enumerated list identifies the Huffman header types
- *    supported by QATZip
+ *    supported by QATZip.
  *
  *****************************************************************************/
 typedef enum QzHuffmanHdr_E {
@@ -171,11 +171,11 @@ typedef enum QzHuffmanHdr_E {
  *    by QATZip.
  *
  *****************************************************************************/
-typedef enum {
+typedef enum PinMem_E {
     COMMON_MEM = 0,
-    /**< Allocate non-continous memory */
+    /**< Allocate non-contiguous memory */
     PINNED_MEM
-    /**< Allocate continous memory */
+    /**< Allocate contiguous memory */
 } PinMem_T;
 
 /**
@@ -214,9 +214,9 @@ typedef enum QzDataFormat_E {
     QZ_DEFLATE_RAW = 0,
     /**< Data is in raw deflate format */
     QZ_DEFLATE_GZIP,
-    /**< Data is in deflate wrappped by GZip header and footer*/
+    /**< Data is in deflate wrapped by GZip header and footer */
     QZ_DEFLATE_GZIP_EXT,
-    /**< Data is in deflate warpped by GZip extension header and footer */
+    /**< Data is in deflate wrapped by GZip extension header and footer */
     QZ_FMT_NUM
 } QzDataFormat_T;
 
@@ -227,7 +227,7 @@ typedef enum QzDataFormat_E {
  *
  * @description
  *      This enumerated list identifies the checksum type for input/output
- *    data. A format can be CRC32, Adler or none.
+ *    data. The format can be CRC32, Adler or none.
  *
  *****************************************************************************/
 typedef enum QzCrcType_E {
@@ -242,7 +242,7 @@ typedef enum QzCrcType_E {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *    QATZIP Session Status definitions and function return codes
+ *      QATZIP Session Status definitions and function return codes
  *
  * @description
  *      This list identifies valid values for session status and function
@@ -250,39 +250,39 @@ typedef enum QzCrcType_E {
  *
  *****************************************************************************/
 #define QZ_OK                   (0)
-/**<Success */
-#define  QZ_DUPLICATE           (1)
-/**<Can not process function again. No failure. */
+/**< Success */
+#define QZ_DUPLICATE           (1)
+/**< Can not process function again. No failure */
 #define QZ_FORCE_SW             (2)
-/**<using SW: Switch to software because of previous block*/
-#define  QZ_PARAMS              (-1)
-/**<invalid parameter in function call */
-#define  QZ_FAIL                (-2)
-/**<Unspecified error */
+/**< Using SW: Switch to software because of previous block */
+#define QZ_PARAMS              (-1)
+/**< Invalid parameter in function call */
+#define QZ_FAIL                (-2)
+/**< Unspecified error */
 #define QZ_BUF_ERROR            (-3)
-/**<Insufficient buffer error */
+/**< Insufficient buffer error */
 #define QZ_DATA_ERROR           (-4)
-/**<Input data was corrupted */
+/**< Input data was corrupted */
 #define QZ_NO_HW                (11)
-/**<using SW: No QAT HW detected */
+/**< Using SW: No QAT HW detected */
 #define QZ_NO_MDRV              (12)
-/**<using SW: No memory driver detected */
+/**< Using SW: No memory driver detected */
 #define QZ_NO_INST_ATTACH       (13)
-/**<using SW: Could not attach to an instance */
+/**< Using SW: Could not attach to an instance */
 #define QZ_LOW_MEM              (14)
-/**<using SW: Not enough pinned memory */
+/**< Using SW: Not enough pinned memory */
 #define QZ_LOW_DEST_MEM         (15)
-/**<using SW: Not enough pinned memory for dest buffer */
+/**< Using SW: Not enough pinned memory for dest buffer */
 #define QZ_NONE                 (100)
-/**<device uninitialzied*/
+/**< Device uninitialized */
 #define QZ_NOSW_NO_HW           (-101)
-/**<not using SW: No QAT HW detected */
+/**< Not using SW: No QAT HW detected */
 #define QZ_NOSW_NO_MDRV         (-102)
-/**<not using SW: No memory driver detected */
+/**< Not using SW: No memory driver detected */
 #define QZ_NOSW_NO_INST_ATTACH  (-103)
-/**<not using SW: Could not attach to instance */
+/**< Not using SW: Could not attach to instance */
 #define QZ_NOSW_LOW_MEM         (-104)
-/**<not using SW: not enough pinned memory */
+/**< Not using SW: not enough pinned memory */
 
 #define QZ_MAX_ALGORITHMS  ((int)255)
 #define QZ_DEFLATE         ((unsigned char)8)
@@ -294,44 +294,44 @@ typedef enum QzCrcType_E {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *    QATZIP Session Initialization parameters
+ *      QATZIP Session Initialization parameters
  *
  * @description
- *      This structure contains data for initializing a session
+ *      This structure contains data for initializing a session.
  *
  *****************************************************************************/
 typedef struct QzSessionParams_S {
-    QzHuffmanHdr_T  huffman_hdr;
-    /**<Dynamic or Static Huffman headers */
-    QzDirection_T  direction;
-    /**<compress or decompress */
+    QzHuffmanHdr_T huffman_hdr;
+    /**< Dynamic or Static Huffman headers */
+    QzDirection_T direction;
+    /**< Compress or decompress */
     QzDataFormat_T data_fmt;
-    /**<defalte, deflate with GZip or deflate with GZip ext */
-    unsigned int  comp_lvl;
-    /**<Compression level 1..9 */
-    unsigned char  comp_algorithm;
-    /**<Compress/decompression algorithms */
-    unsigned int  max_forks;
-    /**<maximum forks permitted in the current thread.  */
-    /**<0 means no forking permitted */
+    /**< Deflate, deflate with GZip or deflate with GZip ext */
+    unsigned int comp_lvl;
+    /**< Compression level 1 to 9 */
+    unsigned char comp_algorithm;
+    /**< Compress/decompression algorithms */
+    unsigned int max_forks;
+    /**< Maximum forks permitted in the current thread */
+    /**< 0 means no forking permitted */
     unsigned char sw_backup;
-    /**<0 means no sw backup, 1 means sw backup */
+    /**< 0 means no sw backup, 1 means sw backup */
     unsigned int hw_buff_sz;
-    /**<default buffer size, Must be a power of 2*/
+    /**< Default buffer size, must be a power of 2k */
     /**< 4K,8K,16K,32K,64K,128K */
     unsigned int strm_buff_sz;
-    /**<stream buffer size between [1K .. 2M - 5K] */
-    /**<default strm_buf_sz equals to hw_buff_sz */
+    /**< Stream buffer size between [1K .. 2M - 5K] */
+    /**< Default strm_buf_sz equals to hw_buff_sz */
     unsigned int input_sz_thrshold;
-    /**<default threshold of compression service's input size */
-    /**<for sw failover, if the size of input request less */
-    /**<than the threshold, QATZip will route the request */
-    /**<to software */
+    /**< Default threshold of compression service's input size */
+    /**< for sw failover, if the size of input request less */
+    /**< than the threshold, QATZip will route the request */
+    /**< to software */
     unsigned int req_cnt_thrshold;
-    /**<set between 1 and 4, default 4*/
+    /**< Set between 1 and 4, default 4 */
     unsigned int wait_cnt_thrshold;
-    /**<when previous try failed, wait for specific number of call */
-    /**<before retry device open. default threshold is 8 */
+    /**< When previous try failed, wait for specific number of call */
+    /**< before retry to open device. Default threshold is 8 */
 } QzSessionParams_T;
 
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
@@ -357,57 +357,57 @@ typedef struct QzSessionParams_S {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *    QATZIP Session opaque data storage
+ *      QATZIP Session opaque data storage
  *
  * @description
  *      This structure contains a pointer to a structure with
- *    session state
+ *    session state.
  *
  *****************************************************************************/
 typedef struct QzSession_S {
     signed long int hw_session_stat;
-    /**< filled in during initialization, session startup and decompression */
+    /**< Filled in during initialization, session startup and decompression */
     int thd_sess_stat;
-    /**< note process compression and decompression thread state*/
-    void  *internal;
-    /**<session data is opaque to outside world */
+    /**< Note process compression and decompression thread state */
+    void *internal;
+    /**< Session data is opaque to outside world */
     unsigned long total_in;
-    /**<Total processed input data length in this session */
+    /**< Total processed input data length in this session */
     unsigned long total_out;
-    /**<Total output data length in this session */
+    /**< Total output data length in this session */
 } QzSession_T;
 
 /**
  *****************************************************************************
  * @ingroup qatZip
- *    QATZIP status structure
+ *      QATZIP status structure
  *
  * @description
- *      This structure contains data relating to the stat usof QAT on the
- *    platform
+ *      This structure contains data relating to the status of QAT on the
+ *    platform.
  *
  *****************************************************************************/
 typedef struct QzStatus_S {
     unsigned short int qat_hw_count;
-    /**<from PCI scan */
+    /**< From PCI scan */
     unsigned char qat_service_stated;
-    /**<Check if the QAT service is properly running  on at least one device*/
+    /**< Check if the QAT service is running properly on at least one device */
     unsigned char qat_mem_drvr;
-    /**<1 if /dev/qat_mem exists */
-    /**<2 if /dev/qat_mem has been opened */
-    /**<0 otherwise */
+    /**< 1 if /dev/qat_mem exists */
+    /**< 2 if /dev/qat_mem has been opened */
+    /**< 0 otherwise */
     unsigned char qat_instance_attach;
-    /**<Is this thread/g_process properly attached to an Instance? */
+    /**< Is this thread/g_process properly attached to an Instance? */
     unsigned long int memory_alloced;
-    /**<Amount of memory allocated by this thread/process */
+    /**< Amount of memory allocated by this thread/process */
     unsigned char using_huge_pages;
-    /**<Are memory slabs coming from huge pages */
+    /**< Are memory slabs coming from huge pages? */
     signed long int hw_session_status;
-    /**<One of QATZIP Session Status */
+    /**< One of QATZIP session status */
     unsigned char algo_sw[QZ_MAX_ALGORITHMS];
-    /**<support software algorithms */
+    /**< Support software algorithms */
     unsigned char algo_hw[QZ_MAX_ALGORITHMS];
-    /**<count of hardware devices supporting algorithms */
+    /**< Count of hardware devices supporting algorithms */
 } QzStatus_T;
 
 /**
@@ -417,7 +417,7 @@ typedef struct QzStatus_S {
  *
  * @description
  *      This function initializes the QAT hardware.
- *    This function is optional in the function calling sequence.  If
+ *    This function is optional in the function calling sequence. If
  *    desired, this call can be made to avoid latency impact during the
  *    first call to qzDecompress or qzCompress, or to set the sw_backup
  *    parameter explicitly.
@@ -426,8 +426,8 @@ typedef struct QzStatus_S {
  *    there are insufficient resources to establish a QAT based compression
  *    or decompression session.
  *
- *    Required resources include access to the QAT hardware, contiguous
- *    pinned memory for mmaping the hardware rings, and contiguous
+ *    The required resources include access to the QAT hardware, contiguous
+ *    pinned memory for mapping the hardware rings, and contiguous
  *    pinned memory for buffers.
  *
  * @context
@@ -445,22 +445,23 @@ typedef struct QzStatus_S {
  * @threadSafe
  *      Yes
  *
- * @param[in]       sess pointer to opaque instance and session data.
- * @param[in]       sw_backup 0 for no sw backup, 1 for sw backup
+ * @param[in]       sess           Session handle
+ *                                 (pointer to opaque instance and session data.)
+ * @param[in]       sw_backup      0 for no sw backup, 1 for sw backup
  *
  * @retval QZ_OK                   Function executed successfully. A hardware
- *                                 or sw instance has been allocated to
- *                                 the calling process/thread.
+ *                                 or software instance has been allocated to
+ *                                 the calling process/thread
  * @retval QZ_DUPLICATE            This process/thread already has a hardware
  *                                 instance
  * @retval QZ_PARAMS               *sess is NULL
- * @retval QZ_NOSW_NO_HW           No hardware and no sw session being
+ * @retval QZ_NOSW_NO_HW           No hardware and no software session being
  *                                 established
  * @retval QZ_NOSW_NO_MDRV         No memory driver. No software session
  *                                 established
- * @retval QZ_NOSW_NO_INST_ATTACH  No instance avail.
+ * @retval QZ_NOSW_NO_INST_ATTACH  No instance available
  *                                 No software session established
- * @retval QZ_NOSW_LOW_MEM         Not enough pinned memory available.
+ * @retval QZ_NOSW_LOW_MEM         Not enough pinned memory available
  *                                 No software session established
  *
  * @pre
@@ -479,13 +480,13 @@ int qzInit(QzSession_T *sess,  unsigned char sw_backup);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      initialize a QATZip session
+ *      Initialize a QATZip session
  *
  * @description
- *      This function establishes a QAT session.  This involves associating
- *    a hardware instance to the session, allocating buffers.  If all of
+ *      This function establishes a QAT session. This involves associating
+ *    a hardware instance to the session, allocating buffers. If all of
  *    these activities can not be completed successfully, then this function
- *    will set up a software based session of param->sw_backup is set to 1.
+ *    will set up a software based session of param->sw_backup that is set to 1.
  *
  *    Before this function is called, the hardware must have been
  *    successfully started via qzInit.
@@ -506,21 +507,22 @@ int qzInit(QzSession_T *sess,  unsigned char sw_backup);
  * @threadSafe
  *      Yes
  *
- * @param[in]       sess         Session handle
- * @param[in]       params       Parameters for session
+ * @param[in]       sess           Session handle
+ *                                 (pointer to opaque instance and session data)
+ * @param[in]       params         Parameters for session
  *
  *
  * @retval QZ_OK                   Function executed successfully. A hardware
- *                                 or sw based compression session has been
- *                                 created.
+ *                                 or software based compression session has been
+ *                                 created
  * @retval QZ_PARAMS               *sess is NULL or member of params is invalid
  * @retval QZ_NOSW_NO_HW           No hardware and no sw session being
  *                                 established
  * @retval QZ_NOSW_NO_MDRV         No memory driver. No software session
  *                                 established
- * @retval QZ_NOSW_NO_INST_ATTACH  No instance avail.
+ * @retval QZ_NOSW_NO_INST_ATTACH  No instance available
  *                                 No software session established
- * @retval QZ_NO_LOW_MEM           Not enough pinned memory available.
+ * @retval QZ_NO_LOW_MEM           Not enough pinned memory available
  *                                 No software session established
  *
  * @pre
@@ -539,7 +541,7 @@ int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      compress a buffer
+ *      Compress a buffer
  *
  * @description
  *      This function will compress a buffer if either a hardware based
@@ -577,18 +579,19 @@ int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
  *      Yes
  *
  * @param[in]       sess     Session handle
- * @param[in]       src      point to source buffer
- * @param[in,out]   src_len  length of source buffer. Modified to number
+ *                           (pointer to opaque instance and session data)
+ * @param[in]       src      Point to source buffer
+ * @param[in,out]   src_len  Length of source buffer. Modified to number
  *                           of bytes consumed
- * @param[in]       dest     point to destination buffer
- * @param[in,out]   dest_len length of destination buffer.  Modified
+ * @param[in]       dest     Point to destination buffer
+ * @param[in,out]   dest_len Length of destination buffer. Modified
  *                           to length of compressed data when
  *                           function returns
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
  *
- * @retval QZ_OK             Function executed successfully.
- * @retval QZ_FAIL           Function did not succeed.
+ * @retval QZ_OK             Function executed successfully
+ * @retval QZ_FAIL           Function did not succeed
  * @retval QZ_PARAMS         *sess is NULL or member of params is invalid
  * @pre
  *      None
@@ -608,7 +611,7 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      compress a buffer and return the CRC checksum
+ *      Compress a buffer and return the CRC checksum
  *
  * @description
  *      This function will compress a buffer if either a hardware based
@@ -621,9 +624,9 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
  *
  *    This function will place completed compression blocks in the output
  *    buffer and put CRC32 checksum for compressed input data in user provided
- *    bufer *crc.
+ *    buffer *crc.
  *
- *    The caller must check the updated src_len.  This value will be the
+ *    The caller must check the updated src_len. This value will be the
  *    number of consumed bytes on exit.  The calling API may have to
  *    process the destination  buffer and call again.
  *
@@ -647,19 +650,20 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
  *      Yes
  *
  * @param[in]       sess     Session handle
- * @param[in]       src      point to source buffer
- * @param[in,out]   src_len  length of source buffer. Modified to number
+ *                           (pointer to opaque instance and session data)
+ * @param[in]       src      Point to source buffer
+ * @param[in,out]   src_len  Length of source buffer. Modified to number
  *                           of bytes consumed
- * @param[in]       dest     point to destination buffer
- * @param[in,out]   dest_len length of destination buffer.  Modified
+ * @param[in]       dest     Point to destination buffer
+ * @param[in,out]   dest_len Length of destination buffer. Modified
  *                           to length of compressed data when
  *                           function returns
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
- * @param[in,out]   crc      point to CRC32 checksum buffer
+ * @param[in,out]   crc      Point to CRC32 checksum buffer
  *
- * @retval QZ_OK             Function executed successfully.
- * @retval QZ_FAIL           Function did not succeed.
+ * @retval QZ_OK             Function executed successfully
+ * @retval QZ_FAIL           Function did not succeed
  * @retval QZ_PARAMS         *sess is NULL or member of params is invalid
  * @pre
  *      None
@@ -679,7 +683,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      decompress a buffer
+ *      Decompress a buffer
  *
  * @description
  *      This function will decompress a buffer if either a hardware based
@@ -688,7 +692,7 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
  *    will attempt to set up a session using qzInit and qzSetupSession.
  *
  *    The input compressed block of data will be composed of one or more
- *    gzip blocks per RFC1952.
+ *    gzip blocks per RFC 1952.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -703,19 +707,20 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
  * @threadSafe
  *      Yes
  *
- * @param[in]     sess                      Session handle
- * @param[in]     src                       point to source buffer
- * @param[in]     src_len                   length of source buffer. Modified to
- *                                          length of processed compressed data
- *                                          when function returns
- * @param[in]      dest                     point to destination buffer
- * @param[in,out]  dest_len                 length of destination buffer. Modified
- *                                          to length of decompressed data when
- *                                          function returns
+ * @param[in]     sess      Session handle
+ *                          (pointer to opaque instance and session data)
+ * @param[in]     src       Point to source buffer
+ * @param[in]     src_len   Length of source buffer. Modified to
+ *                          length of processed compressed data
+ *                          when function returns
+ * @param[in]      dest     Point to destination buffer
+ * @param[in,out]  dest_len Length of destination buffer. Modified
+ *                          to length of decompressed data when
+ *                          function returns
  *
- * @retval QZ_OK      Function executed successfully.
- * @retval QZ_FAIL    Function did not succeed.
- * @retval QZ_PARAMS  *sess is NULL or member of params is invalid
+ * @retval QZ_OK            Function executed successfully
+ * @retval QZ_FAIL          Function did not succeed
+ * @retval QZ_PARAMS        *sess is NULL or member of params is invalid
  * @pre
  *      None
  * @post
@@ -755,9 +760,10 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
  *      Yes
  *
  * @param[in]       sess  Session handle
+ *                        (pointer to opaque instance and session data)
  *
- * @retval QZ_OK          Function executed successfully.
- * @retval QZ_FAIL        Function did not succeed.
+ * @retval QZ_OK          Function executed successfully
+ * @retval QZ_FAIL        Function did not succeed
  * @retval QZ_PARAMS      *sess is NULL or member of params is invalid
  *
  * @pre
@@ -776,13 +782,13 @@ int qzTeardownSession(QzSession_T *sess);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      terminates a QATZip session
+ *      Terminates a QATZip session
  *
  * @description
- *      This function closes the connection with QAT
+ *      This function closes the connection with QAT.
  *
  * @context
- *      This function shall not be called in an interrupt context.
+ *      This function shall not be called in an interrupt context
  * @assumptions
  *      None
  * @sideEffects
@@ -794,10 +800,11 @@ int qzTeardownSession(QzSession_T *sess);
  * @threadSafe
  *      Yes
  *
- * @param[in]       sess  pointer to session data
+ * @param[in]       sess  Session handle
+ *                        (pointer to opaque instance and session data)
  *
- * @retval QZ_OK          Function executed successfully.
- * @retval QZ_FAIL        Function did not succeed.
+ * @retval QZ_OK          Function executed successfully
+ * @retval QZ_FAIL        Function did not succeed
  * @retval QZ_PARAMS      *sess is NULL or member of params is invalid
  *
  * @pre
@@ -819,18 +826,18 @@ int qzClose(QzSession_T *sess);
  *      Get current QAT status
  *
  * @description
- *    This function retrieves the status of QAT in the platform.
- *    The status structure will be filled in as follows:
- *  qat_hw_count         number of discovered QAT devices on PCU bus
- *  qat_service_stated   1 if qzInit has been successfully run, 0 otherwise
- *  qat_mem_drvr         1 if the QAT memory driver is installed, 0 otherwise
- *  qat_instance_attach  1 if session has attached to a hardware instance,
- *                       0 otherwise
- *  memory_alloced       amount of memory, in kilobytes, from kernel or huge
- *                       pages allocated  by this process/thread.
- *  using_huge_pages     1 if memory is being allocated from huge pages, 0 if
- *                       memory is being allocated from standard kernel memory
- *  hw_session_stat      Hw session status:  one of:
+ *      This function retrieves the status of QAT in the platform.
+ *      The status structure will be filled in as follows:
+ *    qat_hw_count         Number of discovered QAT devices on PCU bus
+ *    qat_service_stated   1 if qzInit has been successfully run, 0 otherwise
+ *    qat_mem_drvr         1 if the QAT memory driver is installed, 0 otherwise
+ *    qat_instance_attach  1 if session has attached to a hardware instance,
+ *                         0 otherwise
+ *    memory_alloced       Amount of memory, in kilobytes, from kernel or huge
+ *                         pages allocated  by this process/thread.
+ *    using_huge_pages     1 if memory is being allocated from huge pages, 0 if
+ *                         memory is being allocated from standard kernel memory
+ *    hw_session_stat      Hw session status: one of:
  *      QZ_OK
  *      QZ_FAIL
  *      QZ_NO_HW
@@ -855,11 +862,12 @@ int qzClose(QzSession_T *sess);
  * @threadSafe
  *      Yes
  *
- * @param[in]              sess pointer to opaque instance and session data.
- * @param[in]              status pointer to QATZIP status structure.
- * @retval QZ_OK           Function executed successfully. A hardware based
- *                         compression session has been created.
- * @retval QZ_PARAMS       *status is NULL
+ * @param[in]       sess    Session handle
+ *                          (pointer to opaque instance and session data)
+ * @param[in]       status  Pointer to QATZIP status structure
+ * @retval QZ_OK            Function executed successfully. The hardware based
+ *                          compression session has been created
+ * @retval QZ_PARAMS        *status is NULL
  *
  * @pre
  *      None
@@ -877,10 +885,10 @@ int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *     Get the max compressed output length
+ *      Get the max compressed output length
  *
  * @description
- *     Get the max compressed output length
+ *      Get the max compressed output length.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -896,12 +904,13 @@ int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
  *      Yes
  *
  * @param[in]
- *         src_sz     Input data length in byte.
- *         sess       Session handle.
+ *         src_sz     Input data length in byte
+ *         sess       Session handle
+ *                    (pointer to opaque instance and session data)
  *
  * @retval dest_sz    Max compressed data output length in byte.
- *                    When src_sz equal to 0, the return value is QZ_COMPRESSED_SZ_OF_EMPTY_FILE(34).
- *                    When integer overflow happens, the return value is 0.
+ *                    When src_sz is equal to 0, the return value is QZ_COMPRESSED_SZ_OF_EMPTY_FILE(34).
+ *                    When integer overflow happens, the return value is 0
  *
  * @pre
  *      None
@@ -921,10 +930,10 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *     Set default QzSessionParams_T value
+ *      Set default QzSessionParams_T value
  *
  * @description
- *     Set default QzSessionParams_T value
+ *      Set default QzSessionParams_T value.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -940,10 +949,10 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess);
  *      Yes
  *
  * @param[in]
- *         defaults   The pointer to value to be set as default.
+ *              defaults   The pointer to value to be set as default
  *
- * @retval      QZ_OK      Success on setting default value.
- * @retval      QZ_PARAM   Fail to set default value.
+ * @retval      QZ_OK      Success on setting default value
+ * @retval      QZ_PARAM   Fail to set default value
  *
  * @pre
  *      None
@@ -961,10 +970,10 @@ int qzSetDefaults(QzSessionParams_T *defaults);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *     Get default QzSessionParams_T value
+ *      Get default QzSessionParams_T value
  *
  * @description
- *     Get default QzSessionParams_T value
+ *      Get default QzSessionParams_T value.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -979,10 +988,10 @@ int qzSetDefaults(QzSessionParams_T *defaults);
  * @threadSafe
  *      Yes
  *
- * @param[in]   defaults   The pointer to default value.
+ * @param[in]   defaults   The pointer to default value
  *
- * @retval      QZ_OK      Success on getting default value.
- * @retval      QZ_PARAM   Fail to get default value.
+ * @retval      QZ_OK      Get default value successfully
+ * @retval      QZ_PARAM   Fail to get default value
  *
  * @pre
  *      None
@@ -1000,10 +1009,10 @@ int qzGetDefaults(QzSessionParams_T *defaults);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *     Allocate different types of memory
+ *      Allocate different types of memory
  *
  * @description
- *     Allocate different types of memory
+ *      Allocate different types of memory.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -1018,13 +1027,13 @@ int qzGetDefaults(QzSessionParams_T *defaults);
  * @threadSafe
  *      Yes
  *
- * @param[in]       sz                  Memory size to be allocated.
+ * @param[in]       sz                  Memory size to be allocated
  * @param[in]       numa                NUMA node from which to allocate memory
- * @param[in]       force_pinned        PINNED_MEM allocate continous memory
- *                                      COMMON_MEM allocate non-continous memory
+ * @param[in]       force_pinned        PINNED_MEM allocate contiguous memory
+ *                                      COMMON_MEM allocate non-contiguous memory
  *
  * @retval          NULL                Fail to allocate memory
- * @retval          adress              The address to allocated memory
+ * @retval          address             The address of allocated memory
  *
  * @pre
  *      None
@@ -1042,10 +1051,10 @@ void *qzMalloc(size_t sz, int numa, int force_pinned);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *     Free allocated memory
+ *      Free allocated memory
  *
  * @description
- *     Free allocated memory
+ *      Free allocated memory.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -1060,7 +1069,7 @@ void *qzMalloc(size_t sz, int numa, int force_pinned);
  * @threadSafe
  *      Yes
  *
- * @param[in]       m                   Memory address to be freed.
+ * @param[in]       m                   Memory address to be freed
  *
  * @pre
  *      None
@@ -1078,10 +1087,10 @@ void qzFree(void *m);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *     Check whether the address is available
+ *      Check whether the address is available
  *
  * @description
- *     Check whether the address is available
+ *      Check whether the address is available.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -1099,7 +1108,7 @@ void qzFree(void *m);
  * @param[in]
  *              a       Address need to be checked
  *
- * @retval      1       The Address is available
+ * @retval      1       The address is available
  * @retval      0       The address is not available
  *
  * @pre
@@ -1118,39 +1127,39 @@ int qzMemFindAddr(unsigned char *a);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *    QATZIP Stream data storage
+ *      QATZIP Stream data storage
  *
  * @description
- *      This structure contains metadata needed for stream operation
+ *      This structure contains metadata needed for stream operation.
  *
  *****************************************************************************/
 typedef struct QzStream_S {
-    unsigned int  in_sz;
-    /**<Set by application, reset by QATZip to indicate consumed data */
-    unsigned int  out_sz;
-    /**<Set by application, reset by QATZip to indicate processed data */
+    unsigned int in_sz;
+    /**< Set by application, reset by QATZip to indicate consumed data */
+    unsigned int out_sz;
+    /**< Set by application, reset by QATZip to indicate processed data */
     unsigned char *in ;
-    /**<Input data pointer set by application */
+    /**< Input data pointer set by application */
     unsigned char *out ;
-    /**<Output data pointer set by application */
-    unsigned int  pending_in;
-    /**<Unprocessed bytes held in QATZip */
-    unsigned int  pending_out;
-    /**<Processed bytes held in QATZip */
-    QzCrcType_T  crc_type;
-    /**<Checksum type in Adler, CRC32 or none */
-    unsigned int  crc_32;
-    /**<Checksum value */
-    unsigned long long  reserved;
-    /**<CRC64 polynomial */
+    /**< Output data pointer set by application */
+    unsigned int pending_in;
+    /**< Unprocessed bytes held in QATZip */
+    unsigned int pending_out;
+    /**< Processed bytes held in QATZip */
+    QzCrcType_T crc_type;
+    /**< Checksum type in Adler, CRC32 or none */
+    unsigned int crc_32;
+    /**< Checksum value */
+    unsigned long long reserved;
+    /**< CRC64 polynomial */
     void *opaque;
-    /**<Internal storage managed by QATZip */
+    /**< Internal storage managed by QATZip */
 } QzStream_T;
 
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      compress data in stream and return checksum
+ *      Compress data in stream and return checksum
  *
  * @description
  *      This function will compress data in stream buffer if either a hardware
@@ -1158,7 +1167,7 @@ typedef struct QzStream_S {
  *    has been established - as indicated by the contents of *sess - then this
  *    function will attempt to set up a session using qzInit and qzSetupSession.
  *    The function will start to compress the data when receiving sufficient
- *    number of bytes - as defined by hw_buf_sz in QzSessionParams_T - or
+ *    number of bytes - as defined by hw_buff_sz in QzSessionParams_T - or
  *    reaching the end of input data - as indicated by last parameter.
  *
  *    The resulting compressed block of data will be composed of one or more
@@ -1168,12 +1177,12 @@ typedef struct QzStream_S {
  *    of QzStream_T structure and put checksum for compressed input data
  *    in crc32 of QzStream_T structure.
  *
- *    The caller must check the updated in_sz of QzStream_T.  This value will
- *    be the number of consumed bytes on exit.  The calling API may have to
+ *    The caller must check the updated in_sz of QzStream_T. This value will
+ *    be the number of consumed bytes on exit. The calling API may have to
  *    process the destination buffer and call again.
  *
  *    The parameter out_sz in QzStream_T will be set to the number of bytes
- *    produced in the destination buffer.  This value may be zero if no data
+ *    produced in the destination buffer. This value may be zero if no data
  *    was produced which may occur if the consumed data is retained internally.
  *    A possible reason for this may be small amounts of data in the src
  *    buffer.
@@ -1201,12 +1210,13 @@ typedef struct QzStream_S {
  *      Yes
  *
  * @param[in]       sess     Session handle
+ *                           (pointer to opaque instance and session data)
  * @param[in,out]   strm     Stream handle
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
  *
- * @retval QZ_OK             Function executed successfully.
- * @retval QZ_FAIL           Function did not succeed.
+ * @retval QZ_OK             Function executed successfully
+ * @retval QZ_FAIL           Function did not succeed
  * @retval QZ_PARAMS         *sess is NULL or member of params is invalid
  * @pre
  *      None
@@ -1224,7 +1234,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      decompress data in stream and return checksum
+ *      Decompress data in stream and return checksum
  *
  * @description
  *      This function will decompress data in stream buffer if either a hardware
@@ -1232,22 +1242,22 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *    has been established - as indicated by the contents of *sess - then this
  *    function will attempt to set up a session using qzInit and qzSetupSession.
  *    The function will start to decompress the data when receiving sufficient
- *    number of bytes - as defined by hw_buf_sz in QzSessionParams_T - or
+ *    number of bytes - as defined by hw_buff_sz in QzSessionParams_T - or
  *    reaching the end of input data - as indicated by last parameter.
  *
  *    The input compressed block of data will be composed of one or more
  *    gzip blocks per RFC 1952 or deflate blocks per RFC 1951.
  *
- *    This function will place completed uncompression blocks in the *out
- *    of QzStream_T structure and put checksum for uncompressed data in
+ *    This function will place completed decompression blocks in the *out
+ *    of QzStream_T structure and put checksum for decompressed data in
  *    crc32 of QzStream_T structure.
  *
- *    The caller must check the updated in_sz of QzStream_T.  This value will
- *    be the number of consumed bytes on exit.  The calling API may have to
+ *    The caller must check the updated in_sz of QzStream_T. This value will
+ *    be the number of consumed bytes on exit. The calling API may have to
  *    process the destination buffer and call again.
  *
  *    The parameter out_sz in QzStream_T will be set to the number of bytes
- *    produced in the destination buffer.  This value may be zero if no data
+ *    produced in the destination buffer. This value may be zero if no data
  *    was produced which may occur if the consumed data is retained internally.
  *    A possible reason for this may be small amounts of data in the src
  *    buffer.
@@ -1275,12 +1285,13 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *      Yes
  *
  * @param[in]       sess     Session handle
+ *                           (pointer to opaque instance and session data)
  * @param[in,out]   strm     Stream handle
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
  *
- * @retval QZ_OK             Function executed successfully.
- * @retval QZ_FAIL           Function did not succeed.
+ * @retval QZ_OK             Function executed successfully
+ * @retval QZ_FAIL           Function did not succeed
  * @retval QZ_PARAMS         *sess is NULL or member of params is invalid
  * @retval QZ_NEED_MORE      *last is set but end of block is absent
  * @pre
@@ -1299,11 +1310,11 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      terminates a QATZip stream
+ *      Terminates a QATZip stream
  *
  * @description
  *      This function disconnect stream handle from session handle then reset
- *      stream flag and release stream memory.
+ *    stream flag and release stream memory.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -1318,10 +1329,11 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  * @threadSafe
  *      Yes
  *
- * @param[in]       sess  pointer to session data
+ * @param[in]       sess  Session handle
+ *                        (pointer to opaque instance and session data)
  *
- * @retval QZ_OK          Function executed successfully.
- * @retval QZ_FAIL        Function did not succeed.
+ * @retval QZ_OK          Function executed successfully
+ * @retval QZ_FAIL        Function did not succeed
  * @retval QZ_PARAMS      *sess is NULL or member of params is invalid
  *
  * @pre
