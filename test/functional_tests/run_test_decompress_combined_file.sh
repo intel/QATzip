@@ -1,3 +1,4 @@
+#! /bin/bash
 #***************************************************************************
 #
 #   BSD LICENSE
@@ -33,7 +34,6 @@
 #
 #**************************************************************************
 
-#! /bin/bash
 set -e
 echo "***QZ_ROOT run_test_decompress_combined_file.sh start"
 test_qzip=${QZ_ROOT}/utils/qzip

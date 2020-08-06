@@ -1,3 +1,4 @@
+#! /bin/bash
 #***************************************************************************
 #
 #   BSD LICENSE
@@ -32,7 +33,6 @@
 #   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 #**************************************************************************
-#! /bin/bash
 
 #set -e
 echo "***QZ_ROOT run_test_sw.sh start"

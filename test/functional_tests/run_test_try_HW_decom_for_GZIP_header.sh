@@ -1,3 +1,4 @@
+#! /bin/bash
 #***************************************************************************
 #
 #   BSD LICENSE
@@ -33,7 +34,6 @@
 #
 #**************************************************************************
 
-#! /bin/bash
 set -e
 echo "***QZ_ROOT run_test_try_HW_decom_for_GZIP_header.sh start"
 test_qzip=${QZ_ROOT}/utils/qzip

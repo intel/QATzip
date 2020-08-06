@@ -1,3 +1,4 @@
+#! /bin/bash
 #***************************************************************************
 #
 #   BSD LICENSE
@@ -33,7 +34,6 @@
 #
 #**************************************************************************
 
-#! /bin/bash
 set -e
 echo "***QZ_ROOT run_test_fork_resource_check.sh start"
 readonly BASEDIR=$(cd `dirname $0`; pwd)
