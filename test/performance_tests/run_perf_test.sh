@@ -38,6 +38,12 @@ set -e
 echo "***QZ_ROOT run_perf_test.sh start"
 CURRENT_PATH=`dirname $(readlink -f "$0")`
 
+#check whether test exists
+if [ ! -f "$QZ_ROOT/test/test" ]; then
+    echo "$QZ_ROOT/test/test: No such file. Compile first!"
+    exit 1
+fi
+
 #get the type of QAT hardware
 platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
 $QZ_TOOL/get_platform/get_platforminfo.sh
