@@ -32,6 +32,9 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  ***************************************************************************/
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE
+#endif
 
 #include <unistd.h>
 #include <errno.h>
@@ -79,6 +82,7 @@ const unsigned int g_polling_interval[] = { 10, 10, 20, 30, 60, 100, 200, 400,
         (QZ_DEFLATE_RAW == (fmt) || QZ_DEFLATE_GZIP == (fmt))
 
 #define GET_BUFFER_SLEEP_NSEC   10
+#define QAT_SECTION_NAME_SIZE   32
 
 QzSessionParams_T g_sess_params_default = {
     .huffman_hdr       = QZ_HUFF_HDR_DEFAULT,
@@ -405,10 +409,22 @@ static unsigned int getWaitCnt(QzSession_T *sess)
 
 const char *getSectionName(void)
 {
-    char *section_name = getenv("QATZIP_SECTION_NAME");
-    if (NULL == section_name || 0 == strlen(section_name)) {
-        return g_dev_tag;
+    static char section_name[QAT_SECTION_NAME_SIZE];
+    int len;
+    char *pre_section_name;
+#if __GLIBC_PREREQ(2, 17)
+    pre_section_name = secure_getenv("QAT_SECTION_NAME");
+#else
+    pre_section_name = getenv("QAT_SECTION_NAME");
+#endif
+
+    if (!pre_section_name || !(len = strlen(pre_section_name))) {
+        pre_section_name = (char *)g_dev_tag;
+    } else if (len >= QAT_SECTION_NAME_SIZE) {
+        QZ_ERROR("The length of QAT_SECTION_NAME exceeds the limit.\n");
     }
+    strncpy(section_name, pre_section_name, QAT_SECTION_NAME_SIZE - 1);
+    section_name[QAT_SECTION_NAME_SIZE - 1] = '\0';
     return section_name;
 }
 

@@ -888,7 +888,7 @@ function configuration_file_test()
     numberOfCPM=`lspci | grep Co-processor | wc -l`
 
     dd if=/dev/urandom of=random.tmp bs=1M count=1;
-    export QATZIP_SECTION_NAME="CFTEST"
+    export QAT_SECTION_NAME="CFTEST"
 
     #Change to CFTEST
     for ((i = 0; i < $numberOfCPM; i++)); do
@@ -933,7 +933,7 @@ function configuration_file_test()
     fi
 
     #Change back to SHIM
-    export QATZIP_SECTION_NAME="SHIM"
+    export QAT_SECTION_NAME="SHIM"
     for ((i = 0; i < $numberOfCPM; i++)); do
         if [[ $platform = "37c8" || $platform = "C62x" ]]; then
             sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c6xx_dev$i.conf
@@ -964,7 +964,7 @@ function configuration_file_test_software_compress()
     numberOfCPM=`lspci | grep Co-processor | wc -l`
 
     dd if=/dev/urandom of=random.tmp bs=1M count=1;
-    export QATZIP_SECTION_NAME="CFTEST"
+    export QAT_SECTION_NAME="CFTEST"
 
     OLDMD5=`md5sum random.tmp`
     echo "old md5" $OLDMD5
@@ -995,7 +995,7 @@ function configuration_file_test_software_compress()
     fi
 
     #Change back to SHIM
-    export QATZIP_SECTION_NAME="SHIM"
+    export QAT_SECTION_NAME="SHIM"
     for ((i = 0; i < $numberOfCPM; i++)); do
         if [[ $platform = "37c8" || $platform = "C62x" ]]; then
             sed -i 's/^\[CFTEST\]$/\[SHIM\]/g' /etc/c6xx_dev$i.conf
