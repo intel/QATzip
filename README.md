@@ -101,6 +101,9 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
   in the other session.
 * For stream object, user should clear stream object by calling qzEndStream() before clear session
   object with qzTeardownSession(). Otherwise, memory leak happens.
+* For stream object, stream lenth must be smaller than `strm_buff_sz`, or QATzip would generate multiple
+  deflate block in order and has the last block with BFIN set.
+
 
 
 ## Installation Instructions
