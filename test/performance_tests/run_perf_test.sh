@@ -50,14 +50,17 @@ fi
 
 #get the type of QAT hardware
 platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
-$QZ_TOOL/get_platform/get_platforminfo.sh
-platform=`cat $QZ_TOOL/get_platform/PlatformInfo`
-echo "platform=$platform"
-if [ $platform == "C3000" ]
+if [ $platform != "37c8" ]
 then
-    echo "The performance test case does not need to run on C3000 platform!"
-    exit 0
+    platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
+    if [[ $platform != "DH895XCC" && $platform != "C62x" ]]
+    then
+        echo "Unsupport Platform: `lspci | grep Co-processor` "
+        exit 1
+    fi
 fi
+echo "platform=$platform"
+
 
 #Replace the driver configuration files and configure hugepages
 echo "Replace the driver configuration files and configure hugepages."
@@ -71,10 +74,6 @@ elif [ $platform = "DH895XCC" ]
 then
     process=8
     \cp $CURRENT_PATH/config_file/dh895xcc/dh895xcc_dev0.conf /etc
-elif [ $platform = "270b" ]
-then
-    process=8
-    \cp $CURRENT_PATH/config_file/c4xxx/c4xxx_dev0.conf /etc
 fi
 service qat_service restart
 echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
