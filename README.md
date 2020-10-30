@@ -64,18 +64,22 @@ ratio and throughput for data sets that are submitted piecemeal.
 * 'qzip' utility supports compression from regular file, pipeline and block device.
 * For standard GZIP format, try hardware decompression 1st before switch to software decompression.
 * Enable adaptive polling mechanism to save CPU usage in stress mode.
+* 'qzip' utility supports compression files and directories into 7z format.
 
 ## Hardware Requirements
 
 This QATzip library supports compression and decompression offload to the following
 acceleration devices:
 
-* Intel&reg; C62X Series Chipset
-* [Intel&reg; Communications Chipset 8925 to 8955 Series][1]
-* [Intel&reg; Communications Chipset 8960 to 8970 Series][2]
+* [Intel&reg; C62X Series Chipset][1]
+* [Intel&reg; Communications Chipset 8925 to 8955 Series][2]
+* [Intel&reg; Communications Chipset 8960 to 8970 Series][3]
+* [Intel&reg; C3XXX Series Chipset][4]
 
-[1]:https://www.intel.com/content/www/us/en/ethernet-products/gigabit-server-adapters/quickassist-adapter-8950-brief.html
-[2]:https://www.intel.com/content/www/us/en/ethernet-products/gigabit-server-adapters/quickassist-adapter-8960-8970-brief.html
+[1]:https://www.intel.com/content/www/us/en/design/products-and-solutions/processors-and-chipsets/purley/intel-xeon-scalable-processors.html
+[2]:https://www.intel.com/content/www/us/en/ethernet-products/gigabit-server-adapters/quickassist-adapter-8950-brief.html
+[3]:https://www.intel.com/content/www/us/en/ethernet-products/gigabit-server-adapters/quickassist-adapter-8960-8970-brief.html
+[4]:https://www.intel.com/content/www/us/en/products/docs/processors/atom/c-series/c3000-family-brief.html
 
 ## Software Requirements
 
@@ -83,7 +87,7 @@ This release was validated on the following:
 
 * QATzip has been tested with the latest Intel&reg; QuickAssist Acceleration Driver.
 Please download the QAT driver from the link https://01.org/intel-quickassist-technology
-* QATzip has been tested by Intel&reg; on CentOS 7.2.1511 with kernel 3.10.0-327.el7.x86\_64
+* QATzip has been tested by Intel&reg; on CentOS 7.8.2003 with kernel 3.10.0-1127.19.1.el7.x86\_64
 * Zlib\* library of version 1.2.7 or higher
 * Suggest GCC\* of version 4.8.5 or higher
 
@@ -103,6 +107,9 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
   object with qzTeardownSession(). Otherwise, memory leak happens.
 * For stream object, stream lenth must be smaller than `strm_buff_sz`, or QATzip would generate multiple
   deflate block in order and has the last block with BFIN set.
+* For 7z format, decompression only supports \*.7z archives compressed by qzip.
+* For 7z format, decompression only supports software.
+* For 7z format, the header compression is not supported.
 
 
 
@@ -158,7 +165,7 @@ The Intel&reg; QATzip comes with some example conf files to use with the Intel&r
 The Intel&reg; QATzip will not function with the default Intel&reg; QAT Driver conf file because
 the default conf does not contain a [SHIM] section which the Intel&reg; QATzip requires by default.
 The default section name in the QATzip can be modified if required by setting the environment
-variable "QATZIP_SECTION_NAME".
+variable "QAT_SECTION_NAME".
 
 To update the configuration file, copy the configure file(s) from directory of
 `$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
@@ -266,9 +273,31 @@ compressing or decompressing files:
     "  -V, --version     display version number",
     "  -L, --level       set compression level",
     "  -C, --chunksz     set chunk size",
-    "  -O, --output      set output header format(gzip|gzipext)",
-    "  -r,               set max inflight request number
-    "  -o,               set output file name
+    "  -O, --output      set output header format(gzip|gzipext|7z)",
+    "  -r,               set max inflight request number",
+    "  -R,               set Recursive mode for decompressing a directory
+                         It only supports for gzip/gzipext format and
+                         decompression operation",
+    "  -o,               set output file name"
+```
+
+#### File compession in 7z:
+```bash
+    qzip -O 7z FILE1 FILE2 FILE3... -o result.7z
+```
+#### Dir compression in 7z:
+```bash
+    qzip -O 7z DIR1 DIR2 DIR3... -o result.7z
+```
+#### Decompression file in 7z:
+```bash
+    qzip -d result.7z
+```
+#### Dir Decompression with -R:
+If the DIR contains files that are compressed by qzip and using gzip/gzipext
+format, then it should be add `-R` option to decompress them:
+```bash
+    qzip -d -R DIR
 ```
 
 ### Performance Test With QATzip
