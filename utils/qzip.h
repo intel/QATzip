@@ -152,6 +152,9 @@
 #define QZ7Z_ERR_TIMES                -220
 #define QZ7Z_ERR_SIG_HEADER_BROKEN    -221
 #define QZ7Z_ERR_READLINK             -222
+#define QZ7Z_ERR_SIG_HEADER           -223
+#define QZ7Z_ERR_RESOLVE_SUBSTREAMS   -224
+#define QZ7Z_ERR_UNEXPECTED           -225
 
 #define MAX_PATH_LEN   1024 /* max pathname length */
 #define SUFFIX_GZ      ".gz"
@@ -257,17 +260,6 @@ typedef struct QzListHead_S {
     QzListNode_T      *next;
 } QzListHead_T;
 
-/* create a list return list head */
-QzListHead_T *qzListCreate(int num_per_node);
-
-/*  Add one element's address to the list */
-void qzListAdd(QzListHead_T *head, void **node);
-
-/* Get an element's address from a list */
-void *qzListGet(QzListHead_T *head, int index);
-
-/* Free all allocated memory pointed by head */
-void qzListDestroy(QzListHead_T *head);
 
 /**
  ******************************************************************************
@@ -580,31 +572,86 @@ typedef struct Qz7zItemList_S {
     QzCatagoryTable_T  *table;
 } Qz7zItemList_T;
 
+/* create a list return list head */
+QzListHead_T *qzListCreate(int num_per_node);
+
+/*  Add one element's address to the list */
+void qzListAdd(QzListHead_T *head, void **node);
+
+/* Get an element's address from a list */
+void *qzListGet(QzListHead_T *head, int index);
+
+/* Free all allocated memory pointed by head */
+void qzListDestroy(QzListHead_T *head);
+
 /* create the file items list */
-Qz7zFileItem_T *qzFileItemCreate(char *pfilename);
+Qz7zFileItem_T *fileItemCreate(char *pfilename);
 
 /* destroy the items list */
-void qz7zItemListDestroy(Qz7zItemList_T *p);
+void itemListDestroy(Qz7zItemList_T *p);
 
 /* process the cmdline inputs */
-Qz7zItemList_T *processInputParams(int n, char **files);
+Qz7zItemList_T *itemListCreate(int n, char **files);
 
-/* delete source files when compressing */
-int deleteSourceFile(Qz7zItemList_T *the_list);
 
-/* generate signature header */
+/*
+ * resolve functions
+ */
+Qz7zSignatureHeader_T *resolveSignatureHeader(FILE *fp);
+Qz7zArchiveProperty_T *resolveArchiveProperties(FILE *fp);
+Qz7zPackInfo_T *resolvePackInfo(FILE *fp);
+Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp);
+Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp);
+Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp);
+Qz7zStreamsInfo_T *resolveMainStreamsInfo(FILE *fp);
+Qz7zEndHeader_T *resolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader);
+
+/* create catagory list */
+QzCatagoryTable_T *createCatagoryList();
+int scanFilesIntoCatagory(Qz7zItemList_T *the_list);
+/*
+ * generate functions
+ */
 Qz7zSignatureHeader_T *generateSignatureHeader(void);
-
-/* generate end header */
+Qz7zArchiveProperty_T *generatePropertyInfo(void);
+Qz7zPackInfo_T *generatePackInfo(Qz7zItemList_T *the_list,
+                                 size_t compressed_size);
+Qz7zFolderInfo_T *generateFolderInfo(Qz7zItemList_T *the_list, int n_folders);
+Qz7zCodersInfo_T *generateCodersInfo(Qz7zItemList_T *the_list);
+Qz7zDigest_T *generateDigestInfo(QzListHead_T *head);
+Qz7zSubstreamsInfo_T *generateSubstreamsInfo(Qz7zItemList_T *the_list);
+Qz7zFilesInfo_T *generateFilesInfo(Qz7zItemList_T *the_list);
 Qz7zEndHeader_T *generateEndHeader(Qz7zItemList_T *the_list,
                                    size_t compressed_size);
 
-void qzFreeEndHeader(Qz7zEndHeader_T *eheader, int is_compress);
+/*
+ * write function
+ */
+int writeSignatureHeader(Qz7zSignatureHeader_T *header, FILE *fp);
+size_t writeArchiveProperties(Qz7zArchiveProperty_T *property, FILE *fp,
+                              uint32_t *crc);
+size_t writePackInfo(Qz7zPackInfo_T *pack, FILE *fp, uint32_t *crc);
+size_t writeFolder(Qz7zFolderInfo_T *folder, FILE *fp, uint32_t *crc);
+size_t writeCodersInfo(Qz7zCodersInfo_T *coders, FILE *fp, uint32_t *crc);
+size_t writeDigestInfo(Qz7zDigest_T *digest, FILE *fp, uint32_t *crc);
+size_t writeStreamsInfo(Qz7zStreamsInfo_T *streams, FILE *fp, uint32_t *crc);
+size_t writeFilesInfo(Qz7zFilesInfo_T *files, FILE *fp, uint32_t *crc);
+size_t writeSubstreamsInfo(Qz7zSubstreamsInfo_T *substreams, FILE *fp,
+                           uint32_t *crc);
+size_t writeEndHeader(Qz7zEndHeader_T *header, FILE *fp, uint32_t *crc);
 
-void qzFreePropertyInfo(Qz7zArchiveProperty_T *info);
-void qzFreeStreamsInfo(Qz7zStreamsInfo_T *info);
-void qzFreeFilesInfo(Qz7zFilesInfo_T *info);
-void qzFreeFilesDecInfo(Qz7zFilesInfo_Dec_T *info);
+/*
+ * free functions
+ */
+void freePropertyInfo(Qz7zArchiveProperty_T *info);
+void freePackInfo(Qz7zPackInfo_T *info);
+void freeCodersInfo(Qz7zCodersInfo_T *info);
+void freeSubstreamsInfo(Qz7zSubstreamsInfo_T *info);
+void freeStreamsInfo(Qz7zStreamsInfo_T *info);
+void freeFilesInfo(Qz7zFilesInfo_T *info);
+void freeFilesDecInfo(Qz7zFilesInfo_Dec_T *info);
+void freeEndHeader(Qz7zEndHeader_T *eheader, int is_compress);
+
 
 /* the main API for compress into 7z format */
 int qz7zCompress(QzSession_T *sess, Qz7zItemList_T *the_list,
@@ -613,22 +660,28 @@ int qz7zCompress(QzSession_T *sess, Qz7zItemList_T *the_list,
 /* the main API for decompress a 7z file */
 int qz7zDecompress(QzSession_T *sess, const char *archive);
 
-/*  write the signature header to the buffer */
-int qz7zWriteSignatureHeader(Qz7zSignatureHeader_T *header, FILE *fp);
 
-/*  write the end header to the buffer */
-size_t qz7zWriteEndHeader(Qz7zEndHeader_T *header, FILE *fp, uint32_t *crc);
-
-/* get an UINT64 in presentation, transfer a real uint64_t to UINT64  */
+/*
+ * UINT64 convertion functions
+ */
+/* conversion from real uint64_t to UINT64 */
+int getExtraByteNum(uint64_t n);
 int getUint64Bytes(uint64_t n, unsigned char *u64);
 
-/* create catagory list */
-QzCatagoryTable_T *createCatagoryList();
+/* conversion from UINT64 to uint64_t */
+int getExtraByteNum2(uint8_t first);
+uint64_t getU64FromBytes(FILE *fp);
 
 #ifdef QZ7Z_DEBUG
 void printSignatureHeader(Qz7zSignatureHeader_T *sheader);
 void printEndHeader(Qz7zEndHeader_T *eheader);
 #endif
+
+/* create the directory in path of newdir */
+int createDir(const char *newdir, int back);
+
+/* delete source files represented by the list */
+int deleteSourceFile(Qz7zItemList_T *the_list);
 
 /* check whether the file is 7z archive */
 int check7zArchive(const char *archive);
@@ -636,13 +689,68 @@ int check7zArchive(const char *archive);
 /* check whether the filename is directory */
 int checkDirectory(const char *filename);
 
+void freeTimeList(RunTimeList_T *time_list);
+void displayStats(RunTimeList_T *time_list,
+                  off_t insize, off_t outsize, int is_compress);
+
+void tryHelp(void);
+void help(void);
+void version();
+char *qzipBaseName(char *fname);
+QzSuffix_T getSuffix(const char *filename);
+bool hasSuffix(const char *fname);
+int makeOutName(const char *in_name, const char *out_name,
+                char *oname, int is_compress);
+
+/* Makes a complete file system path by adding a file name to the path of its
+ * parent directory. */
+void mkPath(char *path, const char *dirpath, char *file);
+
+
+
+/*
+ * internal api functions
+ */
+int qatzipSetup(QzSession_T *sess, QzSessionParams_T *params);
+int qatzipClose(QzSession_T *sess);
+
 void processFile(QzSession_T *sess, const char *in_name,
                  const char *out_name, int is_compress);
 
-int qatzipSetup(QzSession_T *sess, QzSessionParams_T *params);
-void freeTimeList(RunTimeList_T *time_list);
+int doProcessBuffer(QzSession_T *sess,
+                    unsigned char *src, unsigned int *src_len,
+                    unsigned char *dst, unsigned int dst_len,
+                    RunTimeList_T *time_list, FILE *dst_file,
+                    off_t *dst_file_size, int is_compress);
 
-void displayStats(RunTimeList_T *time_list, off_t insize, off_t outsize,
-                  int is_compress);
+void doProcessFile(QzSession_T *sess, const char *src_file_name,
+                   const char *dst_file_name, int is_compress);
+
+void processDir(QzSession_T *sess, const char *in_name,
+                const char *out_name, int is_compress);
+
+void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
+                   int is_compress);
+
+int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
+                   const char *dst_file_name);
+
+int doDecompressFile(QzSession_T *sess, const char *src_file_name);
+
+/*
+ * extern declaration
+ */
+extern char const *const g_license_msg[2];
+extern char *g_program_name;
+extern int g_decompress;        /* g_decompress (-d) */
+extern int g_keep;                     /* keep (don't delete) input files */
+extern QzSession_T g_sess;
+extern QzSessionParams_T g_params_th;
+/* Estimate maximum data expansion after decompression */
+extern const unsigned int g_bufsz_expansion_ratio[4];
+/* Command line options*/
+extern char const g_short_opts[];
+extern const struct option g_long_opts[];
+extern const unsigned int USDM_ALLOC_MAX_SZ;
 
 #endif

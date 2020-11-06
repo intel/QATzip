@@ -37,9 +37,6 @@
 #define OK 0
 #define ERROR 1
 
-extern unsigned int g_bufsz_expansion_ratio[4];
-extern int g_keep;
-
 static const unsigned char g_header_signature[] = {
     '7', 'z', 0xBC, 0xAF, 0x27, 0x1C
 };
@@ -61,8 +58,7 @@ static uint64_t const extra_byte_boundary[] = {
     0x7ffffffff,
     0x3ffffffffff,
     0x1ffffffffffff,
-    0xffffffffffffff,
-    0xffffffffffffffff
+    0xffffffffffffff
 };
 
 static uint8_t const first_byte_table[] = {
@@ -104,9 +100,7 @@ static size_t  writeTag(unsigned char tag, FILE *fp, uint32_t *crc)
     size_t  n;
     n = fwrite(&tag, sizeof(unsigned char), 1, fp);
     CHECK_FWRITE_RETURN(n, 1)
-    if (crc) {
-        *crc = crc32(*crc, &tag, 1);
-    }
+    *crc = crc32(*crc, &tag, 1);
     return n;
 }
 
@@ -115,9 +109,7 @@ static size_t writeTime(unsigned int t, FILE *fp, uint32_t *crc)
     size_t n;
     n = fwrite(&t, sizeof(unsigned int), 1, fp);
     CHECK_FWRITE_RETURN(n, 1)
-    if (crc) {
-        *crc = crc32(*crc, (unsigned char *)&t, 4);
-    }
+    *crc = crc32(*crc, (unsigned char *)&t, 4);
     return 4;
 }
 
@@ -129,9 +121,7 @@ static size_t writeNumber(uint64_t u64, FILE *fp, uint32_t *crc)
     n = getUint64Bytes(u64, u64_bytes);
     size = fwrite(u64_bytes, sizeof(unsigned char), n, fp);
     CHECK_FWRITE_RETURN(size, n)
-    if (crc) {
-        *crc = crc32(*crc, u64_bytes, n);
-    }
+    *crc = crc32(*crc, u64_bytes, n);
     return size;
 }
 
@@ -142,18 +132,6 @@ static unsigned char readByte(FILE *fp)
     n = fread(&c, 1, 1, fp);
     CHECK_FREAD_RETURN(n, 1)
     return c;
-}
-
-static unsigned char *readNByte(int n, FILE *fp)
-{
-    unsigned char    *p;
-    int              size;
-    p = (unsigned char *)malloc(n * sizeof(unsigned char));
-    CHECK_ALLOC_RETURN_VALUE(p)
-
-    size = fread(p, 1, n, fp);
-    CHECK_FREAD_RETURN(size, n)
-    return p;
 }
 
 static void skipNByte(int n, FILE *fp)
@@ -170,19 +148,19 @@ static uint32_t readCRC(FILE *fp)
     return crc;
 }
 
-static int getExtraByteNum2(uint8_t first)
+int getExtraByteNum2(uint8_t first)
 {
     int i;
     if (first == 0xff) return 8;
 
-    for (i = 0; i < sizeof(first_byte_table); ++i) {
+    for (i = 0; i < sizeof(first_byte_table) - 1; ++i) {
         if (first >= first_byte_table[i] && first < first_byte_table[i + 1])
             break;
     }
     return i;
 }
 
-static int getExtraByteNum(uint64_t n)
+int getExtraByteNum(uint64_t n)
 {
     int i;
     int boundary_len = sizeof(extra_byte_boundary)
@@ -195,7 +173,7 @@ static int getExtraByteNum(uint64_t n)
             continue;
         break;
     }
-    return i - 1;
+    return i ? i - 1 : i;
 }
 
 /*
@@ -219,7 +197,9 @@ uint64_t getU64FromBytes(FILE *fp)
     for (i = 0; i < extra; ++i) {
         buf[i] = readByte(fp);
     }
-    buf[i] = c & ~p;
+    if (extra != 7 && extra != 8) {
+        buf[i] = c & ~p;
+    }
 
     memcpy(&ret, buf, sizeof(buf));
     return ret;
@@ -470,7 +450,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
     int ret = OK;
     struct stat src_file_stat;
     unsigned int src_buffer_size = 0;
-    unsigned int dst_buffer_size = 0;
+    unsigned int dst_buffer_size = 0, dst_buffer_max_size = 0;
     off_t src_file_size = 0, dst_file_size = 0, file_remaining = 0;
     const char *src_file_name = NULL;
     unsigned char *src_buffer = NULL;
@@ -485,8 +465,14 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
     unsigned int read_more = 0;
     int src_fd = 0;
+    uint64_t non_empty_number = 0;
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
-    CHECK_ALLOC_RETURN_VALUE(time_list_head)
+    Qz7zSignatureHeader_T *sheader = NULL;
+    if (!time_list_head) {
+        QZ_DEBUG("malloc time_list_head error\n");
+        ret = QZ7Z_ERR_OOM;
+        goto exit;
+    }
     gettimeofday(&time_list_head->time_s, NULL);
     time_list_head->time_e = time_list_head->time_s;
     time_list_head->next = NULL;
@@ -500,17 +486,35 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
     dst_file = fopen(dst_file_name, "w+");
     if (!dst_file) {
         QZ_ERROR("Cannot open file: %s\n", dst_file_name);
-        return QZ7Z_ERR_OPEN;
+        ret = QZ7Z_ERR_OPEN;
+        goto exit;
     }
-    Qz7zSignatureHeader_T *sheader = generateSignatureHeader();
+    sheader = generateSignatureHeader();
     if (!sheader) {
         QZ_ERROR("Cannot generate signuature header, out of memory");
-        return QZ7Z_ERR_OOM;
+        ret = QZ7Z_ERR_OOM;
+        goto exit;
     }
 
-    qz7zWriteSignatureHeader(sheader, dst_file);
+    src_buffer = malloc(SRC_BUFF_LEN);
+    if (!src_buffer) {
+        QZ_DEBUG("malloc error\n");
+        ret = QZ7Z_ERR_OOM;
+        goto exit;
+    }
 
-    uint64_t non_empty_number = list->items[1]->total;
+    dst_buffer_max_size = qzMaxCompressedLength(SRC_BUFF_LEN, sess);
+    dst_buffer = malloc(dst_buffer_max_size);
+    if (!src_buffer) {
+        QZ_DEBUG("malloc error\n");
+        ret = QZ7Z_ERR_OOM;
+        goto exit;
+    }
+
+
+    writeSignatureHeader(sheader, dst_file);
+
+    non_empty_number = list->items[1]->total;
 
     if (non_empty_number) {
 
@@ -522,18 +526,21 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
             ret = lstat(src_file_name, &src_file_stat);
             if (ret) {
                 QZ_ERROR("stat(): failed\n");
-                return QZ7Z_ERR_STAT;
+                ret = QZ7Z_ERR_STAT;
+                goto exit;
             }
 
             if (S_ISBLK(src_file_stat.st_mode)) {
                 if ((src_fd = open(src_file_name, O_RDONLY)) < 0) {
                     perror(src_file_name);
-                    return QZ7Z_ERR_OPEN;
+                    ret = QZ7Z_ERR_OPEN;
+                    goto exit;
                 } else {
                     if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
                         close(src_fd);
                         perror(src_file_name);
-                        return QZ7Z_ERR_IOCTL;
+                        ret = QZ7Z_ERR_IOCTL;
+                        goto exit;
                     }
                     src_file_size *= 512;
                     /* size get via BLKGETSIZE is divided by 512 */
@@ -546,18 +553,11 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                               SRC_BUFF_LEN : src_file_size;
             dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
 
-            if (0 == src_file_size) {
-                dst_buffer_size = 1024;
-            }
-
-            src_buffer = malloc(src_buffer_size);
-            CHECK_ALLOC_RETURN_VALUE(src_buffer)
-            dst_buffer = malloc(dst_buffer_size);
-            CHECK_ALLOC_RETURN_VALUE(dst_buffer)
             src_file = fopen(src_file_name, "r");
             if (!src_file) {
                 QZ_ERROR("create %s error\n", src_file_name);
-                return QZ7Z_ERR_OPEN;
+                ret = QZ7Z_ERR_OPEN;
+                goto exit;
             }
 
             file_remaining = src_file_size;
@@ -645,9 +645,8 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
 
             } while (file_remaining > 0);
 
-            free(src_buffer);
-            free(dst_buffer);
             fclose(src_file);
+            src_file = NULL;
         }// end for
 
     } else {
@@ -655,13 +654,19 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
     }
 
     eheader = generateEndHeader(list, total_compressed_size);
+    if (!eheader) {
+        QZ_ERROR("cannot allocate for end header\n");
+        ret = QZ7Z_ERR_OOM;
+        goto exit;
+    }
 
     uint64_t eheader_size;
     uint32_t crc = 0;
-    eheader_size = qz7zWriteEndHeader(eheader, dst_file, &crc);
+    eheader_size = writeEndHeader(eheader, dst_file, &crc);
     if (eheader_size == 0) {
         QZ_ERROR("Cannot write 7z end header\n");
-        return QZ7Z_ERR_END_HEADER;
+        ret = QZ7Z_ERR_END_HEADER;
+        goto exit;
     }
 
     QZ_DEBUG("total compressed: %lu\n"
@@ -689,11 +694,25 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                  1/* is_compress */);
 
 exit:
+    if (eheader) {
+        freeEndHeader(eheader, 1);
+    }
+    if (src_file) {
+        fclose(src_file);
+    }
+    if (dst_buffer) {
+        free(dst_buffer);
+    }
+    if (src_buffer) {
+        free(src_buffer);
+    }
+    if (sheader) {
+        qzFree(sheader);
+    }
+    if (dst_file) {
+        fclose(dst_file);
+    }
     freeTimeList(time_list_head);
-    free(sheader);
-    qzFreeEndHeader(eheader, 1);
-    fclose(dst_file);
-
     if (!g_keep && OK == ret) {
         int re = deleteSourceFile(list);
         if (re != QZ7Z_OK) {
@@ -745,56 +764,63 @@ int deleteSourceFile(Qz7zItemList_T *list)
     return QZ7Z_OK;
 }
 
-Qz7zSignatureHeader_T *qz7zResolveSignatureHeader(FILE *fp)
+Qz7zSignatureHeader_T *resolveSignatureHeader(FILE *fp)
 {
     int n;
-    Qz7zSignatureHeader_T *sheader = malloc(sizeof(Qz7zSignatureHeader_T));
-    CHECK_ALLOC_RETURN_VALUE(sheader)
-
-    n = fread(&sheader->signature, sizeof(unsigned char), 6, fp);
-    CHECK_FREAD_RETURN(n, 6);
-    n = fread(&sheader->majorVersion, sizeof(unsigned char), 1, fp);
-    CHECK_FREAD_RETURN(n, 1);
-    n = fread(&sheader->minorVersion, sizeof(unsigned char), 1, fp);
-    CHECK_FREAD_RETURN(n, 1);
-    n = fread(&sheader->startHeaderCRC, sizeof(uint32_t), 1, fp);
-    CHECK_FREAD_RETURN(n, 1);
-    n = fread(&sheader->nextHeaderOffset, sizeof(uint64_t), 1, fp);
-    CHECK_FREAD_RETURN(n, 1);
-    n = fread(&sheader->nextHeaderSize, sizeof(uint64_t), 1, fp);
-    CHECK_FREAD_RETURN(n, 1);
-    n = fread(&sheader->nextHeaderCRC, sizeof(uint32_t), 1, fp);
-    CHECK_FREAD_RETURN(n, 1);
+    Qz7zSignatureHeader_T *sheader = qzMalloc(sizeof(Qz7zSignatureHeader_T), 0,
+                                     PINNED_MEM);
+    if (sheader) {
+        n = fread(&sheader->signature, sizeof(unsigned char), 6, fp);
+        CHECK_FREAD_RETURN(n, 6);
+        n = fread(&sheader->majorVersion, sizeof(unsigned char), 1, fp);
+        CHECK_FREAD_RETURN(n, 1);
+        n = fread(&sheader->minorVersion, sizeof(unsigned char), 1, fp);
+        CHECK_FREAD_RETURN(n, 1);
+        n = fread(&sheader->startHeaderCRC, sizeof(uint32_t), 1, fp);
+        CHECK_FREAD_RETURN(n, 1);
+        n = fread(&sheader->nextHeaderOffset, sizeof(uint64_t), 1, fp);
+        CHECK_FREAD_RETURN(n, 1);
+        n = fread(&sheader->nextHeaderSize, sizeof(uint64_t), 1, fp);
+        CHECK_FREAD_RETURN(n, 1);
+        n = fread(&sheader->nextHeaderCRC, sizeof(uint32_t), 1, fp);
+        CHECK_FREAD_RETURN(n, 1);
+    } else {
+        QZ_ERROR("malloc error\n");
+    }
 
     return sheader;
 }
 
 #define QZ7Z_DEVELOP_ID_PREFIX_SHIFT  56
 #define QZ7Z_DEVELOP_ID_SHIFT         16
-Qz7zArchiveProperty_T *qz7zResolveArchiveProperties(FILE *fp)
+Qz7zArchiveProperty_T *resolveArchiveProperties(FILE *fp)
 {
-    Qz7zArchiveProperty_T *property = malloc(sizeof(Qz7zArchiveProperty_T));
-    CHECK_ALLOC_RETURN_VALUE(property)
+    Qz7zArchiveProperty_T *property = qzMalloc(sizeof(Qz7zArchiveProperty_T), 0,
+                                      PINNED_MEM);
+    if (!property) {
+        QZ_ERROR("malloc property error\n");
+        return NULL;
+    }
 
     uint64_t  id = getU64FromBytes(fp);
 
     if ((id >> QZ7Z_DEVELOP_ID_PREFIX_SHIFT) != 0x3f /* 7z dev id prefix */) {
         QZ_ERROR("7z file ArchiveProperties develop ID error.\n"
                  "develop ID should starts with 0x3f\n");
-        return NULL;
+        goto error;
     }
     QZ_DEBUG("id = %lu\n", id);
 
     if (((id >> QZ7Z_DEVELOP_ID_SHIFT) & 0xffffffffff) != QZ7Z_DEVELOP_ID) {
         QZ_ERROR("7z file ArchiveProperties develop ID(%lu) error.\n"
                  , id >> 16 & 0xffffffffff);
-        return NULL;
+        goto error;
     }
 
     if ((id & 0xffff) != QZ7Z_DEVELOP_SUBID) {
         QZ_ERROR("7z file ArchiveProperties develop subID(%u) error.\n"
                  , id & 0xffff);
-        return NULL;
+        goto error;
     }
 
     property->id = id;
@@ -805,24 +831,37 @@ Qz7zArchiveProperty_T *qz7zResolveArchiveProperties(FILE *fp)
 
     if (readByte(fp) != PROPERTY_ID_END) {
         QZ_ERROR("Resolve PackInfo: kEnd (0x00) expected\n");
-        return NULL;
+        goto error;
     }
+
     return property;
+
+error:
+    if (property) {
+        qzFree(property);
+    }
+    return NULL;
 }
 
-Qz7zPackInfo_T *qz7zResolvePackInfo(FILE *fp)
+Qz7zPackInfo_T *resolvePackInfo(FILE *fp)
 {
-    Qz7zPackInfo_T  *pack = malloc(sizeof(Qz7zPackInfo_T));
-    CHECK_ALLOC_RETURN_VALUE(pack)
+    Qz7zPackInfo_T  *pack = qzMalloc(sizeof(Qz7zPackInfo_T), 0, PINNED_MEM);
+    if (!pack) {
+        QZ_ERROR("malloc pack error\n");
+        return NULL;
+    }
 
     pack->PackPos = getU64FromBytes(fp);
     pack->NumPackStreams = getU64FromBytes(fp);
-    pack->PackSize = malloc(pack->NumPackStreams * sizeof(uint64_t));
-    CHECK_ALLOC_RETURN_VALUE(pack->PackSize)
+    pack->PackSize = qzMalloc(pack->NumPackStreams * sizeof(uint64_t), 0,
+                              PINNED_MEM);
+    if (!pack->PackSize) {
+        goto error;
+    }
 
     if (readByte(fp) != PROPERTY_ID_SIZE) {
         QZ_ERROR("Resolve PackInfo: kSize (0x09) expected\n");
-        return NULL;
+        goto error;
     }
 
     for (int i = 0; i < pack->NumPackStreams; ++i) {
@@ -831,37 +870,60 @@ Qz7zPackInfo_T *qz7zResolvePackInfo(FILE *fp)
 
     if (readByte(fp) != PROPERTY_ID_END) {
         QZ_ERROR("Resolve PackInfo: kEnd (0x00) expected\n");
-        return NULL;
+        goto error;
     }
 
     return pack;
+
+error:
+    if (pack) {
+        qzFree(pack->PackSize);
+        qzFree(pack);
+    }
+    return NULL;
 }
 
-Qz7zCodersInfo_T *qz7zResolveCodersInfo(FILE *fp)
+Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
 {
     unsigned char c;
-    Qz7zCodersInfo_T *coders = malloc(sizeof(Qz7zCodersInfo_T));
-    CHECK_ALLOC_RETURN_VALUE(coders)
-
-    if ((c = readByte(fp)) != PROPERTY_ID_FOLDER) {
-        QZ_ERROR("Resolve CodersInfo: kFolders(0x0b) expected: %02x\n", c);
+    int i_folder = 0;
+    Qz7zCodersInfo_T *coders = qzMalloc(sizeof(Qz7zCodersInfo_T), 0,
+                                        PINNED_MEM);
+    if (!coders) {
+        QZ_ERROR("malloc coders\n");
         return NULL;
     }
 
+    if ((c = readByte(fp)) != PROPERTY_ID_FOLDER) {
+        QZ_ERROR("Resolve CodersInfo: kFolders(0x0b) expected: %02x\n", c);
+        goto error;
+    }
+
     coders->numFolders = getU64FromBytes(fp);
-    coders->folders = malloc(coders->numFolders * sizeof(Qz7zFolderInfo_T));
-    CHECK_ALLOC_RETURN_VALUE(coders->folders)
+    coders->folders = qzMalloc(coders->numFolders * sizeof(Qz7zFolderInfo_T), 0,
+                               PINNED_MEM);
+    if (!coders->folders) {
+        QZ_ERROR("malloc folders error\n");
+        goto error;
+    }
 
     if ((c = readByte(fp)) == 0) {
-        for (int i = 0; i < coders->numFolders; ++i) {
-            Qz7zFolderInfo_T *p = &coders->folders[i];
+        for (i_folder = 0; i_folder < coders->numFolders; ++i_folder) {
+            Qz7zFolderInfo_T *p = &coders->folders[i_folder];
             size_t n;
             unsigned int id_size;
             p->numCoders = readByte(fp);
-            p->coder_list = malloc(sizeof(Qz7zCoder_T));
+            p->coder_list = qzMalloc(sizeof(Qz7zCoder_T), 0, PINNED_MEM);
+            if (!p->coder_list) {
+                goto error;
+            }
             p->coder_list->coderFirstByte.uc = readByte(fp);
             id_size = p->coder_list->coderFirstByte.st.CodecIdSize;
-            p->coder_list->codecID = malloc(id_size);
+            p->coder_list->codecID = qzMalloc(id_size, 0, PINNED_MEM);
+            if (!p->coder_list->codecID) {
+                QZ_ERROR("malloc error\n");
+                goto error;
+            }
             n = fread(p->coder_list->codecID, 1, id_size, fp);
             CHECK_FREAD_RETURN(n, id_size)
             QZ_DEBUG("codec id: %0x %0x %0x \n",
@@ -873,37 +935,53 @@ Qz7zCodersInfo_T *qz7zResolveCodersInfo(FILE *fp)
         coders->dataStreamIndex = getU64FromBytes(fp);
     } else {
         QZ_ERROR("Folders(0x00) or DataStreamIndex(0x01) expected\n");
-        return NULL;
+        goto error;
     }
 
     if ((c = readByte(fp)) != PROPERTY_ID_CODERS_UNPACK_SIZE) {
         QZ_ERROR("Resolve CodersInfo: kCoderUnpackSize(0x0c) expected: %02x\n",
                  c);
-        return NULL;
+        goto error;
     }
 
-    coders->unPackSize = malloc(coders->numFolders * sizeof(uint64_t));
+    coders->unPackSize = qzMalloc(coders->numFolders * sizeof(uint64_t), 0,
+                                  PINNED_MEM);
+    if (!coders->unPackSize) {
+        QZ_ERROR("malloc error\n");
+        goto error;
+    }
     for (int i = 0; i < coders->numFolders; ++i) {
         coders->unPackSize[i] = getU64FromBytes(fp);
     }
 
     if (readByte(fp) != PROPERTY_ID_END) {
         QZ_ERROR("Resolve CodersInfo: kEnd (0x00) expected\n");
-        return NULL;
+        goto error;
     }
     QZ_DEBUG("Resolve CodersInfo: finished\n");
 
     return coders;
+
+error:
+    freeCodersInfo(coders);
+    return NULL;
 }
 
-Qz7zSubstreamsInfo_T *qz7zResolveSubstreamsInfo(int n_folder, FILE *fp)
+Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
 {
     unsigned char c;
     int total = 1;
     int end = 0;
+    int unpackstreams_resolved = 0;
+    int unpacksize_resolved = 0;
+    int digests_resolved = 0;
 
-    Qz7zSubstreamsInfo_T *substreams = malloc(sizeof(Qz7zSubstreamsInfo_T));
-    CHECK_ALLOC_RETURN_VALUE(substreams)
+    Qz7zSubstreamsInfo_T *substreams = qzMalloc(sizeof(Qz7zSubstreamsInfo_T), 0,
+                                       PINNED_MEM);
+    if (!substreams) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
     memset(substreams, 0, sizeof(Qz7zSubstreamsInfo_T));
 
     while (!end) {
@@ -912,11 +990,18 @@ Qz7zSubstreamsInfo_T *qz7zResolveSubstreamsInfo(int n_folder, FILE *fp)
         switch (c) {
 
         case PROPERTY_ID_NUM_UNPACK_STREAM:
+            if (unpackstreams_resolved) {
+                QZ_ERROR("Resolve substreams info: duplicated tag\n");
+                goto error;
+            }
             total = 0;
             QZ_DEBUG("Resolve SubstreamsInfo: number folders: %d\n", n_folder);
-            substreams->numUnPackStreams = (uint64_t *)malloc(n_folder *
-                                           sizeof(uint64_t));
-            CHECK_ALLOC_RETURN_VALUE(substreams->numUnPackStreams)
+            substreams->numUnPackStreams = qzMalloc(n_folder * sizeof(uint64_t),
+                                                    0, PINNED_MEM);
+            if (!substreams->numUnPackStreams) {
+                QZ_ERROR("malloc error\n");
+                goto error;
+            }
 
             for (int i = 0; i < n_folder; ++i) {
                 substreams->numUnPackStreams[i] = getU64FromBytes(fp);
@@ -925,15 +1010,26 @@ Qz7zSubstreamsInfo_T *qz7zResolveSubstreamsInfo(int n_folder, FILE *fp)
                 total += substreams->numUnPackStreams[i];
             }
             QZ_DEBUG("resolve numUnpackStreams(0x0d) done\n");
+            unpackstreams_resolved = 1;
             break;
 
         case PROPERTY_ID_SIZE:
+            if (unpacksize_resolved) {
+                QZ_ERROR("Resolve substreams info: duplicated tag\n");
+                goto error;
+            }
+
             if (total - n_folder == 0) {
                 QZ_DEBUG("every folder has one file. No unpacksize part. \n");
             } else {
-                substreams->unPackSize = (uint64_t *)malloc((total - n_folder) *
-                                         sizeof(uint64_t));
-                CHECK_ALLOC_RETURN_VALUE(substreams->unPackSize)
+                substreams->unPackSize = qzMalloc((total - n_folder) *
+                                                  sizeof(uint64_t), 0,
+                                                  PINNED_MEM);
+                if (!substreams->unPackSize) {
+                    QZ_DEBUG("malloc error\n");
+                    goto error;
+                }
+
                 for (int i = 0; i < total - n_folder; ++i) {
 
                     substreams->unPackSize[i] = getU64FromBytes(fp);
@@ -943,38 +1039,65 @@ Qz7zSubstreamsInfo_T *qz7zResolveSubstreamsInfo(int n_folder, FILE *fp)
             }
 
             QZ_DEBUG("resolve kSize(0x09) done \n");
+            unpacksize_resolved = 1;
             break;
 
         case PROPERTY_ID_CRC:
+            if (digests_resolved) {
+                QZ_ERROR("Resolve substreams info: duplicated tag\n");
+                goto error;
+            }
+
+            substreams->digests = qzMalloc(sizeof(Qz7zDigest_T), 0, PINNED_MEM);
+            if (!substreams->digests) {
+                QZ_ERROR("malloc error\n");
+                goto error;
+            }
+
             if ((c = readByte(fp)) != 1) {
                 QZ_DEBUG("Resolve Substreams Info: not allaredefined ERROR. "
                          "c = %02x\n", c);
-                return NULL;
+                goto error;
             }
+            substreams->digests->allAreDefined = 1;
             QZ_DEBUG(" read allaredefined : 111 total: %d\n", total);
+
+            substreams->digests->numDefined = total;
+            substreams->digests->crc = qzMalloc(total * sizeof(uint32_t), 0,
+                                                PINNED_MEM);
+            if (!substreams->digests->crc) {
+                QZ_ERROR("malloc error\n");
+                goto error;
+            }
 
             for (int i = 0; i < total; ++i) {
                 readCRC(fp);
             }
 
             QZ_DEBUG("resolve CRC(0x0a) done of substreams\n");
+            digests_resolved = 1;
             break;
 
         case PROPERTY_ID_END:
+
             end = 1;
             break;
 
         default:
             QZ_ERROR("resolve unexpected byte\n");
-            return NULL;
+            goto error;
         }
     }
 
     QZ_DEBUG("Resolve SubstreamsInfo: finished\n");
     return substreams;
+
+error:
+    freeSubstreamsInfo(substreams);
+    return NULL;
 }
 
-int readNames(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
+static int readNames(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
 {
     unsigned char c;
     uint64_t u64;
@@ -1019,7 +1142,7 @@ int readNames(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
     return QZ7Z_OK;
 }
 
-int readTimes(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
+static int readTimes(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
 {
     uint64_t    section_size;
     size_t      nr;
@@ -1053,7 +1176,7 @@ int readTimes(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
     return QZ7Z_OK;
 }
 
-int readAttributes(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
+static int readAttributes(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
 {
     unsigned char c;
     uint64_t u64;
@@ -1087,7 +1210,7 @@ int readAttributes(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
     return QZ7Z_OK;
 }
 
-Qz7zFilesInfo_Dec_T *qz7zResolveFilesInfo(FILE *fp)
+Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp)
 {
     int n;
     int i;
@@ -1100,16 +1223,23 @@ Qz7zFilesInfo_Dec_T *qz7zResolveFilesInfo(FILE *fp)
     uint64_t dir_num;
     uint64_t file_num;
 
-    Qz7zFilesInfo_Dec_T *files = malloc(sizeof(Qz7zFilesInfo_Dec_T));
-    CHECK_ALLOC_RETURN_VALUE(files)
-    memset(files, 0, sizeof(Qz7zFilesInfo_Dec_T));
+    Qz7zFilesInfo_Dec_T *files = qzMalloc(sizeof(Qz7zFilesInfo_Dec_T), 0,
+                                          PINNED_MEM);
+    if (!files) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
+    qzMemSet(files, 0, sizeof(Qz7zFilesInfo_Dec_T));
 
     total_num = getU64FromBytes(fp);
-    Qz7zFileItem_T *p = (Qz7zFileItem_T *)malloc(total_num * sizeof(
-                            Qz7zFileItem_T));
-    CHECK_ALLOC_RETURN_VALUE(p)
+    Qz7zFileItem_T *p = qzMalloc(total_num * sizeof(
+                                     Qz7zFileItem_T), 0, PINNED_MEM);
+    if (!p) {
+        QZ_ERROR("malloc error\n");
+        goto error;
+    }
 
-    memset(p, 0, total_num * sizeof(*p));
+    qzMemSet(p, 0, total_num * sizeof(*p));
 
     end = 0;
     while (!end) {
@@ -1164,52 +1294,150 @@ Qz7zFilesInfo_Dec_T *qz7zResolveFilesInfo(FILE *fp)
             break;
 
         case PROPERTY_ID_NAME:
-            if (readNames(p, total_num, fp) < 0) return NULL;
+            if (readNames(p, total_num, fp) < 0) {
+                goto error;
+            }
             break;
 
         case PROPERTY_ID_CTIME:
         case PROPERTY_ID_ATIME:
         case PROPERTY_ID_MTIME:
-            readTimes(p, total_num, fp);
+            if (readTimes(p, total_num, fp) < 0) {
+                goto error;
+            }
             break;
 
         case PROPERTY_ID_ATTRIBUTES:
-            if (readAttributes(p, total_num, fp) < 0) return NULL;
+            if (readAttributes(p, total_num, fp) < 0) {
+                goto error;
+            }
             break;
 
         case PROPERTY_ID_DUMMY:
             c = readByte(fp);
             if (c) {
-                readNByte(c, fp); // to skip
+                skipNByte(c, fp);
             }
             break;
 
         default:
             QZ_ERROR("Not expected attribute\n");
-            return NULL;
+            goto error;
         }
     }
 
     files->items = p;
     return files;
+
+error:
+    if (p) {
+        qzFree(p);
+    }
+    if (files) {
+        qzFree(files);
+    }
+    return NULL;
 }
 
-Qz7zEndHeader_T *qz7zResolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader)
+
+
+Qz7zStreamsInfo_T *resolveMainStreamsInfo(FILE *fp)
+{
+    Qz7zStreamsInfo_T *streamsInfo = malloc(sizeof(Qz7zStreamsInfo_T));
+    if (!streamsInfo) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
+
+    unsigned char c;
+    int end = 0;
+    int pack_info_resolved = 0;
+    int coders_info_allocated = 0;
+    int coders_info_resolved = 0;
+    int substreams_info_resolved = 0;
+
+    while (!end) {
+
+        switch (c = readByte(fp)) {
+        case PROPERTY_ID_PACKINFO:
+            if (pack_info_resolved) {
+                QZ_ERROR("Resolve substreams info: duplicated tag\n");
+                goto error;
+            }
+
+            streamsInfo->packInfo = resolvePackInfo(fp);
+            if (!streamsInfo->packInfo) {
+                QZ_ERROR("Resolve Pack Info error\n");
+                goto error;
+            }
+            pack_info_resolved = 1;
+            break;
+        case PROPERTY_ID_UNPACKINFO:
+            if (coders_info_resolved) {
+                QZ_ERROR("Resolve substreams info: duplicated tag\n");
+                goto error;
+            }
+
+            streamsInfo->codersInfo = resolveCodersInfo(fp);
+            if (!streamsInfo->codersInfo) {
+                QZ_ERROR("Resolve Coders Info error\n");
+                goto error;
+            }
+            coders_info_allocated = 1;
+            coders_info_resolved = 1;
+            break;
+        case PROPERTY_ID_SUBSTREAMSINFO:
+            if (substreams_info_resolved) {
+                QZ_ERROR("Resolve substreams info: duplicated tag\n");
+                goto error;
+            }
+
+            if (!coders_info_allocated) {
+                QZ_ERROR("No coders info\n");
+                goto error;
+            }
+            streamsInfo->substreamsInfo =
+                resolveSubstreamsInfo(streamsInfo
+                                      ->codersInfo->numFolders, fp);
+            if (!streamsInfo->substreamsInfo) {
+                QZ_ERROR("Resolve Substreams Info error\n");
+                goto error;
+            }
+            substreams_info_resolved = 1;
+            break;
+        case PROPERTY_ID_END:
+            end = 1;
+            break;
+        default:
+            QZ_ERROR("Resolve Mainstreams Info Error\n");
+            goto error;
+        }
+    }
+
+    return streamsInfo;
+
+error:
+    freeStreamsInfo(streamsInfo);
+    return NULL;
+}
+
+
+Qz7zEndHeader_T *resolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader)
 {
     Qz7zEndHeader_T *eheader = malloc(sizeof(Qz7zEndHeader_T));
-    CHECK_ALLOC_RETURN_VALUE(eheader)
-
-    eheader->streamsInfo = malloc(sizeof(Qz7zStreamsInfo_T));
-    CHECK_ALLOC_RETURN_VALUE(eheader->streamsInfo)
-
-    eheader->filesInfo_Dec = malloc(sizeof(Qz7zFilesInfo_Dec_T));
-    CHECK_ALLOC_RETURN_VALUE(eheader->filesInfo_Dec)
+    if (!eheader) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
+    memset(eheader, 0, sizeof(Qz7zEndHeader_T));
 
     unsigned int status = 0;
     unsigned char c;
     int end = 0;
     int has_archive_property = 0;
-    int has_streams_info = 0;
+    int archive_property_resolved = 0;
+    int streams_info_resolved = 0;
+    int files_info_resolved = 0;
 
     fseek(fp, sheader->nextHeaderOffset + 0x20, SEEK_CUR);
 
@@ -1220,36 +1448,47 @@ Qz7zEndHeader_T *qz7zResolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader)
             status = RESOLVE_STATUS_IN_HEADER;
             break;
         case PROPERTY_ID_ARCHIVE_PROPERTIES:
+            if (archive_property_resolved) {
+                QZ_ERROR("Resolve substreams info: duplicated tag\n");
+                goto error;
+            }
+
             has_archive_property = 1;
             status = RESOLVE_STATUS_IN_ARCHIVE_PROPERTIES;
-            eheader->propertyInfo = qz7zResolveArchiveProperties(fp);
-            if (!eheader->propertyInfo) return NULL;
+            eheader->propertyInfo = resolveArchiveProperties(fp);
+            if (!eheader->propertyInfo) {
+                QZ_ERROR("Resolve Archive property error\n");
+                goto error;
+            }
+            archive_property_resolved = 1;
             break;
         case PROPERTY_ID_MAIN_STREAMSINFO:
-            has_streams_info = 1;
+            if (streams_info_resolved) {
+                QZ_ERROR("Resolve substreams info: duplicated tag\n");
+                goto error;
+            }
+
             status = RESOLVE_STATUS_IN_STREAMSINFO;
-            break;
-        case PROPERTY_ID_PACKINFO:
-            status = RESOLVE_STATUS_IN_PACKINFO;
-            eheader->streamsInfo->packInfo = qz7zResolvePackInfo(fp);
-            if (!eheader->streamsInfo->packInfo) return NULL;
-            break;
-        case PROPERTY_ID_UNPACKINFO:
-            status = RESOLVE_STATUS_IN_CODERSINFO;
-            eheader->streamsInfo->codersInfo = qz7zResolveCodersInfo(fp);
-            if (!eheader->streamsInfo->codersInfo) return NULL;
-            break;
-        case PROPERTY_ID_SUBSTREAMSINFO:
-            status = RESOLVE_STATUS_IN_SUBSTREAMSINFO;
-            eheader->streamsInfo->substreamsInfo =
-                qz7zResolveSubstreamsInfo(eheader->streamsInfo
-                                          ->codersInfo->numFolders, fp);
-            if (!eheader->streamsInfo->substreamsInfo) return NULL;
+            eheader->streamsInfo = resolveMainStreamsInfo(fp);
+            if (!eheader->streamsInfo) {
+                QZ_ERROR("malloc error\n");
+                goto error;
+            }
+            streams_info_resolved = 1;
             break;
         case PROPERTY_ID_FILESINFO:
+            if (files_info_resolved) {
+                QZ_ERROR("Resolve substreams info: duplicated tag\n");
+                goto error;
+            }
+
             status = RESOLVE_STATUS_IN_FILESINFO;
-            eheader->filesInfo_Dec = qz7zResolveFilesInfo(fp);
-            if (!eheader->filesInfo_Dec) return NULL;
+            eheader->filesInfo_Dec = resolveFilesInfo(fp);
+            if (!eheader->filesInfo_Dec) {
+                QZ_ERROR("Resolve Files Info error\n");
+                goto error;
+            }
+            files_info_resolved = 1;
             break;
         case PROPERTY_ID_END:
             QZ_DEBUG("readed kEnd: %d\n\n\n", status);
@@ -1258,7 +1497,7 @@ Qz7zEndHeader_T *qz7zResolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader)
             break;
         default:
             QZ_ERROR("Resolve End Header Error\n");
-            return NULL;
+            goto error;
         }
     }
 
@@ -1266,15 +1505,14 @@ Qz7zEndHeader_T *qz7zResolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader)
         QZ_ERROR("ERROR: property 'QAT7z' not found\n");
         QZ_ERROR("This archive is not compressed by QAT,");
         QZ_ERROR("QAT only support 7z archive compressed by QAT\n");
-        return NULL;
-    }
-
-    if (!has_streams_info) {
-        free(eheader->streamsInfo);
-        eheader->streamsInfo = NULL;
+        goto error;
     }
 
     return eheader;
+
+error:
+    freeEndHeader(eheader, 0);
+    return NULL;
 }
 
 static int createEmptyFile(const char *filename)
@@ -1292,7 +1530,7 @@ static int createEmptyFile(const char *filename)
  * create `newdir` at current dirctory
  * back: 1 return to original dir, 0 otherwise
  */
-static int createDir(const char *newdir, int back)
+int createDir(const char *newdir, int back)
 {
     int ret;
     char *dirc, *basec;
@@ -1383,72 +1621,88 @@ int checkHeaderCRC(Qz7zSignatureHeader_T *sh, FILE *fp)
     return 0;
 }
 
-void qzFreePropertyInfo(Qz7zArchiveProperty_T *info)
+void freePropertyInfo(Qz7zArchiveProperty_T *info)
 {
     Qz7zArchiveProperty_T *cur = info;
     while (cur) {
         free(cur->data);
         cur = cur->next;
     }
-    free(info);
+    qzFree(info);
 }
 
-void qzFreeStreamsInfo(Qz7zStreamsInfo_T *info)
+void freePackInfo(Qz7zPackInfo_T *info)
 {
     if (info) {
-        if (info->packInfo) {
-            free(info->packInfo->PackSize);
-            free(info->packInfo);
-        }
+        qzFree(info->PackSize);
+        qzFree(info);
+    }
+}
 
-        if (info->codersInfo) {
-            if (info->codersInfo->folders) {
-                Qz7zCoder_T *cur = info->codersInfo->folders->coder_list;
+void freeCodersInfo(Qz7zCodersInfo_T *info)
+{
+    if (info) {
+        if (info->folders) {
+
+            for (int i = 0; i < info->numFolders; ++i) {
+                Qz7zCoder_T *cur = info->folders[i].coder_list;
                 while (cur) {
-                    free(cur->codecID);
+                    qzFree(cur->codecID);
                     cur = cur->next;
                 }
-                free(info->codersInfo->folders->coder_list);
-                free(info->codersInfo->folders);
+                qzFree(info->folders[i].coder_list);
             }
-            free(info->codersInfo->unPackSize);
-            free(info->codersInfo);
+            qzFree(info->folders);
         }
-
-        if (info->substreamsInfo) {
-            free(info->substreamsInfo->numUnPackStreams);
-            free(info->substreamsInfo->unPackSize);
-            if (info->substreamsInfo->digests) {
-                free(info->substreamsInfo->digests->crc);
-                free(info->substreamsInfo->digests);
-            }
-            free(info->substreamsInfo);
-        }
-        free(info);
+        qzFree(info->unPackSize);
+        qzFree(info);
     }
 }
 
-void qzFreeFilesInfo(Qz7zFilesInfo_T *info)
-{
-    free(info);
-}
-
-void qzFreeFilesDecInfo(Qz7zFilesInfo_Dec_T *info)
+void freeSubstreamsInfo(Qz7zSubstreamsInfo_T *info)
 {
     if (info) {
-        free(info->items);
+        qzFree(info->numUnPackStreams);
+        qzFree(info->unPackSize);
+        if (info->digests) {
+            qzFree(info->digests->crc);
+            qzFree(info->digests);
+        }
+        qzFree(info);
+    }
+}
+
+void freeStreamsInfo(Qz7zStreamsInfo_T *info)
+{
+    if (info) {
+        freePackInfo(info->packInfo);
+        freeCodersInfo(info->codersInfo);
+        freeSubstreamsInfo(info->substreamsInfo);
         free(info);
     }
 }
 
-void qzFreeEndHeader(Qz7zEndHeader_T *h, int is_compress)
+void freeFilesInfo(Qz7zFilesInfo_T *info)
 {
-    qzFreePropertyInfo(h->propertyInfo);
-    qzFreeStreamsInfo(h->streamsInfo);
+    qzFree(info);
+}
+
+void freeFilesDecInfo(Qz7zFilesInfo_Dec_T *info)
+{
+    if (info) {
+        qzFree(info->items);
+        qzFree(info);
+    }
+}
+
+void freeEndHeader(Qz7zEndHeader_T *h, int is_compress)
+{
+    freePropertyInfo(h->propertyInfo);
+    freeStreamsInfo(h->streamsInfo);
     if (is_compress) {
-        qzFreeFilesInfo(h->filesInfo);
+        freeFilesInfo(h->filesInfo);
     } else {
-        qzFreeFilesDecInfo(h->filesInfo_Dec);
+        freeFilesDecInfo(h->filesInfo_Dec);
     }
     free(h);
 }
@@ -1460,6 +1714,11 @@ static int convertToSymlink(const char *name)
         char buf[1000 + 1];
         char *ret = fgets(buf, sizeof(buf) - 1, file);
         fclose(file);
+
+        if (access(buf, F_OK)) {
+            QZ_ERROR("%s: No such file or directory\n", buf);
+            return -1;
+        }
         if (ret) {
             int ir = unlink(name);
             if (ir == 0) {
@@ -1471,7 +1730,7 @@ static int convertToSymlink(const char *name)
     return -1;
 }
 
-static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
+int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 {
     int ret = OK;
     struct stat src_file_stat;
@@ -1494,18 +1753,27 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     int is_last;
     int n_part; // how much parts can the src file be splited
     int n_part_i;
-    Qz7zSignatureHeader_T *sheader;
-    Qz7zEndHeader_T *eheader;
+    Qz7zSignatureHeader_T *sheader = NULL;
+    Qz7zEndHeader_T *eheader = NULL;
+    RunTimeList_T *run_time = NULL;
 
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
-    CHECK_ALLOC_RETURN_VALUE(time_list_head)
+    if (!time_list_head) {
+        QZ_DEBUG("malloc RunTimeList_T error\n");
+        ret = QZ7Z_ERR_OOM;
+        goto exit;
+    }
     gettimeofday(&time_list_head->time_s, NULL);
     time_list_head->time_e = time_list_head->time_s;
     time_list_head->next = NULL;
 
     RunTimeList_T *time_node = time_list_head;
-    RunTimeList_T *run_time = calloc(1, sizeof(RunTimeList_T));
-    CHECK_ALLOC_RETURN_VALUE(run_time)
+    run_time = calloc(1, sizeof(RunTimeList_T));
+    if (!run_time) {
+        QZ_DEBUG("malloc RunTimeList_T error\n");
+        ret = QZ7Z_ERR_OOM;
+        goto exit;
+    }
     run_time->next = NULL;
     time_node->next = run_time;
     time_node = run_time;
@@ -1515,10 +1783,16 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     src_file = fopen(src_file_name, "r");
     if (src_file == NULL) {
         QZ_ERROR("cannot open file %s: %d\n", src_file_name, errno);
-        return QZ7Z_ERR_OPEN;
+        ret = QZ7Z_ERR_OPEN;
+        goto exit;
     }
 
-    sheader = qz7zResolveSignatureHeader(src_file);
+    sheader = resolveSignatureHeader(src_file);
+    if (!sheader) {
+        QZ_ERROR("Resolve signature header\n");
+        ret = QZ7Z_ERR_SIG_HEADER;
+        goto exit;
+    }
 
 #ifdef QZ7Z_DEBUG
     print_signature_header(sheader);
@@ -1526,15 +1800,18 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
     if (checkHeaderCRC(sheader, src_file) < 0) {
         QZ_ERROR("Header error: CRC check failed\n");
-        return QZ7Z_ERR_HEADER_CRC;
+        ret = QZ7Z_ERR_HEADER_CRC;
+        goto exit;
     }
 
-    eheader = qz7zResolveEndHeader(src_file, sheader);
+    eheader = resolveEndHeader(src_file, sheader);
     if (!eheader) {
         QZ_ERROR("Cannot resolve end header\n");
-        return QZ7Z_ERR_RESOLVE_END_HEADER;
+        ret = QZ7Z_ERR_RESOLVE_END_HEADER;
+        goto exit;
     }
     fclose(src_file);
+    src_file = NULL;
 
     // decode the dir
     Qz7zFileItem_T *p = eheader->filesInfo_Dec->items;
@@ -1567,18 +1844,21 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
         ret = stat(src_file_name, &src_file_stat);
         if (ret) {
             perror(src_file_name);
-            return QZ7Z_ERR_STAT;
+            ret = QZ7Z_ERR_STAT;
+            goto exit;
         }
 
         if (S_ISBLK(src_file_stat.st_mode)) {
             if ((src_fd = open(src_file_name, O_RDONLY)) < 0) {
                 perror(src_file_name);
-                return QZ7Z_ERR_OPEN;
+                ret = QZ7Z_ERR_OPEN;
+                goto exit;
             } else {
                 if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
                     close(src_fd);
                     perror(src_file_name);
-                    return QZ7Z_ERR_IOCTL;
+                    ret = QZ7Z_ERR_IOCTL;
+                    goto exit;
                 }
                 src_file_size *= 512;
                 /* size get via BLKGETSIZE is divided by 512 */
@@ -1598,14 +1878,21 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
         saved_dst_buffer_size = dst_buffer_size;
 
         src_buffer = malloc(src_buffer_size);
-        CHECK_ALLOC_RETURN_VALUE(src_buffer)
+        if (!src_buffer) {
+            QZ_ERROR("malloc error\n");
+            goto exit;
+        }
         src_buffer_orig = src_buffer;
         dst_buffer = malloc(dst_buffer_size);
-        CHECK_ALLOC_RETURN_VALUE(dst_buffer)
+        if (!dst_buffer) {
+            QZ_ERROR("malloc error\n");
+            goto exit;
+        }
         src_file = fopen(src_file_name, "r");
         if (!src_file) {
             QZ_ERROR("file open error: %s\n", src_file_name);
-            return QZ7Z_ERR_OPEN;
+            ret = QZ7Z_ERR_OPEN;
+            goto exit;
         }
 
         // skip the signature header
@@ -1623,8 +1910,8 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
         off_t          cur_offset;
         cur_offset = 0;
-        int need_created = 1;
         int file_read_processed_size = 0;
+        int need_check_file_with_same_name = 1;
 
         do {
             is_last = (n_part_i++ == n_part);
@@ -1697,63 +1984,62 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
                     unsigned char *dst_write;
                     size_t         n_written;
                     struct stat    stat_info;
+                    Qz7zFileItem_T *cur_file;
 
                     dst_write = dst_buffer;
                     dst_left = dst_buffer_size;
                     dst_file_size += dst_buffer_size;
 
                     while (dst_left) {
-
-                        if (need_created) {
-                            dst_file = fopen((p + dir_num + i)->fileName, "w");
-                            fseek(dst_file, 0, SEEK_END);
-                            QZ_PRINT("Create %s ...\n",
-                                     (p + dir_num + i)->fileName);
-                            lstat((p + dir_num + i)->fileName, &stat_info);
-                            stat_info.st_mode =
-                                ((p + dir_num + i)->attribute) >> 16;
+                        cur_file = p + dir_num + i;
+                        if (need_check_file_with_same_name) {
+                            if (!access(cur_file->fileName, F_OK)) {
+                                QZ_DEBUG("same name file exist, "
+                                         "need to delete it\n");
+                                unlink((p + dir_num + i)->fileName);
+                                need_check_file_with_same_name = 0;
+                            }
                         }
+                        lstat(cur_file->fileName, &stat_info);
+                        stat_info.st_mode = (cur_file->attribute) >> 16;
 
-                        if ((p + dir_num + i)->size - cur_offset <= dst_left) {
-
+                        dst_file = fopen(cur_file->fileName, "a");
+                        if (cur_file->size - cur_offset <= dst_left) {
                             n_written = fwrite(dst_write, 1,
-                                               (p + dir_num + i)->size -
-                                               cur_offset,
+                                               cur_file->size - cur_offset,
                                                dst_file);
 
-                            if (n_written == (p + dir_num + i)->size -
-                                cur_offset) {
-                                fclose(dst_file);
+                            if (n_written == cur_file->size - cur_offset) {
                                 ++i;
+                                need_check_file_with_same_name = 1;
                                 cur_offset = 0;
-                                need_created = 1;
 
-                                if (S_ISLNK(stat_info.st_mode)) {
-                                    convertToSymlink((p + dir_num + i)->
-                                                     fileName);
-                                }
                             } else {
+                                need_check_file_with_same_name = 0;
                                 cur_offset += n_written;
-                                need_created = 0;
                             }
                             dst_left -= n_written;
                             dst_write += n_written;
-
                         } else {
-                            need_created = 0;
                             n_written = fwrite(dst_write, 1, dst_left,
                                                dst_file);
-                            dst_write = dst_buffer; /* points to the start of
-                                                     the dest buffer to read
-                                                     more data */
+                            dst_write = dst_buffer;
                             cur_offset += dst_left;
-                            break;
+                            dst_left = 0;
+                            need_check_file_with_same_name = 0;
+                        }
+                        fclose(dst_file);
+                        dst_file = NULL;
+
+                        if (need_check_file_with_same_name) {
+                            if (S_ISLNK(stat_info.st_mode)) {
+                                convertToSymlink(cur_file->fileName);
+                            }
                         }
                     }// end while
                     dst_buffer_size = saved_dst_buffer_size;
                 }
             } while (buffer_remaining);
-
             file_remaining -= file_read_processed_size;
         } while (file_remaining > 0);
 
@@ -1778,16 +2064,28 @@ static int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
     displayStats(time_list_head, src_file_size, dst_file_size,
                  0/* is_compress */);
-exit:
-    freeTimeList(time_list_head);
-    free(sheader);
-    qzFreeEndHeader(eheader, 0);
 
-    if (eheader->streamsInfo) {
+exit:
+    if (dst_file) {
+        fclose(dst_file);
+    }
+    if (src_file) {
         fclose(src_file);
-        free(src_buffer_orig);
+    }
+    if (dst_buffer) {
         free(dst_buffer);
     }
+    if (src_buffer_orig) {
+        free(src_buffer_orig);
+    }
+    if (eheader) {
+        freeEndHeader(eheader, 0);
+    }
+    if (sheader) {
+        qzFree(sheader);
+    }
+
+    freeTimeList(time_list_head);
     if (!g_keep && OK == ret) {
         int re = remove(src_file_name);
         if (re != 0) {
@@ -1809,14 +2107,14 @@ int qz7zDecompress(QzSession_T *sess, const char *archive)
 /*
  * calculate a file's crc
  */
-int64_t calculateCRC(char *filename, size_t n)
+static int64_t calculateCRC(char *filename, size_t n)
 {
     FILE          *fp;
     uint32_t      crc = 0;
     size_t        ret;
 
     size_t remaining = n;
-    size_t buffer_size;
+    size_t len;
 
     unsigned char *buf;
     buf = malloc(SRC_BUFF_LEN);
@@ -1828,20 +2126,21 @@ int64_t calculateCRC(char *filename, size_t n)
     fp = fopen(filename, "r");
     if (!fp) {
         QZ_ERROR("filename open error\n");
+        free(buf);
         return QZ7Z_ERR_OPEN;
     }
 
     while (remaining > 0) {
         if (remaining > SRC_BUFF_LEN)
-            buffer_size = SRC_BUFF_LEN;
+            len = SRC_BUFF_LEN;
         else
-            buffer_size = remaining;
+            len = remaining;
 
-        ret = fread(buf, 1, buffer_size, fp);
-        CHECK_FREAD_RETURN(ret, buffer_size)
+        ret = fread(buf, 1, len, fp);
+        CHECK_FREAD_RETURN(ret, len)
 
-        crc = crc32(crc, buf, buffer_size);
-        remaining -= buffer_size;
+        crc = crc32(crc, buf, len);
+        remaining -= len;
     }
 
     free(buf);
@@ -1869,7 +2168,7 @@ void qzListDestroy(QzListHead_T *head)
     free(head);
 }
 
-void qz7zItemListDestroy(Qz7zItemList_T *p)
+void itemListDestroy(Qz7zItemList_T *p)
 {
     QzListHead_T  *h;
     for (int i = 0; i < 2; ++i) {
@@ -1884,14 +2183,14 @@ void qz7zItemListDestroy(Qz7zItemList_T *p)
         free(cat.cat_files->next->items);
         free(cat.cat_files->next);
         free(cat.cat_files);
-        free(table->catas);
     }
+    free(table->catas);
     free(table);
 
     free(p);
 }
 
-uint32_t calculateSymCRC(char *filename, size_t n)
+static uint32_t calculateSymCRC(char *filename, size_t n)
 {
     uint32_t   crc = 0;
     char       *buf;
@@ -1904,6 +2203,7 @@ uint32_t calculateSymCRC(char *filename, size_t n)
     ssize_t size = readlink(filename, buf, PATH_MAX);
     if ((unsigned int)size != (unsigned int)n) {
         QZ_ERROR("readlink error\n");
+        free(buf);
         return 0;
     }
     crc = crc32(crc, (unsigned char *)buf, n);
@@ -1912,7 +2212,7 @@ uint32_t calculateSymCRC(char *filename, size_t n)
     return crc;
 }
 
-Qz7zFileItem_T *qzFileItemCreate(char *f)
+Qz7zFileItem_T *fileItemCreate(char *f)
 {
     Qz7zFileItem_T *p = malloc(sizeof(Qz7zFileItem_T));
 
@@ -1931,6 +2231,8 @@ Qz7zFileItem_T *qzFileItemCreate(char *f)
         struct stat buf;
         if (lstat(p->fileName, &buf) < 0) {
             QZ_ERROR("stat func error\n");
+            free(p->fileName);
+            free(p);
             return NULL;
         }
         if (S_ISLNK(buf.st_mode)) {
@@ -2051,9 +2353,13 @@ QzListHead_T *qzListCreate(int num_per_node)
 
 Qz7zSignatureHeader_T *generateSignatureHeader()
 {
-    Qz7zSignatureHeader_T  *header = malloc(sizeof(Qz7zSignatureHeader_T));
+    Qz7zSignatureHeader_T  *header = qzMalloc(sizeof(Qz7zSignatureHeader_T), 0,
+                                     PINNED_MEM);
 
-    CHECK_ALLOC_RETURN_VALUE(header)
+    if (!header) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
     for (int i = 0; i < 6; ++i) {
         header->signature[i] = g_header_signature[i];
@@ -2063,19 +2369,26 @@ Qz7zSignatureHeader_T *generateSignatureHeader()
     return header;
 }
 
-static Qz7zPackInfo_T *generatePackInfo(Qz7zItemList_T *the_list,
-                                        size_t compressed_size)
+Qz7zPackInfo_T *generatePackInfo(Qz7zItemList_T *the_list,
+                                 size_t compressed_size)
 {
-    Qz7zPackInfo_T *pack = malloc(sizeof(Qz7zPackInfo_T));
+    Qz7zPackInfo_T *pack = qzMalloc(sizeof(Qz7zPackInfo_T), 0, PINNED_MEM);
+    if (!pack) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
-    CHECK_ALLOC_RETURN_VALUE(pack)
     memset(pack, 0, sizeof(Qz7zPackInfo_T));
 
     pack->PackPos = 0;
     pack->NumPackStreams = the_list->table->cat_num;
 
-    pack->PackSize = malloc(pack->NumPackStreams * sizeof(uint64_t));
-    CHECK_ALLOC_RETURN_VALUE(pack->PackSize)
+    pack->PackSize = qzMalloc(pack->NumPackStreams * sizeof(uint64_t), 0,
+                              PINNED_MEM);
+    if (!pack->PackSize) {
+        qzFree(pack);
+        return NULL;
+    }
     pack->PackSize[0] = compressed_size;
 
     pack->PackStreamDigests = NULL;
@@ -2085,12 +2398,18 @@ static Qz7zPackInfo_T *generatePackInfo(Qz7zItemList_T *the_list,
 static Qz7zCoder_T *generateCoder()
 {
 
-    Qz7zCoder_T *coder = (Qz7zCoder_T *)malloc(sizeof(Qz7zCoder_T));
-    CHECK_ALLOC_RETURN_VALUE(coder)
+    Qz7zCoder_T *coder = qzMalloc(sizeof(Qz7zCoder_T), 0, PINNED_MEM);
+    if (!coder) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
     coder->coderFirstByte.uc = 0x03; /* 0000 0011 */
-    coder->codecID = (unsigned char *)malloc(3 * sizeof(unsigned char));
-    CHECK_ALLOC_RETURN_VALUE(coder->codecID)
+    coder->codecID = qzMalloc(3 * sizeof(unsigned char), 0, PINNED_MEM);
+    if (!coder->codecID) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
     memcpy((char *)coder->codecID, g_deflate_codecId, 3);
     coder->numInStreams = 0;
@@ -2102,14 +2421,17 @@ static Qz7zCoder_T *generateCoder()
     return coder;
 }
 
-static Qz7zFolderInfo_T *generateFolderInfo(Qz7zItemList_T *the_list,
-        int n_folders)
+Qz7zFolderInfo_T *generateFolderInfo(Qz7zItemList_T *the_list, int n_folders)
 {
     if (n_folders <= 0) {
         n_folders = 1;
     }
-    Qz7zFolderInfo_T *folders = malloc(n_folders * sizeof(Qz7zFolderInfo_T));
-    CHECK_ALLOC_RETURN_VALUE(folders)
+    Qz7zFolderInfo_T *folders = qzMalloc(n_folders * sizeof(Qz7zFolderInfo_T),
+                                         0, PINNED_MEM);
+    if (!folders) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
     folders->items = the_list->items[1];
 
@@ -2125,15 +2447,30 @@ static Qz7zFolderInfo_T *generateFolderInfo(Qz7zItemList_T *the_list,
     return folders;
 }
 
-static Qz7zCodersInfo_T *generateCodersInfo(Qz7zItemList_T *the_list)
+Qz7zCodersInfo_T *generateCodersInfo(Qz7zItemList_T *the_list)
 {
-    Qz7zCodersInfo_T *coders = malloc(sizeof(Qz7zCodersInfo_T));
-    CHECK_ALLOC_RETURN_VALUE(coders)
+    Qz7zCodersInfo_T *coders = qzMalloc(sizeof(Qz7zCodersInfo_T), 0,
+                                        PINNED_MEM);
+    if (!coders) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
     coders->numFolders = the_list->table->cat_num;
     coders->folders = generateFolderInfo(the_list, coders->numFolders);
-    coders->unPackSize = malloc(coders->numFolders * sizeof(uint64_t));
-    CHECK_ALLOC_RETURN_VALUE(coders->unPackSize)
+    if (!coders->folders) {
+        QZ_ERROR("malloc error\n");
+        qzFree(coders);
+        return NULL;
+    }
+    coders->unPackSize = qzMalloc(coders->numFolders * sizeof(uint64_t), 0,
+                                  PINNED_MEM);
+    if (!coders->unPackSize) {
+        QZ_ERROR("malloc error\n");
+        qzFree(coders->folders);
+        qzFree(coders);
+        return NULL;
+    }
 
     for (int i = 0; i < coders->numFolders; ++i) {
         QzCatagory_T *cat = &(the_list->table->catas[i]);
@@ -2148,16 +2485,24 @@ static Qz7zCodersInfo_T *generateCodersInfo(Qz7zItemList_T *the_list)
     return coders;
 }
 
-static Qz7zDigest_T *generateDigestInfo(QzListHead_T *head)
+Qz7zDigest_T *generateDigestInfo(QzListHead_T *head)
 {
-    Qz7zDigest_T *digests = malloc(sizeof(Qz7zDigest_T));
-    CHECK_ALLOC_RETURN_VALUE(digests)
+    Qz7zDigest_T *digests = qzMalloc(sizeof(Qz7zDigest_T), 0, PINNED_MEM);
+    if (!digests) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
     digests->allAreDefined = 1;
     digests->numStreams = head->total;
     digests->numDefined = head->total;
-    digests->crc = malloc(digests->numDefined * sizeof(uint32_t));
-    CHECK_ALLOC_RETURN_VALUE(digests->crc)
+    digests->crc = qzMalloc(digests->numDefined * sizeof(uint32_t), 0,
+                            PINNED_MEM);
+    if (!digests->crc) {
+        QZ_ERROR("malloc error\n");
+        qzFree(digests);
+        return NULL;
+    }
 
     for (int i = 0; i < digests->numDefined; ++i) {
         Qz7zFileItem_T *p = (Qz7zFileItem_T *)qzListGet(head, i);
@@ -2167,25 +2512,46 @@ static Qz7zDigest_T *generateDigestInfo(QzListHead_T *head)
     return digests;
 }
 
-static Qz7zSubstreamsInfo_T *generateSubstreamsInfo(Qz7zItemList_T *the_list)
+Qz7zSubstreamsInfo_T *generateSubstreamsInfo(Qz7zItemList_T *the_list)
 {
     int index_of_file = 0; // index of all files in the list
     Qz7zFileItem_T *fi;
-    Qz7zSubstreamsInfo_T *substreamsInfo = malloc(sizeof(Qz7zSubstreamsInfo_T));
-    CHECK_ALLOC_RETURN_VALUE(substreamsInfo)
+    Qz7zSubstreamsInfo_T *substreamsInfo =
+        qzMalloc(sizeof(Qz7zSubstreamsInfo_T), 0, PINNED_MEM);
+    qzMemSet(substreamsInfo, 0, sizeof(Qz7zSubstreamsInfo_T));
+
+    if (!substreamsInfo) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
     QzListHead_T *h = the_list->items[1];
     uint64_t total_files = h->total;
-    if (!total_files) return NULL;
+    if (!total_files) {
+        qzFree(substreamsInfo);
+        return NULL;
+    }
 
     substreamsInfo->numFolders = the_list->table->cat_num;
-    substreamsInfo->numUnPackStreams = malloc(substreamsInfo->numFolders
-                                       * sizeof(uint64_t));
-    CHECK_ALLOC_RETURN_VALUE(substreamsInfo->numUnPackStreams);
+    substreamsInfo->numUnPackStreams = qzMalloc(substreamsInfo->numFolders
+                                       * sizeof(uint64_t), 0, PINNED_MEM);
+    if (!substreamsInfo->numUnPackStreams) {
+        QZ_ERROR("malloc error\n");
+        qzFree(substreamsInfo);
+        return NULL;
+    }
 
     // n_files - n_folder
-    substreamsInfo->unPackSize = malloc((total_files - 1) * sizeof(uint64_t));
-    CHECK_ALLOC_RETURN_VALUE(substreamsInfo->unPackSize);
+    if (total_files != 1) {
+        substreamsInfo->unPackSize = qzMalloc((total_files - 1) *
+                                              sizeof(uint64_t), 0, PINNED_MEM);
+        if (!substreamsInfo->unPackSize) {
+            QZ_ERROR("malloc error\n");
+            qzFree(substreamsInfo->numUnPackStreams);
+            qzFree(substreamsInfo);
+            return NULL;
+        }
+    }
 
     for (int i = 0; i < substreamsInfo->numFolders; ++i) {
         h = the_list->table->catas[i].cat_files;
@@ -2199,16 +2565,31 @@ static Qz7zSubstreamsInfo_T *generateSubstreamsInfo(Qz7zItemList_T *the_list)
             substreamsInfo->unPackSize[index_of_file++] = fi->size;
         }
     }
+
+
     substreamsInfo->digests = generateDigestInfo(h);
+    if (!substreamsInfo->digests) {
+        QZ_ERROR("malloc error\n");
+        if (substreamsInfo->unPackSize) {
+            qzFree(substreamsInfo->unPackSize);
+        }
+        qzFree(substreamsInfo->numUnPackStreams);
+        qzFree(substreamsInfo);
+        return NULL;
+    }
 
     return substreamsInfo;
 }
 
-static Qz7zFilesInfo_T *generateFilesInfo(Qz7zItemList_T *the_list)
+Qz7zFilesInfo_T *generateFilesInfo(Qz7zItemList_T *the_list)
 {
-    Qz7zFilesInfo_T *filesInfo = malloc(sizeof(Qz7zFilesInfo_T));
-    CHECK_ALLOC_RETURN_VALUE(filesInfo)
-    memset(filesInfo, 0, sizeof(Qz7zFilesInfo_T));
+    Qz7zFilesInfo_T *filesInfo = qzMalloc(sizeof(Qz7zFilesInfo_T), 0,
+                                          PINNED_MEM);
+    if (!filesInfo) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
+    qzMemSet(filesInfo, 0, sizeof(Qz7zFilesInfo_T));
 
     filesInfo->num = the_list->items[0]->total + the_list->items[1]->total;
     filesInfo->head[0] = the_list->items[0];
@@ -2233,12 +2614,17 @@ Qz7zStreamsInfo_T *generateStreamsInfo(Qz7zItemList_T *the_list,
 
 Qz7zArchiveProperty_T *generatePropertyInfo()
 {
-    Qz7zArchiveProperty_T *property = malloc(sizeof(Qz7zArchiveProperty_T));
-    CHECK_ALLOC_RETURN_VALUE(property)
+    Qz7zArchiveProperty_T *property = qzMalloc(sizeof(Qz7zArchiveProperty_T), 0,
+                                      PINNED_MEM);
+    if (!property) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
     property->id = QZ7Z_PROPERTY_ID_INTEL7Z_1001;
     property->size = sizeof(g_property_data);
     property->data = malloc(property->size * sizeof(unsigned char));
+    CHECK_ALLOC_RETURN_VALUE(property->data)
     memcpy(property->data, g_property_data, property->size);
     property->next = NULL;
     return property;
@@ -2302,7 +2688,7 @@ int scanFilesIntoCatagory(Qz7zItemList_T *the_list)
     return 0;
 }
 
-int qz7zWriteSignatureHeader(Qz7zSignatureHeader_T *header, FILE *fp)
+int writeSignatureHeader(Qz7zSignatureHeader_T *header, FILE *fp)
 {
     size_t n;
     n = fwrite(header->signature, 1, sizeof(header->signature), fp);
@@ -2328,8 +2714,8 @@ int qz7zWriteSignatureHeader(Qz7zSignatureHeader_T *header, FILE *fp)
  * if crc is not null, return the crc of the bytes that have written
  * return the bytes of written
  */
-size_t qz7zWriteArchiveProperties(Qz7zArchiveProperty_T *property, FILE *fp,
-                                  uint32_t *crc)
+size_t writeArchiveProperties(Qz7zArchiveProperty_T *property, FILE *fp,
+                              uint32_t *crc)
 {
     size_t size;
     size_t total_size = 0;
@@ -2344,7 +2730,7 @@ size_t qz7zWriteArchiveProperties(Qz7zArchiveProperty_T *property, FILE *fp,
     return total_size;
 }
 
-size_t qz7zWritePackInfo(Qz7zPackInfo_T *pack, FILE *fp, uint32_t *crc)
+size_t writePackInfo(Qz7zPackInfo_T *pack, FILE *fp, uint32_t *crc)
 {
     int i;
     size_t total_size = 0;
@@ -2360,7 +2746,7 @@ size_t qz7zWritePackInfo(Qz7zPackInfo_T *pack, FILE *fp, uint32_t *crc)
     return total_size;
 }
 
-size_t qz7zWriteFolder(Qz7zFolderInfo_T *folder, FILE *fp, uint32_t *crc)
+size_t writeFolder(Qz7zFolderInfo_T *folder, FILE *fp, uint32_t *crc)
 {
     int i;
     size_t size;
@@ -2380,7 +2766,7 @@ size_t qz7zWriteFolder(Qz7zFolderInfo_T *folder, FILE *fp, uint32_t *crc)
     return total_size;
 }
 
-size_t qz7zWriteCodersInfo(Qz7zCodersInfo_T *coders, FILE *fp, uint32_t *crc)
+size_t writeCodersInfo(Qz7zCodersInfo_T *coders, FILE *fp, uint32_t *crc)
 {
     int i;
     size_t total_size = 0;
@@ -2391,7 +2777,7 @@ size_t qz7zWriteCodersInfo(Qz7zCodersInfo_T *coders, FILE *fp, uint32_t *crc)
     total_size += writeByte(0, fp, crc); // external = 0
 
     for (i = 0; i < coders->numFolders; ++i) {
-        total_size += qz7zWriteFolder(&coders->folders[i], fp, crc);
+        total_size += writeFolder(&coders->folders[i], fp, crc);
     }
 
     total_size += writeTag(PROPERTY_ID_CODERS_UNPACK_SIZE, fp, crc);
@@ -2403,7 +2789,7 @@ size_t qz7zWriteCodersInfo(Qz7zCodersInfo_T *coders, FILE *fp, uint32_t *crc)
     return total_size;
 }
 
-size_t qz7zWriteDigestInfo(Qz7zDigest_T *digest, FILE *fp, uint32_t *crc)
+size_t writeDigestInfo(Qz7zDigest_T *digest, FILE *fp, uint32_t *crc)
 {
     int i;
     size_t size;
@@ -2420,8 +2806,8 @@ size_t qz7zWriteDigestInfo(Qz7zDigest_T *digest, FILE *fp, uint32_t *crc)
     return total_size;
 }
 
-size_t qz7zWriteSubstreamsInfo(Qz7zSubstreamsInfo_T *substreams, FILE *fp,
-                               uint32_t *crc)
+size_t writeSubstreamsInfo(Qz7zSubstreamsInfo_T *substreams, FILE *fp,
+                           uint32_t *crc)
 {
     int i, j;
     int total_index = 0;
@@ -2447,27 +2833,27 @@ size_t qz7zWriteSubstreamsInfo(Qz7zSubstreamsInfo_T *substreams, FILE *fp,
     }
 
     total_size += writeTag(PROPERTY_ID_CRC, fp, crc);
-    total_size += qz7zWriteDigestInfo(substreams->digests, fp, crc);
+    total_size += writeDigestInfo(substreams->digests, fp, crc);
 
     total_size += writeTag(PROPERTY_ID_END, fp, crc);
     return total_size;
 }
 
-size_t qz7zWriteStreamsInfo(Qz7zStreamsInfo_T *streams, FILE *fp,
-                            uint32_t *crc)
+size_t writeStreamsInfo(Qz7zStreamsInfo_T *streams, FILE *fp,
+                        uint32_t *crc)
 {
     size_t total_size = 0;
     if (!streams) return 0;
 
     total_size += writeTag(PROPERTY_ID_MAIN_STREAMSINFO, fp, crc);
-    total_size += qz7zWritePackInfo(streams->packInfo, fp, crc);
-    total_size += qz7zWriteCodersInfo(streams->codersInfo, fp, crc);
-    total_size += qz7zWriteSubstreamsInfo(streams->substreamsInfo, fp, crc);
+    total_size += writePackInfo(streams->packInfo, fp, crc);
+    total_size += writeCodersInfo(streams->codersInfo, fp, crc);
+    total_size += writeSubstreamsInfo(streams->substreamsInfo, fp, crc);
     total_size += writeTag(PROPERTY_ID_END, fp, crc);
     return total_size;
 }
 
-unsigned char *calculateEmptyStreamProperty(int m, int n, uint64_t *size)
+static unsigned char *calculateEmptyStreamProperty(int m, int n, uint64_t *size)
 {
     unsigned char *res;
     unsigned char sum = 0;
@@ -2487,19 +2873,25 @@ unsigned char *calculateEmptyStreamProperty(int m, int n, uint64_t *size)
     return res;
 }
 
-unsigned char *calculateEmptyFileProperty(Qz7zFilesInfo_T *files,
+static unsigned char *calculateEmptyFileProperty(Qz7zFilesInfo_T *files,
         int m,
         uint64_t *size)
 {
     int i, j;
     *size = (!((m) % 8)) ? (m) / 8 : ((m) / 8 + 1);
     unsigned char *res = malloc(*size);
+    CHECK_ALLOC_RETURN_VALUE(res)
     memset(res, 0, *size);
     int total_index = 0;
 
     for (i = 0; i < *size; ++i) {
         for (j = 7; j >= 0; --j) {
             Qz7zFileItem_T *p = qzListGet(files->head[0], total_index++);
+            if (!p) {
+                QZ_ERROR("Cannot get the file from list\n");
+                free(res);
+                return NULL;
+            }
             if (p->isEmpty) {
                 QZ_DEBUG("%s is empty stream: i=%d j=%d\n", p->fileName, i, j);
                 res[i] += 1 << j;
@@ -2510,8 +2902,9 @@ unsigned char *calculateEmptyFileProperty(Qz7zFilesInfo_T *files,
     return res;
 }
 
-unsigned char *genNamesPart(QzListHead_T *head_dir, QzListHead_T *head_file,
-                            uint64_t *size)
+static unsigned char *genNamesPart(QzListHead_T *head_dir,
+                                   QzListHead_T *head_file,
+                                   uint64_t *size)
 {
     int i;
     int j; // for buf index
@@ -2554,7 +2947,7 @@ unsigned char *genNamesPart(QzListHead_T *head_dir, QzListHead_T *head_file,
     return buf;
 }
 
-uint32_t *genAttributes(QzListHead_T *head_dir, QzListHead_T *head_file)
+static uint32_t *genAttributes(QzListHead_T *head_dir, QzListHead_T *head_file)
 {
     int i;
     int k;
@@ -2586,12 +2979,16 @@ static int checkZerobyteFiles(Qz7zFilesInfo_T *files)
     int n = files->head[0]->total;
     for (i = 0; i < n; ++i) {
         pfile = qzListGet(files->head[0], i);
+        if (!pfile) {
+            QZ_ERROR("Cannot get file from list\n");
+            exit(ERROR);
+        }
         if (pfile->isEmpty) return 1;
     }
     return 0;
 }
 
-size_t qz7zWriteFilesInfo(Qz7zFilesInfo_T *files, FILE *fp, uint32_t *crc)
+size_t writeFilesInfo(Qz7zFilesInfo_T *files, FILE *fp, uint32_t *crc)
 {
     int n_emptystream = files->head[0]->total;
     int n_file = files->head[1]->total;
@@ -2619,6 +3016,10 @@ size_t qz7zWriteFilesInfo(Qz7zFilesInfo_T *files, FILE *fp, uint32_t *crc)
     if (n_emptystream && has_zerobyte_file) {
         total_size += writeTag(PROPERTY_ID_EMPTY_FILE, fp, crc);
         p = calculateEmptyFileProperty(files, n_emptystream, &size);
+        if (!p) {
+            QZ_ERROR("Cannot calculate emptyfile property\n");
+            exit(ERROR);
+        }
         total_size += writeNumber(size, fp, crc);
         ret_size = fwrite(p, 1, size, fp);
         CHECK_FWRITE_RETURN(size, ret_size)
@@ -2682,25 +3083,33 @@ size_t qz7zWriteFilesInfo(Qz7zFilesInfo_T *files, FILE *fp, uint32_t *crc)
 /**
  * return total size that has written
  */
-size_t qz7zWriteEndHeader(Qz7zEndHeader_T *header, FILE *fp, uint32_t *crc)
+size_t writeEndHeader(Qz7zEndHeader_T *header, FILE *fp, uint32_t *crc)
 {
     size_t total_size = 0;
+    if (!crc) {
+        QZ_ERROR("bad crc param\n");
+        return 0;
+    }
     total_size += writeTag(PROPERTY_ID_HEADER, fp, crc);
-    total_size += qz7zWriteArchiveProperties(header->propertyInfo, fp, crc);
-    total_size += qz7zWriteStreamsInfo(header->streamsInfo, fp, crc);
-    total_size += qz7zWriteFilesInfo(header->filesInfo, fp, crc);
+    total_size += writeArchiveProperties(header->propertyInfo, fp, crc);
+    total_size += writeStreamsInfo(header->streamsInfo, fp, crc);
+    total_size += writeFilesInfo(header->filesInfo, fp, crc);
     total_size += writeTag(PROPERTY_ID_END, fp, crc);
     return total_size;
 }
 
-Qz7zItemList_T *processInputParams(int n, char **files)
+Qz7zItemList_T *itemListCreate(int n, char **files)
 {
     int      i;
     uint32_t dir_index = 0;
     // the index of next processing directory in the dir list
-
+    Qz7zFileItem_T *fi = NULL;
+    DIR *dirp = NULL;
     Qz7zItemList_T *res = malloc(sizeof(Qz7zItemList_T));
-    CHECK_ALLOC_RETURN_VALUE(res)
+    if (!res) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
 
     res->items[0] = qzListCreate(QZ_DIRLIST_DEFAULT_NUM_PER_NODE);
     res->items[1] = qzListCreate(QZ_FILELIST_DEFAULT_NUM_PER_NODE);
@@ -2715,12 +3124,11 @@ Qz7zItemList_T *processInputParams(int n, char **files)
         QZ_DEBUG("process %dth parameter: %s\n", i + 1, files[optind]);
 #endif
 
-        if (access(files[optind], F_OK)) {
-            QZ_ERROR("%s: No such file or directory\n", files[optind]);
-            return NULL;
+        fi = fileItemCreate(files[optind]);
+        if (!fi) {
+            QZ_ERROR("Cannot create file\n");
+            goto error;
         }
-
-        Qz7zFileItem_T *fi = qzFileItemCreate(files[optind]);
 
         if (fi->isDir || fi->isEmpty) {
             qzListAdd(dirs_head, (void **)&fi);  // add it to directory list
@@ -2731,16 +3139,16 @@ Qz7zItemList_T *processInputParams(int n, char **files)
 
                 if (processing == NULL) {
                     QZ_DEBUG("qzListGet got NULL!\n");
-                    return NULL;
+                    goto error;
                 }
                 QZ_DEBUG("processing: %s\n", processing->fileName);
 
                 if (processing->isDir) {
                     struct dirent *dentry;
-                    DIR *dirp = opendir(processing->fileName);
+                    dirp = opendir(processing->fileName);
                     if (!dirp) {
                         QZ_ERROR("errors ocurs: %s \n", strerror(errno));
-                        return NULL;
+                        goto error;
                     }
 
                     while ((dentry = readdir(dirp))) {
@@ -2754,7 +3162,11 @@ Qz7zItemList_T *processInputParams(int n, char **files)
                                  processing->fileName, dentry->d_name);
                         QZ_DEBUG(" file_path: %s\n", file_path);
                         Qz7zFileItem_T *anotherfile =
-                            qzFileItemCreate(file_path);
+                            fileItemCreate(file_path);
+                        if (!anotherfile) {
+                            QZ_ERROR("Cannot create file\n");
+                            goto error;
+                        }
 
                         if (anotherfile->isDir || anotherfile->isEmpty) {
                             qzListAdd(dirs_head, (void **)&anotherfile);
@@ -2776,6 +3188,18 @@ Qz7zItemList_T *processInputParams(int n, char **files)
     scanFilesIntoCatagory(res);
 
     return res;
+
+error:
+    if (dirp) {
+        closedir(dirp);
+    }
+    if (fi) {
+        free(fi);
+    }
+    if (res) {
+        itemListDestroy(res);
+    }
+    return NULL;
 }
 
 /**
@@ -2793,11 +3217,15 @@ int check7zArchive(const char *archive)
         return QZ7Z_ERR_OPEN;
     }
     n = fread(buf, 1, sizeof(buf), fp);
-    if (n < sizeof(buf)) return -1;
+    if (n < sizeof(buf)) {
+        fclose(fp);
+        return -1;
+    }
 
     if ((sig_wrong =
              memcmp(buf, g_header_signature, sizeof(g_header_signature)))) {
         QZ_ERROR("The archive signature header is broken\n");
+        fclose(fp);
         return QZ7Z_ERR_SIG_HEADER_BROKEN;
     }
 
@@ -2816,10 +3244,7 @@ int check7zArchive(const char *archive)
 int checkDirectory(const char *filename)
 {
     struct stat buf;
-    if (stat(filename, &buf) < 0) {
-        QZ_ERROR("stat function error\n");
-        return QZ7Z_ERR_STAT;
-    }
+    stat(filename, &buf);
     if (S_ISDIR(buf.st_mode)) {
         return 1;
     } else {

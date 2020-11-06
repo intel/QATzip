@@ -41,6 +41,7 @@ QATZIP_LIB_SHARED = libqatzip.so
 QATZIP_INCLUDE = qatzip.h
 QATZIP_MAN = QATzip-man.pdf
 QZIP_UTIL = qzip
+QZIP_OBJ_UT = qzip_obj_without_main
 CODE_FORMATTING_BIN   = $(top_builddir)/test/code_format_tests/format.sh
 
 EXTRA_CFLAGS = $(QAT_INCLUDE) \
@@ -49,6 +50,7 @@ EXTRA_CFLAGS = $(QAT_INCLUDE) \
 
 default: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED) qzip
 all: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED) qzip test
+qzip_obj_without_main: qzip_obj_without_main
 
 install: qzip $(QATZIP_LIB_SHARED)
 	$(INSTALL) -D -m 750 $(QATZIP_LIB_D)/$(QATZIP_LIB_STATIC) $(staticlib_dir)/$(QATZIP_LIB_STATIC)
@@ -82,6 +84,9 @@ $(QATZIP_LIB_SHARED):
 
 qzip: $(QATZIP_LIB_STATIC)
 	$(MAKE) -C $(QZIP_UTIL_D) $(QZIP_UTIL)
+
+qzip_obj_without_main: $(QATZIP_LIB_STATIC)
+	$(MAKE) -C $(QZIP_UTIL_D) $(QZIP_OBJ_UT)
 
 test: $(QATZIP_LIB_STATIC)
 	$(MAKE) -C $(FUNCTEST_SRC_D) all
