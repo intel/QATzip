@@ -94,7 +94,7 @@ extern"C" {
  *    this interface.
  *
  *****************************************************************************/
-#define QATZIP_API_VERSION_NUM_MINOR (1)
+#define QATZIP_API_VERSION_NUM_MINOR (2)
 
 /* Define a macro as an integer to test */
 #define QATZIP_API_VERSION    (QATZIP_API_VERSION_NUM_MAJOR * 10000 +      \
@@ -225,12 +225,14 @@ typedef enum QzDirection_E {
  *
  *****************************************************************************/
 typedef enum QzDataFormat_E {
-    QZ_DEFLATE_RAW = 0,
-    /**< Data is in raw deflate format */
+    QZ_DEFLATE_4B = 0,
+    /**< Data is in raw deflate format with 4 byte header */
     QZ_DEFLATE_GZIP,
     /**< Data is in deflate wrapped by GZip header and footer */
     QZ_DEFLATE_GZIP_EXT,
     /**< Data is in deflate wrapped by GZip extension header and footer */
+    QZ_DEFLATE_RAW,
+    /**< Data is in raw deflate format */
     QZ_FMT_NUM
 } QzDataFormat_T;
 
@@ -342,7 +344,8 @@ typedef struct QzSessionParams_S {
     /**< than the threshold, QATZip will route the request */
     /**< to software */
     unsigned int req_cnt_thrshold;
-    /**< Set between 1 and 4, default 4 */
+    /**< Set between 1 and NUM_BUFF, default NUM_BUFF */
+    /**< NUM_BUFF is defined in qatzip_internal.h */
     unsigned int wait_cnt_thrshold;
     /**< When previous try failed, wait for specific number of call */
     /**< before retry to open device. Default threshold is 8 */
@@ -365,9 +368,11 @@ typedef struct QzSessionParams_S {
 #define QZ_COMP_THRESHOLD_DEFAULT    1024
 #define QZ_COMP_THRESHOLD_MINIMUM    128
 #define QZ_REQ_THRESHOLD_MINIMUM     1
-#define QZ_REQ_THRESHOLD_MAXINUM     NUM_BUFF
-#define QZ_REQ_THRESHOLD_DEFAULT     QZ_REQ_THRESHOLD_MAXINUM
+#define QZ_REQ_THRESHOLD_MAXIMUM     NUM_BUFF
+#define QZ_REQ_THRESHOLD_DEFAULT     QZ_REQ_THRESHOLD_MAXIMUM
 #define QZ_WAIT_CNT_THRESHOLD_DEFAULT 8
+#define QZ_DEFLATE_COMP_LVL_MINIMUM   (1)
+#define QZ_DEFLATE_COMP_LVL_MAXIMUM   (9)
 /**
  *****************************************************************************
  * @ingroup qatZip

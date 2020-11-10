@@ -63,8 +63,8 @@ extern"C" {
 /*For Sync mode, request counts must less than NUM_BUFF.
  *If then the request can't get adequate unused buffer and will be hanged
  * */
-#if QZ_REQ_THRESHOLD_MAXINUM > NUM_BUFF
-#error QZ_REQ_THRESHOLD_MAXINUM should not be larger than NUM_BUFF
+#if QZ_REQ_THRESHOLD_MAXIMUM > NUM_BUFF
+#error QZ_REQ_THRESHOLD_MAXIMUM should not be larger than NUM_BUFF
 #endif
 
 #define QAT_MAX_DEVICES     32

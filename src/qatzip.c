@@ -320,7 +320,7 @@ int qz_sessParamsCheck(QzSessionParams_T *params)
         params->input_sz_thrshold < QZ_COMP_THRESHOLD_MINIMUM ||
         params->input_sz_thrshold > QZ_HW_BUFF_MAX_SZ         ||
         params->req_cnt_thrshold < QZ_REQ_THRESHOLD_MINIMUM   ||
-        params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXINUM) {
+        params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXIMUM) {
         return FAILURE;
     }
 
@@ -1556,7 +1556,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     qz_sess = (QzSess_T *)(sess->internal);
 
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
-    if (unlikely(data_fmt != QZ_DEFLATE_RAW &&
+    if (unlikely(data_fmt != QZ_DEFLATE_4B &&
+                 data_fmt != QZ_DEFLATE_RAW &&
                  data_fmt != QZ_DEFLATE_GZIP &&
                  data_fmt != QZ_DEFLATE_GZIP_EXT)) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
