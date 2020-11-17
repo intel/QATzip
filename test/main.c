@@ -3483,6 +3483,7 @@ void *forkResourceCheck(void *arg)
         QZ_PRINT("After qzInit, number_huge_pages in parent process is %d\n",
                  (int)number_huge_pages);
         close(hp_params_fd);
+        wait(&status);
     } else if (pid == 0) {
         sleep(2);
         QZ_PRINT("This is child process, my pid = %d\n", getpid());
@@ -3523,11 +3524,10 @@ void *forkResourceCheck(void *arg)
         QZ_PRINT("After qzInit, number_huge_pages in child process is %d\n",
                  (int)number_huge_pages);
         close(hp_params_fd);
+        exit(0);
     } else {
         perror("fork");
     }
-
-    wait(&status);
 
 done:
     pthread_exit((void *)NULL);
