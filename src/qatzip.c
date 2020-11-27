@@ -902,7 +902,11 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
     }
 
     qz_sess->session_setup_data.sessState = CPA_DC_STATELESS;
+#if (CPA_DC_API_VERSION_NUM_MAJOR >= 3) && (CPA_DC_API_VERSION_NUM_MINOR >= 0)
+    qz_sess->session_setup_data.windowSize = (Cpa32U)7;
+#else
     qz_sess->session_setup_data.deflateWindowSize = (Cpa32U)7;
+#endif
     qz_sess->session_setup_data.checksum = CPA_DC_CRC32;
 
     if (g_process.qz_init_status == QZ_NONE) {
