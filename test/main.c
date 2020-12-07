@@ -153,6 +153,7 @@ static struct timeval g_timer_start;
 extern void dumpAllCounters();
 static int test_thread_safe_flag = 0;
 extern processData_T g_process;
+extern int errno;
 
 QzBlock_T *parseFormatOption(char *buf)
 {
@@ -3692,6 +3693,7 @@ int main(int argc, char *argv[])
     char *stop = NULL;
     QzThdOps *qzThdOps = NULL;
     QzBlock_T  *qzBlocks = NULL;
+    errno = 0;
 
     if (qzGetDefaults(&g_params_th) != QZ_OK) {
         return -1;

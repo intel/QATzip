@@ -47,6 +47,7 @@ int main(int argc, char **argv)
     int is_good_7z = 0;
     int is_dir = 0;
     int recursive_mode = 0;
+    errno = 0;
 
     if (qzGetDefaults(&g_params_th) != QZ_OK)
         return -1;
