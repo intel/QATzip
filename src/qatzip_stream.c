@@ -44,6 +44,198 @@
 #include <qz_utils.h>
 #include <qatzip_internal.h>
 
+#define STREAM_BUFF_LIST_SZ 8
+
+typedef struct StreamBuffNode_S {
+    void *buffer;
+    size_t size;
+    int pinned;
+    struct StreamBuffNode_S *next;
+    struct StreamBuffNode_S *prev;
+} StreamBuffNode_T;
+
+typedef struct StreamBuffNodeList_S {
+    StreamBuffNode_T *head;
+    StreamBuffNode_T *tail;
+    unsigned int size;
+    pthread_mutex_t mutex;
+} StreamBuffNodeList_T;
+
+StreamBuffNodeList_T g_strm_buff_list_free = {
+    .head = NULL,
+    .tail = NULL,
+    .size = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER
+};
+
+StreamBuffNodeList_T g_strm_buff_list_used = {
+    .head = NULL,
+    .tail = NULL,
+    .size = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER
+};
+
+static inline int addNodeToList(StreamBuffNode_T *node,
+                                StreamBuffNodeList_T *buff_list)
+{
+    if (unlikely(0 != pthread_mutex_lock(&buff_list->mutex))) {
+        QZ_ERROR("Failed to get Mutex Lock.\n");
+        return FAILURE;
+    }
+
+    buff_list->size += 1;
+    node->next = NULL;
+    if (NULL == buff_list->tail) {
+        buff_list->head = node;
+        node->prev = NULL;
+    } else {
+        node->prev = buff_list->tail;
+        buff_list->tail->next = node;
+    }
+    buff_list->tail = node;
+
+    if (unlikely(0 != pthread_mutex_unlock(&buff_list->mutex))) {
+        QZ_ERROR("Failed to release Mutex Lock.\n");
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+static inline int removeNodeFromList(StreamBuffNode_T *node,
+                                     StreamBuffNodeList_T *buff_list)
+{
+    if (unlikely(0 != pthread_mutex_lock(&buff_list->mutex))) {
+        QZ_ERROR("Failed to get Mutex Lock.\n");
+        return FAILURE;
+    }
+
+    buff_list->size -= 1;
+    if (NULL != node->prev) {
+        node->prev->next = node->next;
+        if (NULL != node->next) {
+            node->next->prev = node->prev;
+        } else {
+            buff_list->tail = node->prev;
+        }
+    } else {
+        if (NULL != node->next) {
+            node->next->prev = NULL;
+            buff_list->head = node->next;
+        } else {
+            buff_list->head = NULL;
+            buff_list->tail = NULL;
+        }
+    }
+
+    if (unlikely(0 != pthread_mutex_unlock(&buff_list->mutex))) {
+        QZ_ERROR("Failed to release Mutex Lock.\n");
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+void streamBufferCleanup()
+{
+    StreamBuffNode_T *node;
+    StreamBuffNode_T *next;
+
+    node = g_strm_buff_list_used.head;
+    while (node != NULL) {
+        next = node->next;
+        removeNodeFromList(node, &g_strm_buff_list_used);
+        qzFree(node->buffer);
+        free(node);
+        node = next;
+    }
+
+    node = g_strm_buff_list_free.head;
+    while (node != NULL) {
+        next = node->next;
+        removeNodeFromList(node, &g_strm_buff_list_free);
+        qzFree(node->buffer);
+        free(node);
+        node = next;
+    }
+}
+
+static void *streamBufferAlloc(size_t sz, int numa, int pinned)
+{
+    StreamBuffNode_T *node;
+    int i;
+
+    for (node = g_strm_buff_list_free.head; node != NULL; node = node->next) {
+        if (pinned == node->pinned && sz <= node->size) {
+            if (!removeNodeFromList(node, &g_strm_buff_list_free)) {
+                return NULL;
+            }
+            if (!addNodeToList(node, &g_strm_buff_list_used)) {
+                return NULL;
+            }
+
+            return node->buffer;
+        }
+    }
+
+    for (i = 0; i < STREAM_BUFF_LIST_SZ; ++i) {
+        node = malloc(sizeof(StreamBuffNode_T));
+        if (NULL == node) {
+            break;
+        }
+
+        node->buffer = qzMalloc(sz, numa, pinned);
+        if (NULL == node->buffer) {
+            free(node);
+            break;
+        }
+        node->pinned = pinned;
+        node->size = sz;
+
+        if (NULL == g_strm_buff_list_free.head) {
+            atexit(streamBufferCleanup);
+        }
+        if (!addNodeToList(node, &g_strm_buff_list_free)) {
+            return NULL;
+        }
+    }
+
+    for (node = g_strm_buff_list_free.tail; node != NULL; node = node->prev) {
+        if (pinned == node->pinned && sz <= node->size) {
+            if (!removeNodeFromList(node, &g_strm_buff_list_free)) {
+                return NULL;
+            }
+            if (!addNodeToList(node, &g_strm_buff_list_used)) {
+                return NULL;
+            }
+
+            return node->buffer;
+        }
+    }
+
+    return NULL;
+}
+
+static void streamBufferFree(void *addr)
+{
+    StreamBuffNode_T *node;
+
+    for (node = g_strm_buff_list_used.head; node != NULL; node = node->next) {
+        if (addr == node->buffer) {
+            if (removeNodeFromList(node, &g_strm_buff_list_used) == FAILURE) {
+                QZ_ERROR("Fail to remove Node for streamBufferFree");
+                return;
+            }
+            if (STREAM_BUFF_LIST_SZ <= g_strm_buff_list_free.size) {
+                qzFree(node->buffer);
+                free(node);
+            } else {
+                addNodeToList(node, &g_strm_buff_list_free);
+            }
+            addr = NULL;
+            return;
+        }
+    }
+}
+
 int initStream(QzSession_T *sess, QzStream_T *strm)
 {
     int rc = QZ_FAIL;
@@ -73,16 +265,20 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
 
     stream_buf->out_offset = 0;
     stream_buf->buf_len = qz_sess->sess_params.strm_buff_sz;
-    stream_buf->in_buf = qzMalloc(stream_buf->buf_len, NODE_0, PINNED_MEM);
-    stream_buf->out_buf = qzMalloc(stream_buf->buf_len, NODE_0, PINNED_MEM);
+    stream_buf->in_buf =
+        streamBufferAlloc(stream_buf->buf_len, NODE_0, PINNED_MEM);
+    stream_buf->out_buf =
+        streamBufferAlloc(stream_buf->buf_len, NODE_0, PINNED_MEM);
 
     if (NULL == stream_buf->in_buf) {
         QZ_DEBUG("stream_buf->in_buf : PINNED_MEM failed, try COMMON_MEM\n");
-        stream_buf->in_buf = qzMalloc(stream_buf->buf_len, NODE_0, COMMON_MEM);
+        stream_buf->in_buf =
+            streamBufferAlloc(stream_buf->buf_len, NODE_0, COMMON_MEM);
     }
     if (NULL == stream_buf->out_buf) {
         QZ_DEBUG("stream_buf->out_buf : PINNED_MEM failed, try COMMON_MEM\n");
-        stream_buf->out_buf = qzMalloc(stream_buf->buf_len, NODE_0, COMMON_MEM);
+        stream_buf->out_buf =
+            streamBufferAlloc(stream_buf->buf_len, NODE_0, COMMON_MEM);
     }
 
     if (NULL == stream_buf->in_buf ||
@@ -484,8 +680,8 @@ int qzEndStream(QzSession_T *sess, QzStream_T *strm)
     }
 
     stream_buf = (QzStreamBuf_T *)strm->opaque;
-    qzFree(stream_buf->out_buf);
-    qzFree(stream_buf->in_buf);
+    streamBufferFree(stream_buf->out_buf);
+    streamBufferFree(stream_buf->in_buf);
     free(stream_buf);
     strm->opaque = NULL;
     rc = QZ_OK;

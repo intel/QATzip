@@ -2394,6 +2394,8 @@ int qzClose(QzSession_T *sess)
         return QZ_FAIL;
     }
 
+    streamBufferCleanup();
+
     return QZ_OK;
 }
 

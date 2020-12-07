@@ -294,4 +294,5 @@ void *qzMemSet(void *ptr, unsigned char filler, unsigned int count);
 unsigned char *findStdGzipFooter(const unsigned char *src_ptr,
                                  long src_avail_len);
 
+void streamBufferCleanup();
 #endif //_QATZIPP_H
