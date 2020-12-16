@@ -55,30 +55,14 @@ extern"C" {
 #endif
 
 /**
- * These macros define how the project will be built
- * QATZIP_LINK_DLL must be defined if linking the DLL
- * QATZIP_BUILD_DLL must be defined when building a DLL
- * No definition required if building the project as static library
- */
-#if defined QATZIP_LINK_DLL
-#    define QATZIP_API __declspec(dllimport)
-#elif defined QATZIP_BUILD_DLL
-#    define QATZIP_API __declspec(dllexport)
-#else
-#    define QATZIP_API
-#endif
-
-#include <string.h>
-
-/**
  *****************************************************************************
  * @ingroup qatZip
  *      QATZIP Major Version Number
  * @description
  *      The QATZIP API major version number. This number will be incremented
- *    when significant changes to the API has occurred. The combination of the
- *    major and minor number definitions represent the complete version number
- *    for this interface.
+ *      when significant churn to the API has occurred. The combination of the
+ *      major and minor number definitions represent the complete version number
+ *      for this interface.
  *
  *****************************************************************************/
 #define QATZIP_API_VERSION_NUM_MAJOR (1)
@@ -89,16 +73,33 @@ extern"C" {
  *      QATZIP Minor Version Number
  * @description
  *      The QATZIP API minor version number. This number will be incremented
- *    when minor changes to the API has occurred. The combination of the major
- *    and minor number definitions represent the complete version number for
- *    this interface.
- *
+ *      when minor changes to the API have occurred. The combination of the major
+ *      and minor number definitions represent the complete version number for
+ *      this interface.
  *****************************************************************************/
-#define QATZIP_API_VERSION_NUM_MINOR (2)
+#define QATZIP_API_VERSION_NUM_MINOR (3)
 
 /* Define a macro as an integer to test */
 #define QATZIP_API_VERSION    (QATZIP_API_VERSION_NUM_MAJOR * 10000 +      \
                                QATZIP_API_VERSION_NUM_MINOR * 100)
+
+/**
+* These macros define how the project will be built
+* QATZIP_LINK_DLL must be defined if linking the DLL
+* QATZIP_BUILD_DLL must be defined when building a DLL
+* No definition required if building the project as static library
+*/
+#if defined QATZIP_LINK_DLL
+#define QATZIP_API __declspec(dllimport)
+#elif defined QATZIP_BUILD_DLL
+#define QATZIP_API __declspec(dllexport)
+#else
+#define QATZIP_API
+#endif
+
+#ifdef ERR_INJECTION
+#include "cf.h"
+#endif
 
 /**
  *****************************************************************************
@@ -150,7 +151,7 @@ extern"C" {
  *  Notes: Invoking qzSetupSession with NULL for params sets up a session with
  *  default session attributed, detailed in the function description below.
  *
- *  If an application terminates with out invoking tear down and close
+ *  If an application terminates without invoking tear down and close
  *  functions, process termination will invoke memory and hardware instance
  *  cleanup.
  *
@@ -267,7 +268,7 @@ typedef enum QzCrcType_E {
  *****************************************************************************/
 #define QZ_OK                   (0)
 /**< Success */
-#define QZ_DUPLICATE           (1)
+#define QZ_DUPLICATE            (1)
 /**< Can not process function again. No failure */
 #define QZ_FORCE_SW             (2)
 /**< Using SW: Switch to software because of previous block */
@@ -302,18 +303,15 @@ typedef enum QzCrcType_E {
 
 #define QZ_MAX_ALGORITHMS  ((int)255)
 #define QZ_DEFLATE         ((unsigned char)8)
-
 #define MIN(a,b) (((a)<(b))?(a):(b))
+#ifdef __linux__
 #define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
-            memcpy((void *)(dest), (void *) (src), (size_t)MIN(dest_sz, src_sz))
-
-#include <cpa_dc.h>
-#if (CPA_DC_API_VERSION_NUM_MAJOR >= 3) && (CPA_DC_API_VERSION_NUM_MINOR >= 0)
-  #define MAX_COMP_LEVEL           12
-#else
-  #define MAX_COMP_LEVEL            9
+        memcpy((void *)(dest), (void *) (src), (size_t)MIN(dest_sz, src_sz))
 #endif
-
+#ifdef _WIN64
+#define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
+        memcpy_s((void *)(dest), dest_sz, (void *) (src), MIN(dest_sz, src_sz))
+#endif
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -356,6 +354,11 @@ typedef struct QzSessionParams_S {
     unsigned int wait_cnt_thrshold;
     /**< When previous try failed, wait for specific number of call */
     /**< before retry to open device. Default threshold is 8 */
+#ifdef ERR_INJECTION
+    FallbackError *fbError;
+    FallbackError *fbErrorCurr;
+    /* Linked list for simulated errors from HW */
+#endif
 } QzSessionParams_T;
 
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
@@ -429,7 +432,7 @@ typedef struct QzStatus_S {
     unsigned char using_huge_pages;
     /**< Are memory slabs coming from huge pages? */
     signed long int hw_session_status;
-    /**< One of QATZIP session status */
+    /**< One of QATZIP Session Status */
     unsigned char algo_sw[QZ_MAX_ALGORITHMS];
     /**< Support software algorithms */
     unsigned char algo_hw[QZ_MAX_ALGORITHMS];
@@ -653,11 +656,11 @@ QATZIP_API int qzCompress(QzSession_T *sess, const unsigned char *src,
  *    buffer *crc.
  *
  *    The caller must check the updated src_len. This value will be the
- *    number of consumed bytes on exit.  The calling API may have to
- *    process the destination  buffer and call again.
+ *    number of consumed bytes on exit. The calling API may have to
+ *    process the destination buffer and call again.
  *
  *    The parameter dest_len will be set to the number of bytes produced in
- *    the destination buffer.  This value may be zero if no data was produced
+ *    the destination buffer. This value may be zero if no data was produced
  *    which may occur if the consumed data is retained internally. A
  *    possible reason for this may be small amounts of data in the src
  *    buffer.
@@ -872,7 +875,7 @@ QATZIP_API int qzClose(QzSession_T *sess);
  *      QZ_NO_INST_ATTACH
  *      QZ_LOW_MEM
  *      QZ_NOSW_NO_HW
- *      QZ_NOSW_MDRV
+ *      QZ_NOSW_NO_MDRV
  *      QZ_NOSW_NO_INST_ATTACH
  *      QZ_NOSW_LOW_MEM
  *
@@ -1018,7 +1021,7 @@ QATZIP_API int qzSetDefaults(QzSessionParams_T *defaults);
  *
  * @param[in]   defaults   The pointer to default value
  *
- * @retval      QZ_OK      Get default value successfully
+ * @retval      QZ_OK      Success on getting default value
  * @retval      QZ_PARAM   Fail to get default value
  *
  * @pre
@@ -1242,6 +1245,7 @@ typedef struct QzStream_S {
  * @param[in,out]   strm     Stream handle
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
+ *                           (always set to 1 in Windows(R)'s QATZip implementation)
  *
  * @retval QZ_OK             Function executed successfully
  * @retval QZ_FAIL           Function did not succeed
