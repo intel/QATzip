@@ -55,14 +55,30 @@ extern"C" {
 #endif
 
 /**
+ * These macros define how the project will be built
+ * QATZIP_LINK_DLL must be defined if linking the DLL
+ * QATZIP_BUILD_DLL must be defined when building a DLL
+ * No definition required if building the project as static library
+ */
+#if defined QATZIP_LINK_DLL
+#    define QATZIP_API __declspec(dllimport)
+#elif defined QATZIP_BUILD_DLL
+#    define QATZIP_API __declspec(dllexport)
+#else
+#    define QATZIP_API
+#endif
+
+#include <string.h>
+
+/**
  *****************************************************************************
  * @ingroup qatZip
  *      QATZIP Major Version Number
  * @description
- *      The QATZIP API major version number. This number will be incremented
- *      when significant churn to the API has occurred. The combination of the
- *      major and minor number definitions represent the complete version number
- *      for this interface.
+ *    The QATZIP API major version number. This number will be incremented
+ *    when significant changes to the API have occurred. The combination of the
+ *    major and minor number definitions represent the complete version number
+ *    for this interface.
  *
  *****************************************************************************/
 #define QATZIP_API_VERSION_NUM_MAJOR (1)
@@ -70,12 +86,12 @@ extern"C" {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      QATZIP Minor Version Number
+ *   QATZIP Minor Version Number
  * @description
- *      The QATZIP API minor version number. This number will be incremented
- *      when minor changes to the API have occurred. The combination of the major
- *      and minor number definitions represent the complete version number for
- *      this interface.
+ *   The QATZIP API minor version number. This number will be incremented
+ *   when minor changes to the API have occurred. The combination of the major
+ *   and minor number definitions represent the complete version number for
+ *   this interface.
  *****************************************************************************/
 #define QATZIP_API_VERSION_NUM_MINOR (3)
 
@@ -383,6 +399,7 @@ typedef struct QzSessionParams_S {
 #define QZ_WAIT_CNT_THRESHOLD_DEFAULT 8
 #define QZ_DEFLATE_COMP_LVL_MINIMUM   (1)
 #define QZ_DEFLATE_COMP_LVL_MAXIMUM   (9)
+
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -1245,7 +1262,8 @@ typedef struct QzStream_S {
  * @param[in,out]   strm     Stream handle
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
- *                           (always set to 1 in Windows(R)'s QATZip implementation)
+ *                           (always set to 1 in Windows(R)'s QATZip
+ *                           implementation)
  *
  * @retval QZ_OK             Function executed successfully
  * @retval QZ_FAIL           Function did not succeed
