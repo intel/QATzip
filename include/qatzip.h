@@ -1262,8 +1262,8 @@ typedef struct QzStream_S {
  * @param[in,out]   strm     Stream handle
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
- *                           (always set to 1 in Windows(R)'s QATZip
- *                           implementation)
+ *                           (always set to 1 in Microsoft(R)
+ *                           Windows(TM)'s QATZip implementation)
  *
  * @retval QZ_OK             Function executed successfully
  * @retval QZ_FAIL           Function did not succeed
