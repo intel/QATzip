@@ -1006,7 +1006,7 @@ static void *doCompressIn(void *in)
     unsigned int remaining;
     unsigned int src_send_sz;
     unsigned char *src_ptr, *dest_ptr;
-    unsigned int src_sz;
+    unsigned int src_sz, dest_sz;
     CpaStatus rc;
     int src_pinned, dest_pinned;
     QzDataFormat_T data_fmt;
@@ -1030,6 +1030,7 @@ static void *doCompressIn(void *in)
     dest_pinned = qzMemFindAddr(dest_ptr);
     remaining = *qz_sess->src_sz - qz_sess->qz_in_len;
     src_sz = qz_sess->sess_params.hw_buff_sz;
+    dest_sz = *qz_sess->dest_sz;
     data_fmt = qz_sess->sess_params.data_fmt;
     opData.flushFlag = IS_DEFLATE(data_fmt) ? CPA_DC_FLUSH_FULL :
                        CPA_DC_FLUSH_FINAL;
@@ -1060,8 +1061,13 @@ static void *doCompressIn(void *in)
         g_process.qz_inst[i].stream[j].src2++; /*this buffer is in use*/
         /*set up src dest buffers*/
         g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes = src_send_sz;
-        g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes
-            = *(qz_sess->dest_sz);
+        if (dest_sz > DEST_SZ(qz_sess->sess_params.hw_buff_sz)) {
+            g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
+                DEST_SZ(qz_sess->sess_params.hw_buff_sz) - outputHeaderSz(data_fmt);
+        } else {
+            g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
+                dest_sz - outputHeaderSz(data_fmt);
+        }
 
         if (0 == src_pinned) {
             QZ_DEBUG("memory copy in doCompressIn\n");
