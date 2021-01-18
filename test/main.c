@@ -919,7 +919,7 @@ void *qzSetupParamFuncTest(void *arg)
         goto end;
     }
 
-    cus_params.comp_lvl = 10;
+    cus_params.comp_lvl = (MAX_COMP_LEVEL + 1);
     if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect comp_level: %d.\n",
                  cus_params.comp_lvl);
@@ -2408,9 +2408,11 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
         QZ_DEBUG("T#############T DecompressStream Session is null Test ***\n");
         test_strm = &comp_strm;
     } else if (2 == test_no) {
-        QZ_DEBUG("T#############T DecompressStream comp level is 10 Test ***\n");
+        QZ_DEBUG("T#############T DecompressStream comp level is %d Test ***\n",
+                 (MAX_COMP_LEVEL + 1));
         test_sess = &comp_sess;
-        ((QzSess_T *)(test_sess->internal))->sess_params.comp_lvl = 10;
+        ((QzSess_T *)(test_sess->internal))->sess_params.comp_lvl =
+                 (MAX_COMP_LEVEL + 1);
         test_strm = &comp_strm;
     } else if (3 == test_no) {
         QZ_DEBUG("T#############T DecompressStream Neg parameter for last is -1 Test ***\n");
@@ -3612,7 +3614,10 @@ done:
     pthread_exit((void *)NULL);
 }
 
-#define USAGE_STRING                                                            \
+#define STR_INTER(N)    #N
+#define STR(N) STR_INTER(N)
+
+#define USAGE_STRING(MAX_LVL)                                                   \
     "Usage: %s [options]\n"                                                     \
     "\n"                                                                        \
     "Required options:\n"                                                       \
@@ -3640,7 +3645,7 @@ done:
     "    -C hw_buff_sz         default 64K\n"                                   \
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
-    "    -L comp_lvl           1 - 9\n"                                         \
+    "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
     "    -O data_fmt           deflate | gzip | gzipext\n"                      \
     "    -T huffmanType        static | dynamic\n"                              \
     "    -r req_cnt_thrshold   max inflight request num, default is 16\n"       \
@@ -3649,7 +3654,7 @@ done:
 
 void qzPrintUsageAndExit(char *progName)
 {
-    QZ_ERROR("%s %s", USAGE_STRING, progName);
+    QZ_ERROR(USAGE_STRING(MAX_COMP_LEVEL), progName);
     exit(-1);
 }
 
@@ -3774,7 +3779,7 @@ int main(int argc, char *argv[])
         case 'L':
             g_params_th.comp_lvl = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (*stop != '\0' || errno ||  \
-                g_params_th.comp_lvl > 9 || g_params_th.comp_lvl <= 0) {
+                g_params_th.comp_lvl > MAX_COMP_LEVEL || g_params_th.comp_lvl <= 0) {
                 QZ_ERROR("Error compLevel arg: %s\n", optarg);
                 return -1;
             }

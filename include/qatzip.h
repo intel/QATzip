@@ -307,6 +307,13 @@ typedef enum QzCrcType_E {
 #define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
             memcpy((void *)(dest), (void *) (src), (size_t)MIN(dest_sz, src_sz))
 
+#include <cpa_dc.h>
+#if (CPA_DC_API_VERSION_NUM_MAJOR >= 3) && (CPA_DC_API_VERSION_NUM_MINOR >= 0)
+  #define MAX_COMP_LEVEL           12
+#else
+  #define MAX_COMP_LEVEL            9
+#endif
+
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -324,7 +331,7 @@ typedef struct QzSessionParams_S {
     QzDataFormat_T data_fmt;
     /**< Deflate, deflate with GZip or deflate with GZip ext */
     unsigned int comp_lvl;
-    /**< Compression level 1 to 9 */
+    /**< Compression level 1 to MAX_COMP_LEVEL */
     unsigned char comp_algorithm;
     /**< Compress/decompression algorithms */
     unsigned int max_forks;

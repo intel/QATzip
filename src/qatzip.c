@@ -309,7 +309,7 @@ int qz_sessParamsCheck(QzSessionParams_T *params)
     if (params->huffman_hdr > QZ_STATIC_HDR                   ||
         params->direction > QZ_DIR_BOTH                       ||
         params->comp_lvl < 1                                  ||
-        params->comp_lvl > 9                                  ||
+        params->comp_lvl > MAX_COMP_LEVEL                     ||
         params->comp_algorithm != QZ_DEFLATE                  ||
         params->sw_backup > 1                                 ||
         params->hw_buff_sz < QZ_HW_BUFF_MIN_SZ                ||
@@ -1574,16 +1574,18 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
 
     qz_sess->crc32 = crc;
 
-    if (*src_len < qz_sess->sess_params.input_sz_thrshold ||
-        g_process.qz_init_status == QZ_NO_HW              ||
-        sess->hw_session_stat == QZ_NO_HW                 ||
-        qz_sess->sess_params.comp_lvl == 9) {
+    if (*src_len < qz_sess->sess_params.input_sz_thrshold
+         || g_process.qz_init_status == QZ_NO_HW
+         || sess->hw_session_stat == QZ_NO_HW
+#if !((CPA_DC_API_VERSION_NUM_MAJOR >= 3) && (CPA_DC_API_VERSION_NUM_MINOR >= 0))
+         || qz_sess->sess_params.comp_lvl == 9
+#endif
+       ) {
         QZ_DEBUG("compression src_len=%u, sess_params.input_sz_thrshold = %u, "
                  "process.qz_init_status = %d, sess->hw_session_stat = %d, "
-                 "qz_sess->sess_params.comp_lvl = %d, switch to software.\n",
+                 " switch to software.\n",
                  *src_len, qz_sess->sess_params.input_sz_thrshold,
-                 g_process.qz_init_status, sess->hw_session_stat,
-                 qz_sess->sess_params.comp_lvl);
+                 g_process.qz_init_status, sess->hw_session_stat);
         goto sw_compression;
     } else if (sess->hw_session_stat != QZ_OK &&
                sess->hw_session_stat != QZ_NO_INST_ATTACH) {
