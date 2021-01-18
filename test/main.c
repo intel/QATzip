@@ -3657,7 +3657,8 @@ static int qz_do_g_process_Check(void)
 {
     if (g_process.qz_init_status == QZ_OK &&
         g_process.sw_backup == 1 &&
-        (g_process.num_instances == 12 || g_process.num_instances == 4) &&
+        (g_process.num_instances == 12 || g_process.num_instances == 4 ||
+        g_process.num_instances == 32) &&
         g_process.qat_available == CPA_TRUE) {
         return QZ_OK;
     } else {
