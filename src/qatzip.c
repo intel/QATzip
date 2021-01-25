@@ -318,7 +318,6 @@ int qz_sessParamsCheck(QzSessionParams_T *params)
         params->strm_buff_sz > QZ_STRM_BUFF_MAX_SZ            ||
         (params->hw_buff_sz & (params->hw_buff_sz - 1))       ||
         params->input_sz_thrshold < QZ_COMP_THRESHOLD_MINIMUM ||
-        params->input_sz_thrshold > QZ_HW_BUFF_MAX_SZ         ||
         params->req_cnt_thrshold < QZ_REQ_THRESHOLD_MINIMUM   ||
         params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXIMUM) {
         return FAILURE;
