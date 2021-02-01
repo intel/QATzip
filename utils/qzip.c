@@ -2,7 +2,7 @@
  *
  *   BSD LICENSE
  *
- *   Copyright(c) 2007-2020 Intel Corporation. All rights reserved.
+ *   Copyright(c) 2007-2021 Intel Corporation. All rights reserved.
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@
 #include "qzip.h"
 
 char const *const g_license_msg[] = {
-    "Copyright (C) 2020 Intel Corporation.",
+    "Copyright (C) 2021 Intel Corporation.",
     0
 };
 
