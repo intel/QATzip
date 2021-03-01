@@ -1990,7 +1990,11 @@ err_exit:
 /* The internal function to g_process the decomrpession response
  * from the QAT hardware
  */
-static void *doDecompressOut(void *in)
+/* A fix for the chunksize test performance. Without the attribute
+ * cold it will lead to a performance drop in the chunksize test.
+ * Will root cause it and fix it in the future version
+ */
+static void *__attribute__((cold)) doDecompressOut(void *in)
 {
     int i = 0, j = 0, si = 0, good;
     CpaDcRqResults *resl;
