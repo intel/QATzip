@@ -3888,7 +3888,7 @@ int main(int argc, char *argv[])
             fclose(file);
             return -1;
         } else {
-            QZ_ERROR("Read %d bytes from file %s\n", input_buf_len, g_input_file_name);
+            QZ_DEBUG("Read %d bytes from file %s\n", input_buf_len, g_input_file_name);
         }
         fclose(file);
     }
