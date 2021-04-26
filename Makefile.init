@@ -53,28 +53,22 @@ all: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED) qzip test
 qzip_obj_without_main: qzip_obj_without_main
 
 install: qzip $(QATZIP_LIB_SHARED)
-	$(INSTALL) -D -m 750 $(QATZIP_LIB_D)/$(QATZIP_LIB_STATIC) $(staticlib_dir)/$(QATZIP_LIB_STATIC)
-	$(INSTALL) -D -m 750 $(QATZIP_LIB_D)/$(QATZIP_LIB_SHARED).$(VER) $(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER)
-	$(INSTALL) -D -m 750 $(QATZIP_LIB_D)/$(QATZIP_LIB_SHARED).$(VER) /lib64/$(QATZIP_LIB_SHARED).$(VER)
-	$(INSTALL) -D -m 750 $(top_builddir)/include/$(QATZIP_INCLUDE) $(includedir)/$(QATZIP_INCLUDE)
-	$(LN_S) -f $(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER) $(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER_M)
-	$(LN_S) -f $(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER) $(sharedlib_dir)/$(QATZIP_LIB_SHARED)
-	$(LN_S) -f /lib64/$(QATZIP_LIB_SHARED).$(VER) /lib64/$(QATZIP_LIB_SHARED).$(VER_M)
-	$(LN_S) -f /lib64/$(QATZIP_LIB_SHARED).$(VER) /lib64/$(QATZIP_LIB_SHARED)
-	$(INSTALL) -D -m 777 $(QZIP_UTIL_D)/$(QZIP_UTIL) $(bindir)/$(QZIP_UTIL)
-	$(INSTALL) -D -m 777 $(QATZIP_MAN_D)/$(QATZIP_MAN) $(mandir)/$(QATZIP_MAN)
+	$(INSTALL) -D -m 755 $(QATZIP_LIB_D)/$(QATZIP_LIB_SHARED).$(VER) $(DESTDIR)/$(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER)
+	$(INSTALL) -D -m 644 $(top_builddir)/include/$(QATZIP_INCLUDE) $(DESTDIR)/$(includedir)/$(QATZIP_INCLUDE)
+	$(LN_S) -f $(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER) $(DESTDIR)/$(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER_M)
+	$(LN_S) -f $(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER) $(DESTDIR)/$(sharedlib_dir)/$(QATZIP_LIB_SHARED)
+	$(INSTALL) -D -m 755 $(QZIP_UTIL_D)/$(QZIP_UTIL) $(DESTDIR)/$(bindir)/$(QZIP_UTIL)
+	$(INSTALL) -D -m 644 $(QATZIP_MAN_D)/$(QATZIP_MAN) $(DESTDIR)/$(mandir)/$(QATZIP_MAN)
+	$(INSTALL) -D -m 644 $(top_builddir)/man/qzip.1 $(DESTDIR)/$(mandir)/man1/qzip.1
 
 uninstall:
-	$(RM) $(staticlib_dir)/$(QATZIP_LIB_STATIC)
-	$(RM) $(sharedlib_dir)/$(QATZIP_LIB_SHARED)
-	$(RM) $(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER)
-	$(RM) $(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER_M)
-	$(RM) $(includedir)/$(QATZIP_INCLUDE)
-	$(RM) /lib64/$(QATZIP_LIB_SHARED)
-	$(RM) /lib64/$(QATZIP_LIB_SHARED).$(VER)
-	$(RM) /lib64/$(QATZIP_LIB_SHARED).$(VER_M)
-	$(RM) $(bindir)/$(QZIP_UTIL)
-	$(RM) $(mandir)/$(QATZIP_MAN)
+	$(RM) $(DESTDIR)/$(sharedlib_dir)/$(QATZIP_LIB_SHARED)
+	$(RM) $(DESTDIR)/$(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER)
+	$(RM) $(DESTDIR)/$(sharedlib_dir)/$(QATZIP_LIB_SHARED).$(VER_M)
+	$(RM) $(DESTDIR)/$(includedir)/$(QATZIP_INCLUDE)
+	$(RM) $(DESTDIR)/$(bindir)/$(QZIP_UTIL)
+	$(RM) $(DESTDIR)/$(mandir)/$(QATZIP_MAN)
+	$(RM) $(DESTDIR)/$(mandir)/man1/qzip.1
 
 $(QATZIP_LIB_STATIC):
 	$(MAKE) -C $(QATZIP_LIB_D) $(QATZIP_LIB_STATIC)

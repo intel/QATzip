@@ -78,6 +78,8 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
 Optional Features:
   --enable-debug          turn on qatzip debug
+  --enable-symbol         generate qatzip debug symbol
+                          this will be ignored if --enable-debug is on
   --with-ICP_ROOT[=ARG]   Used to link Cpa library
   --sync-api-repo=REPO_URL  Used to sync api from repo REPO_URL
 
@@ -124,6 +126,8 @@ exit 0 ;;
         mandir=$qz_val; shift;;
     --enable-debug):
         enable_debug=yes; shift;;
+    --enable-symbol):
+        enable_symbol=yes; shift;;
     --with-ICP_ROOT):
         ICP_ROOT=$qz_val; shift;;
     --sync-api-repo):
@@ -152,6 +156,10 @@ if [ "$enable_debug" = "yes" ] ; then
   CFLAGS+=" -g -DQATZIP_DEBUG -O0"
 else
   CFLAGS+=" -O2 -D_FORTIFY_SOURCE=2"
+fi
+
+if [ "$enable_symbol" = "yes" ] ; then
+  CFLAGS+=" -g"
 fi
 
 testfile=qztest$$
