@@ -49,7 +49,7 @@ QzSessionParams_T g_params_th = {(QzHuffmanHdr_T)0,};
 const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-char const g_short_opts[] = "A:H:L:C:r:o:O:dfhkVR";
+char const g_short_opts[] = "A:H:L:C:r:o:O:P:dfhkVR";
 const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -65,6 +65,8 @@ const struct option g_long_opts[] = {
     {"output",     1, 0, 'O'}, /* set output header format(gzip, gzipext, 7z)*/
     {"recursive",  0, 0, 'R'}, /* set recursive mode when compressing a
                                   directory */
+    {"polling",    1, 0, 'P'}, /* set polling mode when compressing and
+                                  decompressing */
     { 0, 0, 0, 0 }
 };
 
@@ -98,6 +100,7 @@ void help(void)
         "  -r,               set max inflight request number",
         "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
+        "  -P, --polling     set polling mode, only supports busy polling settings",
         "",
         "With no FILE, read standard input.",
         0

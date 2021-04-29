@@ -96,7 +96,8 @@ QzSessionParams_T g_sess_params_default = {
     .strm_buff_sz      = QZ_STRM_BUFF_SZ_DEFAULT,
     .input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
     .req_cnt_thrshold  = QZ_REQ_THRESHOLD_DEFAULT,
-    .wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT
+    .wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT,
+    .is_busy_polling   = QZ_PERIODICAL_POLLING
 };
 
 processData_T g_process = {
@@ -1174,6 +1175,7 @@ static void *doCompressOut(void *in)
     int dest_pinned = qzMemFindAddr(qz_sess->next_dest);
     i = qz_sess->inst_hint;
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
+    bool is_busy_polling = qz_sess->sess_params.is_busy_polling;
 
     while ((qz_sess->last_submitted == 0) ||
            (qz_sess->processed < qz_sess->submitted)) {
@@ -1394,17 +1396,20 @@ static void *doCompressOut(void *in)
             }
         }
 
-        if (0 == good) {
-            qz_sess->polling_idx = (qz_sess->polling_idx >= POLLING_LIST_NUM - 1) ?
-                                   (POLLING_LIST_NUM - 1) : (qz_sess->polling_idx + 1);
+        if (QZ_PERIODICAL_POLLING == is_busy_polling) {
+            if (0 == good) {
+                qz_sess->polling_idx = (qz_sess->polling_idx >= POLLING_LIST_NUM - 1) ?
+                                       (POLLING_LIST_NUM - 1) :
+                                       (qz_sess->polling_idx + 1);
 
-            QZ_DEBUG("comp sleep for %d usec...\n",
-                     g_polling_interval[qz_sess->polling_idx]);
-            usleep(g_polling_interval[qz_sess->polling_idx]);
-            sleep_cnt++;
-        } else {
-            qz_sess->polling_idx = (qz_sess->polling_idx == 0) ? (0) :
-                                   (qz_sess->polling_idx - 1);
+                QZ_DEBUG("comp sleep for %d usec...\n",
+                         g_polling_interval[qz_sess->polling_idx]);
+                usleep(g_polling_interval[qz_sess->polling_idx]);
+                sleep_cnt++;
+            } else {
+                qz_sess->polling_idx = (qz_sess->polling_idx == 0) ? (0) :
+                                       (qz_sess->polling_idx - 1);
+            }
         }
     }
 
@@ -2005,6 +2010,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
+    bool is_busy_polling = qz_sess->sess_params.is_busy_polling;
 
     QZ_DEBUG("mw>> function %s() called\n", __func__);
     fflush(stdout);
@@ -2104,17 +2110,20 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
             done = (qz_sess->last_submitted) && (qz_sess->processed == qz_sess->submitted);
         }
 
-        if (0 == good) {
-            qz_sess->polling_idx = (qz_sess->polling_idx >= POLLING_LIST_NUM - 1) ?
-                                   (POLLING_LIST_NUM - 1) : (qz_sess->polling_idx + 1);
+        if (QZ_PERIODICAL_POLLING == is_busy_polling) {
+            if (0 == good) {
+                qz_sess->polling_idx = (qz_sess->polling_idx >= POLLING_LIST_NUM - 1) ?
+                                       (POLLING_LIST_NUM - 1) :
+                                       (qz_sess->polling_idx + 1);
 
-            QZ_DEBUG("decomp sleep for %d usec...\n",
-                     g_polling_interval[qz_sess->polling_idx]);
-            usleep(g_polling_interval[qz_sess->polling_idx]);
-            sleep_cnt++;
-        } else {
-            qz_sess->polling_idx = (qz_sess->polling_idx == 0) ? (0) :
-                                   (qz_sess->polling_idx - 1);
+                QZ_DEBUG("decomp sleep for %d usec...\n",
+                         g_polling_interval[qz_sess->polling_idx]);
+                usleep(g_polling_interval[qz_sess->polling_idx]);
+                sleep_cnt++;
+            } else {
+                qz_sess->polling_idx = (qz_sess->polling_idx == 0) ? (0) :
+                                       (qz_sess->polling_idx - 1);
+            }
         }
     }
 

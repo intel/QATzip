@@ -278,7 +278,8 @@ compressing or decompressing files:
     "  -R,               set Recursive mode for decompressing a directory
                          It only supports for gzip/gzipext format and
                          decompression operation",
-    "  -o,               set output file name"
+    "  -o,               set output file name",
+    "  -P, --polling     set polling mode, only supports busy polling settings"
 ```
 
 #### File compession in 7z:

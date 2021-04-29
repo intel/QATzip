@@ -3650,6 +3650,7 @@ done:
     "    -T huffmanType        static | dynamic\n"                              \
     "    -r req_cnt_thrshold   max inflight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
+    "    -P polling            set polling mode, default is periodical polling\n" \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -3693,7 +3694,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:vh";
+    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:vh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -3842,6 +3843,14 @@ int main(int argc, char *argv[])
                 return -1;
             }
             thread_sleep *= 1000;
+            break;
+        case 'P':
+            if (strcmp(optarg, "busy") == 0) {
+                g_params_th.is_busy_polling = QZ_BUSY_POLLING;
+            } else {
+                QZ_ERROR("Error set polling mode: %s\n", optarg);
+                return -1;
+            }
             break;
         default:
             qzPrintUsageAndExit(argv[0]);

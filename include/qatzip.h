@@ -55,6 +55,7 @@ extern"C" {
 #endif
 
 #include <string.h>
+#include <stdbool.h>
 
 /**
  *****************************************************************************
@@ -363,6 +364,8 @@ typedef struct QzSessionParams_S {
     FallbackError *fbErrorCurr;
     /* Linked list for simulated errors from HW */
 #endif
+    bool is_busy_polling;
+    /**< true means busy polling */
 } QzSessionParams_T;
 
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
@@ -394,6 +397,8 @@ typedef struct QzSessionParams_S {
 #define QZ_DEFLATE_COMP_LVL_MAXIMUM   (9)
 #endif
 
+#define QZ_PERIODICAL_POLLING         (false)
+#define QZ_BUSY_POLLING               (true)
 /**
  *****************************************************************************
  * @ingroup qatZip

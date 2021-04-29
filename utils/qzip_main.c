@@ -142,6 +142,14 @@ int main(int argc, char **argv)
         case 'f':
             option_f = 1;
             break;
+        case 'P':
+            if (strcmp(optarg, "busy") == 0) {
+                g_params_th.is_busy_polling = QZ_BUSY_POLLING;
+            } else {
+                printf("Error set polling mode: %s\n", optarg);
+                return -1;
+            }
+            break;
         default:
             tryHelp();
         }
