@@ -4,7 +4,7 @@
 %global libqatzip_soversion 1
 
 Name:           qatzip
-Version:        1.0.3
+Version:        1.0.4
 Release:        1%{?dist}
 Summary:        Intel QuickAssist Technology (QAT) QATzip Library
 License:        BSD
@@ -59,5 +59,5 @@ applications that use the QATzip APIs.
 %{_libdir}/libqatzip.so
 
 %changelog
-* Tue Mar 23 2021 Ma Zheng <zheng.ma@intel.com> - 1.0.3-1
+* Tue Mar 23 2021 Ma Zheng <zheng.ma@intel.com> - 1.0.4-1
 - Initial version of RPM Package
