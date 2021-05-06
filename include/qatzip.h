@@ -40,7 +40,7 @@
  * @defgroup qatZip Data Compression API
  *
  * @description
- *      These functions specify the API for Data Compression operations.
+ *      These functions specify the API for data compression operations.
  *
  * @remarks
  *
@@ -55,10 +55,10 @@ extern"C" {
 #endif
 
 /**
- * These macros define how the project will be built
- * QATZIP_LINK_DLL must be defined if linking the DLL
- * QATZIP_BUILD_DLL must be defined when building a DLL
- * No definition required if building the project as static library
+ *  These macros define how the project will be built
+ *  QATZIP_LINK_DLL must be defined if linking the DLL
+ *  QATZIP_BUILD_DLL must be defined when building a DLL
+ *  No definition required if building the project as static library
  */
 #if defined QATZIP_LINK_DLL
 #    define QATZIP_API __declspec(dllimport)
@@ -73,12 +73,12 @@ extern"C" {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      QATZIP Major Version Number
+ *      QATzip Major Version Number
  * @description
- *      The QATZIP API major version number. This number will be incremented
- *      when significant changes to the API have occurred.
- *      The combination of the major and minor number definitions represent
- *      the complete version number for this interface.
+ *      The QATzip API major version number. This number will be incremented
+ *    when significant changes to the API have occurred.
+ *    The combination of the major and minor number definitions represent
+ *    the complete version number for this interface.
  *
  *****************************************************************************/
 #define QATZIP_API_VERSION_NUM_MAJOR (1)
@@ -86,12 +86,12 @@ extern"C" {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *   QATZIP Minor Version Number
+ *      QATzip Minor Version Number
  * @description
- *   The QATZIP API minor version number. This number will be incremented
- *   when minor changes to the API have occurred. The combination of the major
- *   and minor number definitions represent the complete version number for
- *   this interface.
+ *      The QATzip API minor version number. This number will be incremented
+ *    when minor changes to the API have occurred. The combination of the major
+ *    and minor number definitions represent the complete version number for
+ *    this interface.
  *****************************************************************************/
 #define QATZIP_API_VERSION_NUM_MINOR (3)
 
@@ -100,10 +100,10 @@ extern"C" {
                                QATZIP_API_VERSION_NUM_MINOR * 100)
 
 /**
- * These macros define how the project will be built
- * QATZIP_LINK_DLL must be defined if linking the DLL
- * QATZIP_BUILD_DLL must be defined when building a DLL
- * No definition required if building the project as static library
+ *  These macros define how the project will be built
+ *  QATZIP_LINK_DLL must be defined if linking the DLL
+ *  QATZIP_BUILD_DLL must be defined when building a DLL
+ *  No definition required if building the project as static library
  */
 #if defined QATZIP_LINK_DLL
 #define QATZIP_API __declspec(dllimport)
@@ -182,7 +182,7 @@ extern"C" {
  *
  * @description
  *      This enumerated list identifies the Huffman header types
- *    supported by QATZip.
+ *    supported by QATzip.
  *
  *****************************************************************************/
 typedef enum QzHuffmanHdr_E {
@@ -199,7 +199,7 @@ typedef enum QzHuffmanHdr_E {
  *
  * @description
  *      This enumerated list identifies memory types supported
- *    by QATZip.
+ *    by QATzip.
  *
  *****************************************************************************/
 typedef enum PinMem_E {
@@ -216,7 +216,7 @@ typedef enum PinMem_E {
  *
  * @description
  *      This enumerated list identifies the session directions
- *    supported by QATZip. A session can be compress, decompress
+ *    supported by QATzip. A session can be compress, decompress
  *    or both.
  *
  *****************************************************************************/
@@ -236,7 +236,7 @@ typedef enum QzDirection_E {
  *
  * @description
  *      This enumerated list identifies the data format supported by
- *    QATZip streaming API. A format can be raw deflate data block, deflate
+ *    QATzip streaming API. A format can be raw deflate data block, deflate
  *    block wrapped by GZip header and footer, or deflate data block wrapped
  *    by GZip extension header and footer.
  *
@@ -247,7 +247,7 @@ typedef enum QzDataFormat_E {
     QZ_DEFLATE_GZIP,
     /**< Data is in deflate wrapped by GZip header and footer */
     QZ_DEFLATE_GZIP_EXT,
-    /**< Data is in deflate wrapped by GZip extension header and footer */
+    /**< Data is in deflate wrapped by GZip extended header and footer */
     QZ_DEFLATE_RAW,
     /**< Data is in raw deflate format */
     QZ_FMT_NUM
@@ -275,7 +275,7 @@ typedef enum QzCrcType_E {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      QATZIP Session Status definitions and function return codes
+ *      QATzip Session Status definitions and function return codes
  *
  * @description
  *      This list identifies valid values for session status and function
@@ -328,10 +328,11 @@ typedef enum QzCrcType_E {
 #define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
         memcpy_s((void *)(dest), dest_sz, (void *) (src), MIN(dest_sz, src_sz))
 #endif
+
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      QATZIP Session Initialization parameters
+ *      QATzip Session Initialization parameters
  *
  * @description
  *      This structure contains data for initializing a session.
@@ -361,15 +362,15 @@ typedef struct QzSessionParams_S {
     /**< Default strm_buf_sz equals to hw_buff_sz */
     unsigned int input_sz_thrshold;
     /**< Default threshold of compression service's input size */
-    /**< for sw failover, if the size of input request less */
-    /**< than the threshold, QATZip will route the request */
+    /**< for sw failover, if the size of input request is less */
+    /**< than the threshold, QATzip will route the request */
     /**< to software */
     unsigned int req_cnt_thrshold;
     /**< Set between 1 and NUM_BUFF, default NUM_BUFF */
     /**< NUM_BUFF is defined in qatzip_internal.h */
     unsigned int wait_cnt_thrshold;
-    /**< When previous try failed, wait for specific number of call */
-    /**< before retry to open device. Default threshold is 8 */
+    /**< When previous try failed, wait for specific number of calls */
+    /**< before retrying to open device. Default threshold is 8 */
 #ifdef ERR_INJECTION
     FallbackError *fbError;
     FallbackError *fbErrorCurr;
@@ -403,7 +404,7 @@ typedef struct QzSessionParams_S {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      QATZIP Session opaque data storage
+ *      QATzip Session opaque data storage
  *
  * @description
  *      This structure contains a pointer to a structure with
@@ -426,7 +427,7 @@ typedef struct QzSession_S {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      QATZIP status structure
+ *      QATzip status structure
  *
  * @description
  *      This structure contains data relating to the status of QAT on the
@@ -449,7 +450,7 @@ typedef struct QzStatus_S {
     unsigned char using_huge_pages;
     /**< Are memory slabs coming from huge pages? */
     signed long int hw_session_status;
-    /**< One of QATZIP Session Status */
+    /**< One of QATzip Session Status */
     unsigned char algo_sw[QZ_MAX_ALGORITHMS];
     /**< Support software algorithms */
     unsigned char algo_hw[QZ_MAX_ALGORITHMS];
@@ -481,9 +482,9 @@ typedef struct QzStatus_S {
  * @assumptions
  *      None
  * @sideEffects
- *    This function will:
- *      1) start the user space driver if necessary
- *      2) allocate all hardware instances available
+ *      This function will:
+ *        1) start the user space driver if necessary
+ *        2) allocate all hardware instances available
  * @blocking
  *      Yes
  * @reentrant
@@ -526,7 +527,7 @@ QATZIP_API int qzInit(QzSession_T *sess,  unsigned char sw_backup);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      Initialize a QATZip session
+ *      Initialize a QATzip session
  *
  * @description
  *      This function establishes a QAT session. This involves associating
@@ -596,17 +597,17 @@ QATZIP_API int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
  *    function will attempt to set up a session using qzInit and qzSetupSession.
  *
  *    The resulting compressed block of data will be composed of one or more
- *    gzip blocks per RFC 1952.
+ *    gzip blocks, as per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
  *    buffer.
  *
- *    The caller must check the updated src_len.  This value will be the
- *    number of consumed bytes on exit.  The calling API may have to
- *    process the destination  buffer and call again.
+ *    The caller must check the updated src_len. This value will be the
+ *    number of consumed bytes on exit. The calling API may have to
+ *    process the destination buffer and call again.
  *
  *    The parameter dest_len will be set to the number of bytes produced in
- *    the destination buffer.  This value may be zero if no data was produced
+ *    the destination buffer. This value may be zero if no data was produced
  *    which may occur if the consumed data is retained internally. A
  *    possible reason for this may be small amounts of data in the src
  *    buffer.
@@ -666,7 +667,7 @@ QATZIP_API int qzCompress(QzSession_T *sess, const unsigned char *src,
  *    will attempt to set up a session using qzInit and qzSetupSession.
  *
  *    The resulting compressed block of data will be composed of one or more
- *    gzip blocks per RFC 1952.
+ *    gzip blocks, as per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
  *    buffer and put CRC32 checksum for compressed input data in user provided
@@ -739,7 +740,7 @@ QATZIP_API int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
  *    will attempt to set up a session using qzInit and qzSetupSession.
  *
  *    The input compressed block of data will be composed of one or more
- *    gzip blocks per RFC 1952.
+ *    gzip blocks, as per RFC 1952.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -786,7 +787,7 @@ QATZIP_API int qzDecompress(QzSession_T *sess, const unsigned char *src,
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      Deinitialize a QATZip session
+ *      Uninitialize a QATzip session
  *
  * @description
  *      This function disconnects a session from a hardware instance and
@@ -829,13 +830,13 @@ QATZIP_API int qzTeardownSession(QzSession_T *sess);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      Terminates a QATZip session
+ *      Terminates a QATzip session
  *
  * @description
  *      This function closes the connection with QAT.
  *
  * @context
- *      This function shall not be called in an interrupt context
+ *      This function shall not be called in an interrupt context.
  * @assumptions
  *      None
  * @sideEffects
@@ -874,7 +875,7 @@ QATZIP_API int qzClose(QzSession_T *sess);
  *
  * @description
  *      This function retrieves the status of QAT in the platform.
- *      The status structure will be filled in as follows:
+ *    The status structure will be filled in as follows:
  *    qat_hw_count         Number of discovered QAT devices on PCU bus
  *    qat_service_stated   1 if qzInit has been successfully run, 0 otherwise
  *    qat_mem_drvr         1 if the QAT memory driver is installed, 0 otherwise
@@ -884,17 +885,17 @@ QATZIP_API int qzClose(QzSession_T *sess);
  *                         pages allocated  by this process/thread.
  *    using_huge_pages     1 if memory is being allocated from huge pages, 0 if
  *                         memory is being allocated from standard kernel memory
- *    hw_session_stat      Hw session status: one of:
- *      QZ_OK
- *      QZ_FAIL
- *      QZ_NO_HW
- *      QZ_NO_MDRV
- *      QZ_NO_INST_ATTACH
- *      QZ_LOW_MEM
- *      QZ_NOSW_NO_HW
- *      QZ_NOSW_NO_MDRV
- *      QZ_NOSW_NO_INST_ATTACH
- *      QZ_NOSW_LOW_MEM
+ *    hw_session_status    Hw session status: one of:
+ *                                            QZ_OK
+ *                                            QZ_FAIL
+ *                                            QZ_NO_HW
+ *                                            QZ_NO_MDRV
+ *                                            QZ_NO_INST_ATTACH
+ *                                            QZ_LOW_MEM
+ *                                            QZ_NOSW_NO_HW
+ *                                            QZ_NOSW_NO_MDRV
+ *                                            QZ_NOSW_NO_INST_ATTACH
+ *                                            QZ_NOSW_LOW_MEM
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -911,7 +912,7 @@ QATZIP_API int qzClose(QzSession_T *sess);
  *
  * @param[in]       sess    Session handle
  *                          (pointer to opaque instance and session data)
- * @param[in]       status  Pointer to QATZIP status structure
+ * @param[in]       status  Pointer to QATzip status structure
  * @retval QZ_OK            Function executed successfully. The hardware based
  *                          compression session has been created
  * @retval QZ_PARAMS        *status is NULL
@@ -932,10 +933,10 @@ QATZIP_API int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      Get the max compressed output length
+ *      Get the maximum compressed output length
  *
  * @description
- *      Get the max compressed output length.
+ *      Get the maximum compressed output length.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -951,11 +952,11 @@ QATZIP_API int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
  *      Yes
  *
  * @param[in]
- *         src_sz     Input data length in byte
+ *         src_sz     Input data length in bytes
  *         sess       Session handle
  *                    (pointer to opaque instance and session data)
  *
- * @retval dest_sz    Max compressed data output length in byte.
+ * @retval dest_sz    Max compressed data output length in bytes.
  *                    When src_sz is equal to 0, the return value is QZ_COMPRESSED_SZ_OF_EMPTY_FILE(34).
  *                    When integer overflow happens, the return value is 0
  *
@@ -1154,7 +1155,7 @@ QATZIP_API void qzFree(void *m);
  *      Yes
  *
  * @param[in]
- *              a       Address need to be checked
+ *              a       Address to be checked
  *
  * @retval      1       The address is available
  * @retval      0       The address is not available
@@ -1175,7 +1176,7 @@ QATZIP_API int qzMemFindAddr(unsigned char *a);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      QATZIP Stream data storage
+ *      QATzip Stream data storage
  *
  * @description
  *      This structure contains metadata needed for stream operation.
@@ -1183,17 +1184,17 @@ QATZIP_API int qzMemFindAddr(unsigned char *a);
  *****************************************************************************/
 typedef struct QzStream_S {
     unsigned int in_sz;
-    /**< Set by application, reset by QATZip to indicate consumed data */
+    /**< Set by application, reset by QATzip to indicate consumed data */
     unsigned int out_sz;
-    /**< Set by application, reset by QATZip to indicate processed data */
+    /**< Set by application, reset by QATzip to indicate processed data */
     unsigned char *in ;
     /**< Input data pointer set by application */
     unsigned char *out ;
     /**< Output data pointer set by application */
     unsigned int pending_in;
-    /**< Unprocessed bytes held in QATZip */
+    /**< Unprocessed bytes held in QATzip */
     unsigned int pending_out;
-    /**< Processed bytes held in QATZip */
+    /**< Processed bytes held in QATzip */
     QzCrcType_T crc_type;
     /**< Checksum type in Adler, CRC32 or none */
     unsigned int crc_32;
@@ -1201,7 +1202,7 @@ typedef struct QzStream_S {
     unsigned long long reserved;
     /**< Reserved for future use */
     void *opaque;
-    /**< Internal storage managed by QATZip */
+    /**< Internal storage managed by QATzip */
 } QzStream_T;
 
 /**
@@ -1219,7 +1220,7 @@ typedef struct QzStream_S {
  *    reaching the end of input data - as indicated by last parameter.
  *
  *    The resulting compressed block of data will be composed of one or more
- *    gzip blocks per RFC 1952 or deflate blocks per RFC 1951.
+ *    gzip blocks, per RFC 1952, or deflate blocks, per RFC 1951.
  *
  *    This function will place completed compression blocks in the *out
  *    of QzStream_T structure and put checksum for compressed input data
@@ -1236,12 +1237,12 @@ typedef struct QzStream_S {
  *    buffer.
  *
  *    The caller must check the updated pending_in of QzStream_T. This value
- *    will be the number of unprocessed bytes held in QATZip. The calling API
+ *    will be the number of unprocessed bytes held in QATzip. The calling API
  *    may have to feed more input data or indicate reaching the end of input
  *    and call again.
  *
  *    The caller must check the updated pending_out of QzStream_T. This value
- *    will be the number of processed bytes held in QATZip. The calling API
+ *    will be the number of processed bytes held in QATzip. The calling API
  *    may have to process the destination buffer and call again.
  *
  * @context
@@ -1262,8 +1263,8 @@ typedef struct QzStream_S {
  * @param[in,out]   strm     Stream handle
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
- *                           (always set to 1 in Microsoft(R)
- *                           Windows(TM)'s QATZip implementation)
+ *                           (always set to 1 in the Microsoft(R)
+ *                           Windows(TM) QATzip implementation)
  *
  * @retval QZ_OK             Function executed successfully
  * @retval QZ_FAIL           Function did not succeed
@@ -1297,7 +1298,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *    reaching the end of input data - as indicated by last parameter.
  *
  *    The input compressed block of data will be composed of one or more
- *    gzip blocks per RFC 1952 or deflate blocks per RFC 1951.
+ *    gzip blocks, per RFC 1952, or deflate blocks, per RFC 1951.
  *
  *    This function will place completed decompression blocks in the *out
  *    of QzStream_T structure and put checksum for decompressed data in
@@ -1314,12 +1315,12 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *    buffer.
  *
  *    The caller must check the updated pending_in of QzStream_T. This value
- *    will be the number of unprocessed bytes held in QATZip. The calling API
+ *    will be the number of unprocessed bytes held in QATzip. The calling API
  *    may have to feed more input data or indicate reaching the end of input
  *    and call again.
  *
  *    The caller must check the updated pending_out of QzStream_T. This value
- *    will be the number of processed bytes held in QATZip. The calling API
+ *    will be the number of processed bytes held in QATzip. The calling API
  *    may have to process the destination buffer and call again.
  *
  * @context
@@ -1362,10 +1363,10 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      Terminates a QATZip stream
+ *      Terminates a QATzip stream
  *
  * @description
- *      This function disconnect stream handle from session handle then reset
+ *      This function disconnects stream handle from session handle then reset
  *    stream flag and release stream memory.
  *
  * @context
