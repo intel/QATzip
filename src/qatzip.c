@@ -711,7 +711,9 @@ void cleanUpInstMem(int i)
     /*src buffers*/
     for (j = 0; j < g_process.qz_inst[i].src_count; j++) {
         qzFree(g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData);
-        qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData);
+        if (g_process.qz_inst[i].stream[j].src_pinned != SV_MEM) {
+            qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData);
+        }
         qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers);
         qzFree(g_process.qz_inst[i].src_buffers[j]);
     }
@@ -724,7 +726,9 @@ void cleanUpInstMem(int i)
     /*dest buffers*/
     for (j = 0; j < g_process.qz_inst[i].dest_count; j++) {
         qzFree(g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData);
-        qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData);
+        if (g_process.qz_inst[i].stream[j].dest_pinned != SV_MEM) {
+            qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData);
+        }
         qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers);
         qzFree(g_process.qz_inst[i].dest_buffers[j]);
     }
@@ -1101,6 +1105,8 @@ static void *doCompressIn(void *in)
 
     i = qz_sess->inst_hint;
     j = -1;
+    CpaBoolean need_cont_mem =
+        g_process.qz_inst[i].instance_info.requiresPhysicallyContiguousMemory;
     src_ptr = qz_sess->src + qz_sess->qz_in_len;
     dest_ptr = qz_sess->next_dest;
     src_pinned = qzMemFindAddr(src_ptr);
@@ -1153,24 +1159,30 @@ static void *doCompressIn(void *in)
                 dest_sz - outputHeaderSz(data_fmt);
         }
 
-        if (0 == src_pinned) {
+        if (!need_cont_mem) {
+            QZ_DEBUG("Compress SVM Enabled in doCompressIn\n");
+        }
+        if ((0 == src_pinned) && need_cont_mem) {
             QZ_DEBUG("memory copy in doCompressIn\n");
             QZ_MEMCPY(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData,
                       src_ptr,
                       src_send_sz,
                       src_send_sz);
-            g_process.qz_inst[i].stream[j].src_pinned = 0;
+            g_process.qz_inst[i].stream[j].src_pinned = COMMON_MEM;
         } else {
             QZ_DEBUG("changing src_ptr to 0x%lx\n", (unsigned long)src_ptr);
             g_process.qz_inst[i].stream[j].src_pinned = 1;
             g_process.qz_inst[i].src_buffers[j]->pBuffers->pData = src_ptr;
+            g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? PINNED_MEM : SV_MEM;
         }
 
         /*using zerocopy for the first request while dest buffer is pinned*/
-        if (unlikely(dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq))) {
+        if (unlikely((!need_cont_mem || dest_pinned) &&
+                     (0 == g_process.qz_inst[i].stream[j].seq))) {
             g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
                 dest_ptr + outputHeaderSz(data_fmt);
-            g_process.qz_inst[i].stream[j].dest_pinned = 1;
+            g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? PINNED_MEM :
+                    SV_MEM;
         }
 
         g_process.qz_inst[i].stream[j].res.checksum = 0;
@@ -1230,16 +1242,17 @@ err_exit:
     g_process.qz_inst[i].stream[j].src2 -= 1;
     qz_sess->seq -= 1;
     sess->thd_sess_stat = QZ_FAIL;
-    if (1 == g_process.qz_inst[i].stream[j].dest_pinned &&
-        (0 == g_process.qz_inst[i].stream[j].seq)) {
+    if ((PINNED_MEM == g_process.qz_inst[i].stream[j].dest_pinned ||
+         !need_cont_mem) && (0 == g_process.qz_inst[i].stream[j].seq)) {
         g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
             g_process.qz_inst[i].stream[j].orig_dest;
-        g_process.qz_inst[i].stream[j].dest_pinned = 0;
+        g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? COMMON_MEM :
+                SV_MEM;
     }
-    if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
+    if (PINNED_MEM == g_process.qz_inst[i].stream[j].src_pinned || !need_cont_mem) {
         g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
             g_process.qz_inst[i].stream[j].orig_src;
-        g_process.qz_inst[i].stream[j].src_pinned = 0;
+        g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? COMMON_MEM : SV_MEM;
     }
     return ((void *)NULL);
 }
@@ -1263,6 +1276,9 @@ static void *doCompressOut(void *in)
     i = qz_sess->inst_hint;
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
     bool is_busy_polling = qz_sess->sess_params.is_busy_polling;
+
+    CpaBoolean need_cont_mem =
+        g_process.qz_inst[i].instance_info.requiresPhysicallyContiguousMemory;
 
     while ((qz_sess->last_submitted == 0) ||
            (qz_sess->processed < qz_sess->submitted)) {
@@ -1416,16 +1432,19 @@ static void *doCompressOut(void *in)
                         //Append footer
                         outputFooterGen(qz_sess, resl, data_fmt);
                         qz_sess->next_dest += outputFooterSz(data_fmt);
-                        if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
+                        if ((PINNED_MEM == g_process.qz_inst[i].stream[j].src_pinned) ||
+                            !need_cont_mem) {
                             g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
                                 g_process.qz_inst[i].stream[j].orig_src;
-                            g_process.qz_inst[i].stream[j].src_pinned = 0;
+                            g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? COMMON_MEM : SV_MEM;
                         }
 
-                        if (dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq)) {
+                        if (((dest_pinned  || !need_cont_mem) &&
+                             (0 == g_process.qz_inst[i].stream[j].seq))) {
                             g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
                                 g_process.qz_inst[i].stream[j].orig_dest;
-                            g_process.qz_inst[i].stream[j].dest_pinned = 0;
+                            g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? COMMON_MEM :
+                                    SV_MEM;
                         }
                     }
                 } else {
@@ -1443,10 +1462,15 @@ static void *doCompressOut(void *in)
                     qz_sess->next_dest += outputHeaderSz(data_fmt);
                     qz_sess->qz_out_len += outputHeaderSz(data_fmt);
 
-                    if (dest_pinned && (0 == g_process.qz_inst[i].stream[j].seq)) {
+                    if (!need_cont_mem) {
+                        QZ_DEBUG("Compress SVM Enabled in doCompressOut\n");
+                    }
+                    if ((!need_cont_mem || dest_pinned) &&
+                        (0 == g_process.qz_inst[i].stream[j].seq)) {
                         g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
                             g_process.qz_inst[i].stream[j].orig_dest;
-                        g_process.qz_inst[i].stream[j].dest_pinned = 0;
+                        g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? COMMON_MEM :
+                                SV_MEM;
                     } else {
                         QZ_MEMCPY(qz_sess->next_dest,
                                   g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData,
@@ -1474,10 +1498,11 @@ static void *doCompressOut(void *in)
                     qz_sess->next_dest += outputFooterSz(data_fmt);
                     qz_sess->qz_out_len += outputFooterSz(data_fmt);
 
-                    if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
+                    if ((PINNED_MEM == g_process.qz_inst[i].stream[j].src_pinned) ||
+                        !need_cont_mem) {
                         g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
                             g_process.qz_inst[i].stream[j].orig_src;
-                        g_process.qz_inst[i].stream[j].src_pinned = 0;
+                        g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? COMMON_MEM : SV_MEM;
                     }
                 }
 
@@ -1517,16 +1542,21 @@ err_exit:
     qz_sess->stop_submitting = 1;
 
     for (j = 0; j < g_process.qz_inst[i].dest_count; j++) {
-        if (1 == g_process.qz_inst[i].stream[j].dest_pinned &&
+
+        if ((!need_cont_mem ||
+             PINNED_MEM == g_process.qz_inst[i].stream[j].dest_pinned) &&
             (0 == g_process.qz_inst[i].stream[j].seq)) {
             g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
                 g_process.qz_inst[i].stream[j].orig_dest;
-            g_process.qz_inst[i].stream[j].dest_pinned = 0;
+            g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? COMMON_MEM :
+                    SV_MEM;
         }
-        if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
+
+        if (PINNED_MEM == g_process.qz_inst[i].stream[j].src_pinned || !need_cont_mem) {
             g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
                 g_process.qz_inst[i].stream[j].orig_src;
-            g_process.qz_inst[i].stream[j].src_pinned = 0;
+            g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? COMMON_MEM :
+                    SV_MEM;
         }
     }
     qz_sess->last_processed = 1;
@@ -1885,7 +1915,11 @@ static void *doDecompressIn(void *in)
     src_avail_len = remaining;
     dest_avail_len = (long)(*qz_sess->dest_sz - qz_sess->qz_out_len);
     QZ_DEBUG("doDecompressIn: Need to g_process %ld bytes\n", remaining);
-
+    CpaBoolean need_cont_mem =
+        g_process.qz_inst[i].instance_info.requiresPhysicallyContiguousMemory;
+    if (!need_cont_mem) {
+        QZ_DEBUG("Decompress SVM Enabled in doDecompressIn\n");
+    }
     while (!done) {
 
         QZ_DEBUG("src_avail_len is %ld, dest_avail_len is %ld\n",
@@ -1974,22 +2008,22 @@ static void *doDecompressIn(void *in)
             g_process.qz_inst[i].stream[j].src2++;/*this buffer is in use*/
 
             /*set up src dest buffers*/
-            if (0 == src_pinned) {
+            if ((0 == src_pinned) && need_cont_mem) {
                 QZ_DEBUG("memory copy in doDecompressIn\n");
                 QZ_MEMCPY(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData,
                           src_ptr,
                           src_send_sz,
                           src_send_sz);
-                g_process.qz_inst[i].stream[j].src_pinned = 0;
+                g_process.qz_inst[i].stream[j].src_pinned = COMMON_MEM;
             } else {
-                g_process.qz_inst[i].stream[j].src_pinned = 1;
                 g_process.qz_inst[i].src_buffers[j]->pBuffers->pData = src_ptr;
+                g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? PINNED_MEM : SV_MEM;
             }
 
             if (0 == dest_pinned) {
-                g_process.qz_inst[i].stream[j].dest_pinned = 0;
+                g_process.qz_inst[i].stream[j].dest_pinned = COMMON_MEM;
             } else {
-                g_process.qz_inst[i].stream[j].dest_pinned = 1;
+                g_process.qz_inst[i].stream[j].dest_pinned = PINNED_MEM;
                 g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData = dest_ptr;
             }
 
@@ -2055,15 +2089,17 @@ static void *doDecompressIn(void *in)
     return ((void *)NULL);
 
 err_exit:
-    if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
+    if (PINNED_MEM == g_process.qz_inst[i].stream[j].src_pinned || !need_cont_mem) {
         g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
             g_process.qz_inst[i].stream[j].orig_src;
-        g_process.qz_inst[i].stream[j].src_pinned = 0;
+        g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? COMMON_MEM : SV_MEM;
     }
-    if (1 == g_process.qz_inst[i].stream[j].dest_pinned) {
+    if (PINNED_MEM == g_process.qz_inst[i].stream[j].dest_pinned) {
         g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
             g_process.qz_inst[i].stream[j].orig_dest;
-        g_process.qz_inst[i].stream[j].dest_pinned = 0;
+        g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? COMMON_MEM :
+                SV_MEM;
+
     }
     /*roll back last submit*/
     qz_sess->last_submitted = 1;
@@ -2098,6 +2134,9 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
     QZ_DEBUG("mw>> function %s() called\n", __func__);
     fflush(stdout);
     i = qz_sess->inst_hint;
+
+    CpaBoolean need_cont_mem =
+        g_process.qz_inst[i].instance_info.requiresPhysicallyContiguousMemory;
 
     while (!done) {
         /*Poll for responses*/
@@ -2157,13 +2196,14 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                 } else {
                     g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
                         g_process.qz_inst[i].stream[j].orig_dest;
-                    g_process.qz_inst[i].stream[j].dest_pinned = 0;
+                    g_process.qz_inst[i].stream[j].dest_pinned = COMMON_MEM;
                 }
 
-                if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
+                if ((PINNED_MEM == g_process.qz_inst[i].stream[j].src_pinned) ||
+                    (!need_cont_mem)) {
                     g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
                         g_process.qz_inst[i].stream[j].orig_src;
-                    g_process.qz_inst[i].stream[j].src_pinned = 0;
+                    g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? COMMON_MEM : SV_MEM;
                 }
 
 
@@ -2235,15 +2275,18 @@ err_exit:
     qz_sess->last_processed = 1;
 
     for (si = 0; si < g_process.qz_inst[i].dest_count; si++) {
-        if (1 == g_process.qz_inst[i].stream[si].src_pinned) {
+        if (PINNED_MEM == g_process.qz_inst[i].stream[si].src_pinned ||
+            !need_cont_mem) {
             g_process.qz_inst[i].src_buffers[si]->pBuffers->pData =
                 g_process.qz_inst[i].stream[si].orig_src;
-            g_process.qz_inst[i].stream[si].src_pinned = 0;
+            g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? COMMON_MEM : SV_MEM;
         }
-        if (1 == g_process.qz_inst[i].stream[si].dest_pinned) {
+        if (PINNED_MEM == g_process.qz_inst[i].stream[si].dest_pinned) {
             g_process.qz_inst[i].dest_buffers[si]->pBuffers->pData =
                 g_process.qz_inst[i].stream[si].orig_dest;
-            g_process.qz_inst[i].stream[si].dest_pinned = 0;
+            g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? COMMON_MEM :
+                    SV_MEM;
+
         }
     }
     swapDataBuffer(i, j);
