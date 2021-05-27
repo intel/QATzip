@@ -54,20 +54,6 @@
 extern"C" {
 #endif
 
-/**
- *  These macros define how the project will be built
- *  QATZIP_LINK_DLL must be defined if linking the DLL
- *  QATZIP_BUILD_DLL must be defined when building a DLL
- *  No definition required if building the project as static library
- */
-#if defined QATZIP_LINK_DLL
-#    define QATZIP_API __declspec(dllimport)
-#elif defined QATZIP_BUILD_DLL
-#    define QATZIP_API __declspec(dllexport)
-#else
-#    define QATZIP_API
-#endif
-
 #include <string.h>
 
 /**
