@@ -309,7 +309,7 @@ int qz_sessParamsCheck(QzSessionParams_T *params)
     if (params->huffman_hdr > QZ_STATIC_HDR                   ||
         params->direction > QZ_DIR_BOTH                       ||
         params->comp_lvl < 1                                  ||
-        params->comp_lvl > MAX_COMP_LEVEL                     ||
+        params->comp_lvl > QZ_DEFLATE_COMP_LVL_MAXIMUM        ||
         params->comp_algorithm != QZ_DEFLATE                  ||
         params->sw_backup > 1                                 ||
         params->hw_buff_sz < QZ_HW_BUFF_MIN_SZ                ||

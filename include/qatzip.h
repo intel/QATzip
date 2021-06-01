@@ -385,7 +385,13 @@ typedef struct QzSessionParams_S {
 #define QZ_REQ_THRESHOLD_DEFAULT     QZ_REQ_THRESHOLD_MAXIMUM
 #define QZ_WAIT_CNT_THRESHOLD_DEFAULT 8
 #define QZ_DEFLATE_COMP_LVL_MINIMUM   (1)
+
+#include <cpa_dc.h>
+#if (CPA_DC_API_VERSION_NUM_MAJOR >= 3) && (CPA_DC_API_VERSION_NUM_MINOR >= 0)
+#define QZ_DEFLATE_COMP_LVL_MAXIMUM   (12)
+#else
 #define QZ_DEFLATE_COMP_LVL_MAXIMUM   (9)
+#endif
 
 /**
  *****************************************************************************

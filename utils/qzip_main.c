@@ -115,7 +115,8 @@ int main(int argc, char **argv)
         case 'L':
             g_params_th.comp_lvl = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (*stop != '\0' || ERANGE == errno ||
-                g_params_th.comp_lvl > MAX_COMP_LEVEL || g_params_th.comp_lvl <= 0) {
+                g_params_th.comp_lvl > QZ_DEFLATE_COMP_LVL_MAXIMUM ||
+                g_params_th.comp_lvl <= 0) {
                 QZ_ERROR("Error compLevel arg: %s\n", optarg);
                 return -1;
             }
