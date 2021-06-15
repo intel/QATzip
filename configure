@@ -39,8 +39,6 @@ top_builddir=`pwd`
 
 MAKE='make'
 CC='gcc'
-CFLAGS='-Wall -Werror -std=gnu99 -pedantic -fstack-protector -fPIE -fPIC -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv'
-LDFLAGS='-fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
 AR='ar'
 LN_S='ln -s'
 RM='rm -f'
@@ -146,6 +144,18 @@ sharedlib_dir=${sharedlib_dir:-$prefix/lib64}
 lib_dir=${lib_dir:-$prefix/lib64}
 includedir=${includedir:-$prefix/include}
 mandir=${mandir:-$prefix/share/man}
+
+# define CFLAGS and LDFLAGS if no environment variables defined
+if test -z ${CFLAGS}; then
+  CFLAGS='-Wall -Werror -std=gnu99 -pedantic -fstack-protector -fPIE -fPIC -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv'
+else
+  CFLAGS+=" -Wall -Werror -std=gnu99 -pedantic -fstack-protector -fPIE -fPIC"
+fi
+if test -z ${LDFLAGS}; then
+  LDFLAGS='-fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
+else
+  LDFLAGS+=" -fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack"
+fi
 
 # try to build 32 or 64 bit system binary
 if test 'x'$build = $build'x'; then

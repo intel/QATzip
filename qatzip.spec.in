@@ -4,7 +4,7 @@
 %global libqatzip_soversion 1
 
 Name:           qatzip
-Version:        1.0.4
+Version:        VERSION
 Release:        1%{?dist}
 Summary:        Intel QuickAssist Technology (QAT) QATzip Library
 License:        BSD
@@ -28,9 +28,17 @@ compliant gzip* implementation. QATzip is designed to take full
 advantage of the performance provided by Intel QuickAssist
 Technology.
 
+%package        libs
+Summary:        Libraries for the qatzip package
+
+%description    libs
+This package contains libraries for applications to use
+the QATzip APIs.
+
 %package        devel
 Summary:        Development components for the libqatzip package
 Requires:       %{name}%{?_isa} = %{version}-%{release}
+Requires:       %{name}-libs%{?_isa} = %{version}-%{release}
 
 %description    devel
 This package contains headers and libraries required to build
@@ -40,16 +48,29 @@ applications that use the QATzip APIs.
 %autosetup -n %{githubname}-%{version}
 
 %build
-./configure --prefix=%{_prefix} --enable-symbol
+%set_build_flags
+
+./configure \
+    --bindir=%{_bindir} \
+    --sharedlib-dir=%{_libdir} \
+    --includedir=%{_includedir} \
+    --mandir=%{_mandir} \
+    --prefix=%{_prefix} \
+    --enable-symbol
+
 %make_build
 
 %install
 %make_install
 
+# Check section is not available for these functional and performance tests require special hardware.
+
 %files
 %license LICENSE*
 %{_mandir}/man1/qzip.1*
 %{_bindir}/qzip
+
+%files libs
 %{_libdir}/libqatzip.so.%{libqatzip_soversion}
 %{_libdir}/libqatzip.so.%{version}
 
