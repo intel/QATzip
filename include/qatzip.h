@@ -308,7 +308,8 @@ typedef enum QzCrcType_E {
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #ifdef __linux__
 #define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
-        memcpy((void *)(dest), (void *) (src), (size_t)MIN(dest_sz, src_sz))
+        memcpy((void *)(dest), (void *) (src), MIN((size_t)dest_sz, \
+               (size_t)src_sz))
 #endif
 #ifdef _WIN64
 #define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
