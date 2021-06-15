@@ -218,7 +218,8 @@ int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr)
         h->extra.st2            != 'Z'              || \
         h->std_hdr.cm           != QZ_DEFLATE       || \
         h->std_hdr.flag         != 0x04             || \
-        h->std_hdr.xfl          != 0                || \
+        (h->std_hdr.xfl != 0 && h->std_hdr.xfl != 2 && \
+         h->std_hdr.xfl         != 4)               || \
         h->std_hdr.os           != 255              || \
         h->x_len                != sizeof(h->extra) || \
         h->extra.x2_len         != sizeof(h->extra.qz_e)) {

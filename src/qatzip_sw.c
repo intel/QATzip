@@ -89,6 +89,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     int comp_level = Z_DEFAULT_COMPRESSION;
     QzDataFormat_T data_fmt = QZ_DATA_FORMAT_DEFAULT;
     unsigned int chunk_sz = QZ_HW_BUFF_SZ;
+    QzGzH_T *qz_hdr = NULL;
 
     *src_len = 0;
     *dest_len = 0;
@@ -156,6 +157,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                 stream->total_out = 0;
                 return QZ_FAIL;
             }
+            qz_hdr = (QzGzH_T *)dest;
         }
     }
 
@@ -217,6 +219,15 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     } while (left_input_sz);
 
     if (NULL != qz_sess->deflate_strm && 1 == last) {
+        /*
+         * When data_fmt is QZ_DEFLATE_GZIP_EXT,
+         * we should fill src_sz & dest_sz in gzipext header field.
+         */
+        if (QZ_DEFLATE_GZIP_EXT == data_fmt && qz_hdr) {
+            qz_hdr->extra.qz_e.src_sz  = stream->total_in;
+            qz_hdr->extra.qz_e.dest_sz = stream->total_out -
+                                         outputHeaderSz(data_fmt) - outputFooterSz(data_fmt);
+        }
         ret = deflateEnd(stream);
         stream->total_in = 0;
         stream->total_out = 0;
