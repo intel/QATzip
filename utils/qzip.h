@@ -277,7 +277,7 @@ typedef struct Qz7zFileItem_S {
     unsigned char   isEmpty;     /* 1byte */  /* is empty file */
     unsigned char   isSymLink;   /* 1byte */  /* is symbol link */
     unsigned char   isAnti;      /* 1byte */  /* is anti file(on windows) */
-    unsigned char   reserved[4]; /* 4byte */
+    uint32_t        baseNameLength; /* base pathname length */
     uint32_t        nameLength;  /* memory allocated length */
     size_t          size;        /* for file it's file's length*/
     uint32_t        crc;

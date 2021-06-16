@@ -1715,10 +1715,6 @@ static int convertToSymlink(const char *name)
         char *ret = fgets(buf, sizeof(buf) - 1, file);
         fclose(file);
 
-        if (access(buf, F_OK)) {
-            QZ_ERROR("%s: No such file or directory\n", buf);
-            return -1;
-        }
         if (ret) {
             int ir = unlink(name);
             if (ir == 0) {
@@ -2004,6 +2000,18 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
                         stat_info.st_mode = (cur_file->attribute) >> 16;
 
                         dst_file = fopen(cur_file->fileName, "a");
+                        if (NULL == dst_file) {
+                            if (S_ISLNK(stat_info.st_mode)) {
+                                QZ_DEBUG("open an broken soft-link file, "
+                                         "need to delete it\n");
+                                remove(cur_file->fileName);
+                                dst_file = fopen(cur_file->fileName, "a");
+                            } else {
+                                QZ_DEBUG("open file error\n");
+                                ret = ERROR;
+                                goto exit;
+                            }
+                        }
                         if (cur_file->size - cur_offset <= dst_left) {
                             n_written = fwrite(dst_write, 1,
                                                cur_file->size - cur_offset,
@@ -2059,7 +2067,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
     // restore the attribute
     for (int i = 0; i < dir_num + fil_num; ++i) {
-        chmod(p[i].fileName, p->attribute >> 16);
+        chmod(p[i].fileName, p[i].attribute >> 16);
     }
 
     displayStats(time_list_head, src_file_size, dst_file_size,
@@ -2917,11 +2925,11 @@ static unsigned char *genNamesPart(QzListHead_T *head_dir,
 
     for (i = 0; i < n_dir; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_dir, i);
-        buf_len += 2 * p->nameLength;
+        buf_len += 2 * (p->nameLength - p->baseNameLength);
     }
     for (i = 0; i < n_file; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_file, i);
-        buf_len += 2 * p->nameLength;
+        buf_len += 2 * (p->nameLength - p->baseNameLength);
     }
     buf = malloc(buf_len + 1);
     CHECK_ALLOC_RETURN_VALUE(buf)
@@ -2930,14 +2938,14 @@ static unsigned char *genNamesPart(QzListHead_T *head_dir,
     buf[k++] = 0;
     for (i = 0; i < n_dir; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_dir, i);
-        for (j = 0; j < p->nameLength; ++j) {
+        for (j = p->baseNameLength; j < p->nameLength; ++j) {
             buf[k++] = p->fileName[j];
             buf[k++] = 0;
         }
     }
     for (i = 0; i < n_file; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_file, i);
-        for (j = 0; j < p->nameLength; ++j) {
+        for (j = p->baseNameLength; j < p->nameLength; ++j) {
             buf[k++] = p->fileName[j];
             buf[k++] = 0;
         }
@@ -3105,6 +3113,9 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
     // the index of next processing directory in the dir list
     Qz7zFileItem_T *fi = NULL;
     DIR *dirp = NULL;
+    char *dirc = NULL;
+    char *absolute_path;
+    char path[PATH_MAX];
     Qz7zItemList_T *res = malloc(sizeof(Qz7zItemList_T));
     if (!res) {
         QZ_ERROR("malloc error\n");
@@ -3123,11 +3134,23 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
 #ifdef QZ7Z_DEBUG
         QZ_DEBUG("process %dth parameter: %s\n", i + 1, files[optind]);
 #endif
+        absolute_path = realpath(files[optind], path);
+        if (NULL == absolute_path) {
+            goto error;
+        }
+        dirc = strdup(absolute_path);
+        dirc = dirname(dirc);
 
-        fi = fileItemCreate(files[optind]);
+        fi = fileItemCreate(absolute_path);
         if (!fi) {
             QZ_ERROR("Cannot create file\n");
             goto error;
+        }
+
+        if (strcmp(dirc, "/")) {
+            fi->baseNameLength = strlen(dirc) + 1;
+        } else {
+            fi->baseNameLength = strlen(dirc);
         }
 
         if (fi->isDir || fi->isEmpty) {
@@ -3167,6 +3190,11 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
                             QZ_ERROR("Cannot create file\n");
                             goto error;
                         }
+                        if (strcmp(dirc, "/")) {
+                            anotherfile->baseNameLength = strlen(dirc) + 1;
+                        } else {
+                            anotherfile->baseNameLength = strlen(dirc);
+                        }
 
                         if (anotherfile->isDir || anotherfile->isEmpty) {
                             qzListAdd(dirs_head, (void **)&anotherfile);
@@ -3181,6 +3209,7 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
             qzListAdd(files_head, (void **)&fi);
         }
         optind++;
+        free(dirc);
     }// end for
 
     /* now the res->items has been resolved successfully */
