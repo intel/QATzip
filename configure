@@ -43,7 +43,6 @@ AR='ar'
 LN_S='ln -s'
 RM='rm -f'
 INSTALL='install'
-SYNC_API_REPO=''
 
 # extract version numbers from qatzip_internal.h
 VER=`sed -n -e '/VERSION "/s/.*"\(.*\)".*/\1/p' < src/qatzip_internal.h`
@@ -79,7 +78,6 @@ Optional Features:
   --enable-symbol         generate qatzip debug symbol
                           this will be ignored if --enable-debug is on
   --with-ICP_ROOT[=ARG]   Used to link Cpa library
-  --sync-api-repo=REPO_URL  Used to sync api from repo REPO_URL
 
 Usage: $0 [OPTION]... [VAR=VALUE]...
   Installation directories:
@@ -128,8 +126,6 @@ exit 0 ;;
         enable_symbol=yes; shift;;
     --with-ICP_ROOT):
         ICP_ROOT=$qz_val; shift;;
-    --sync-api-repo):
-        SYNC_API_REPO=$qz_val; shift;;
     *)
         echo "unrecognize option: $argument"
         echo "--help for help"
@@ -564,22 +560,6 @@ if [ -n "${ICP_ROOT}" ]; then
   QAT_INCLUDE="$QAT_INCLUDE $USDM_INCLUDE"
 fi
 
-if [ "$SYNC_API_REPO" != "" ]; then
-  if [ -d "qatzip-api" ]; then
-    rm -rf qatzip-api
-  fi
-  git clone $SYNC_API_REPO
-  REMOTE_API_HASH=`git hash-object qatzip-api/qatzip.h`
-  LOCAL_API_HASH=`git hash-object include/qatzip.h`
-  if [ $REMOTE_API_HASH != $LOCAL_API_HASH ]; then
-    cp qatzip-api/qatzip.h include/qatzip.h
-    echo "replace with the qatzip-api/qatzip.h...done"
-    git add include/qatzip.h
-    git commit -m "Update qatzip.h to the latest version"
-    git push origin HEAD
-  fi
-fi
-
 # Update Makefile
 line=`grep "^#.*POSSIBILITY" Makefile.init -n|cut -d: -f1`
 sed  < Makefile.init ''$((line+=3))'a \
@@ -603,7 +583,6 @@ RM='"$RM"'\
 INSTALL='"$INSTALL"'\
 LIBADD='"$LIBADD"'\
 QAT_INCLUDE='"$QAT_INCLUDE"'\
-SYNC_API_REPO='"$SYNC_API_REPO"'\
 '> Makefile
 
 exit_conf
