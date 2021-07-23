@@ -9,13 +9,14 @@ Release:        1%{?dist}
 Summary:        Intel QuickAssist Technology (QAT) QATzip Library
 License:        BSD
 URL:            https://github.com/intel/%{githubname}
-Source0:        https://github.com/intel/%{githubname}/archive/v%{version}/%{name}-%{version}.tar.gz
+Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  gcc >= 4.8.5
 BuildRequires:  zlib-devel >= 1.2.7
-BuildRequires:  qatlib-devel >= 20.10.0
-# Placeholder comment, will be replaced with bugzilla reporting unsupported architectures
-ExcludeArch:    %{arm} aarch64 %{power64} s390x i686
+BuildRequires:  qatlib-devel >= 21.08.0
+# The purpose of the package is to support hardware that only exists on x86_64 platforms
+# https://bugzilla.redhat.com/show_bug.cgi?id=1987280
+ExclusiveArch:  x86_64
 
 %description
 QATzip is a user space library which builds on top of the Intel
@@ -37,7 +38,6 @@ the QATzip APIs.
 
 %package        devel
 Summary:        Development components for the libqatzip package
-Requires:       %{name}%{?_isa} = %{version}-%{release}
 Requires:       %{name}-libs%{?_isa} = %{version}-%{release}
 
 %description    devel
@@ -62,6 +62,7 @@ applications that use the QATzip APIs.
 
 %install
 %make_install
+rm -vf %{buildroot}%{_mandir}/*.pdf
 
 # Check section is not available for these functional and performance tests require special hardware.
 
@@ -71,14 +72,15 @@ applications that use the QATzip APIs.
 %{_bindir}/qzip
 
 %files libs
+%license LICENSE*
 %{_libdir}/libqatzip.so.%{libqatzip_soversion}
 %{_libdir}/libqatzip.so.%{version}
 
 %files devel
-%doc %{_mandir}/QATzip-man.pdf
+%doc docs/QATzip-man.pdf
 %{_includedir}/qatzip.h
 %{_libdir}/libqatzip.so
 
 %changelog
-* Tue Mar 23 2021 Ma Zheng <zheng.ma@intel.com> - 1.0.4-1
+* Tue Jul 13 2021 Ma Zheng <zheng.ma@intel.com> - 1.0.5-1
 - Initial version of RPM Package
