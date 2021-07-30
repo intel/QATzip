@@ -196,6 +196,8 @@ typedef struct QzStreamBuf_S {
     unsigned char *in_buf;
     unsigned char *out_buf;
     unsigned int out_offset;
+    unsigned int in_offset;
+    unsigned int flush_more;
 } QzStreamBuf_T;
 
 typedef struct ThreadData_S {
