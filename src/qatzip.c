@@ -1556,7 +1556,7 @@ err_exit:
         if (PINNED_MEM == g_process.qz_inst[i].stream[j].src_pinned || !need_cont_mem) {
             g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
                 g_process.qz_inst[i].stream[j].orig_src;
-            g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? COMMON_MEM :
+            g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? COMMON_MEM :
                     SV_MEM;
         }
     }
@@ -2280,12 +2280,13 @@ err_exit:
             !need_cont_mem) {
             g_process.qz_inst[i].src_buffers[si]->pBuffers->pData =
                 g_process.qz_inst[i].stream[si].orig_src;
-            g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? COMMON_MEM : SV_MEM;
+            g_process.qz_inst[i].stream[si].src_pinned = need_cont_mem ? COMMON_MEM :
+                    SV_MEM;
         }
         if (PINNED_MEM == g_process.qz_inst[i].stream[si].dest_pinned) {
             g_process.qz_inst[i].dest_buffers[si]->pBuffers->pData =
                 g_process.qz_inst[i].stream[si].orig_dest;
-            g_process.qz_inst[i].stream[j].dest_pinned = need_cont_mem ? COMMON_MEM :
+            g_process.qz_inst[i].stream[si].dest_pinned = need_cont_mem ? COMMON_MEM :
                     SV_MEM;
 
         }
