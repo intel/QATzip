@@ -81,7 +81,7 @@ extern"C" {
  *    and minor number definitions represent the complete version number for
  *    this interface.
  *****************************************************************************/
-#define QATZIP_API_VERSION_NUM_MINOR (4)
+#define QATZIP_API_VERSION_NUM_MINOR (5)
 
 /* Define a macro as an integer to test */
 #define QATZIP_API_VERSION    (QATZIP_API_VERSION_NUM_MAJOR * 10000 +      \
@@ -110,7 +110,7 @@ extern"C" {
  *
  *  This API provides access to underlying compression functions in QAT
  *  hardware. The API supports an implementation that provides compression
- *  service in software if not all of the required resources are available
+ *  service in software if all of the required resources are not available
  *  to execute the compression service in hardware.
  *
  *  The API supports threaded applications.
@@ -408,15 +408,15 @@ typedef struct QzSessionParams_S {
  *      QATzip Extended return information
  *
  * @description
- *      The following defintions can be used with the extended return
+ *      The following definitions can be used with the extended return
  *      values.
  *
- *      QZ_SW_EXECUTION indicates if a request for services was performed in 
+ *      QZ_SW_EXECUTION indicates if a request for services was performed in
  *      software.
  *
  *****************************************************************************/
 #define QZ_SW_EXECUTION_BIT           (4)
-#define QZ_SW_EXECUTION_MASK         (1 << QZ_SW_EXECUTION_BIT) 
+#define QZ_SW_EXECUTION_MASK         (1 << QZ_SW_EXECUTION_BIT)
 #define QZ_SW_EXECUTION(ret, ext_rc) \
      (!ret && (ext_rc & QZ_SW_EXECUTION_MASK))
 
@@ -456,8 +456,8 @@ typedef struct QzSession_S {
 typedef struct QzStatus_S {
     unsigned short int qat_hw_count;
     /**< From PCI scan */
-    unsigned char qat_service_stated;
-    /**< Check if the QAT service is running properly on at least one device */
+    unsigned char qat_service_init;
+    /**< Check if the available services have been initialized */
     unsigned char qat_mem_drvr;
     /**< 1 if /dev/qat_mem exists */
     /**< 2 if /dev/qat_mem has been opened */
@@ -512,7 +512,8 @@ typedef struct QzStatus_S {
  *      Yes
  *
  * @param[in]       sess           Session handle
- *                                 (pointer to opaque instance and session data.)
+ *                                 (pointer to opaque instance and
+ *                                 session data.)
  * @param[in]       sw_backup      0 for no sw backup, 1 for sw backup
  *
  * @retval QZ_OK                   Function executed successfully. A hardware
@@ -529,10 +530,10 @@ typedef struct QzStatus_S {
  *                                 No software session established
  * @retval QZ_NOSW_LOW_MEM         Not enough pinned memory available
  *                                 No software session established
- * @retval QZ_NO_SW_AVAIL          No software is available. This will be 
- *                                 returned when sw_backup is set to 1 but 
- *                                 the session does not support software 
- *                                 backup or software backup is unavailable 
+ * @retval QZ_NO_SW_AVAIL          No software is available. This will be
+ *                                 returned when sw_backup is set to 1 but
+ *                                 the session does not support software
+ *                                 backup or software backup is unavailable
  *                                 to the application.
  *
  *
@@ -596,7 +597,7 @@ QATZIP_API int qzInit(QzSession_T *sess,  unsigned char sw_backup);
  *                                 No software session established
  * @retval QZ_NO_LOW_MEM           Not enough pinned memory available
  *                                 No software session established
- * @retval QZ_NO_SW_AVAIL          No software is available. This may returned 
+ * @retval QZ_NO_SW_AVAIL          No software is available. This may returned
  *                                 when sw_backup is set to 1 but the session
  *                                 does not support software backup or software
  *                                 backup is unavailable to the application.
@@ -665,11 +666,11 @@ QATZIP_API int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
  *                           function returns
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
- * @param[in,out]   ext_rc   qzCompressExt only. 
+ * @param[in,out]   ext_rc   qzCompressExt only.
  *                           If not NULL, ext_rc point to a location where
  *                           extended return codes may be returned. See
  *                           extended return code section for details.
- *                           if NULL, no extended information will be 
+ *                           if NULL, no extended information will be
  *                           provided.
  *
  * @retval QZ_OK             Function executed successfully
@@ -692,9 +693,9 @@ QATZIP_API int qzCompress(QzSession_T *sess, const unsigned char *src,
                           unsigned int *dest_len, unsigned int last);
 
 QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
-                          unsigned int *src_len, unsigned char *dest,
-                          unsigned int *dest_len, unsigned int last,
-                          uint64_t *ext_rc );
+                             unsigned int *src_len, unsigned char *dest,
+                             unsigned int *dest_len, unsigned int last,
+                             uint64_t *ext_rc);
 
 
 /**
@@ -750,11 +751,11 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
  * @param[in,out]   crc      Pointer to CRC32 checksum buffer
- * @param[in,out]   ext_rc   qzCompressCrcExt only. 
+ * @param[in,out]   ext_rc   qzCompressCrcExt only.
  *                           If not NULL, ext_rc point to a location where
  *                           extended return codes may be returned. See
  *                           extended return code section for details.
- *                           if NULL, no extended information will be 
+ *                           if NULL, no extended information will be
  *                           provided.
  *
  * @retval QZ_OK             Function executed successfully
@@ -777,9 +778,9 @@ QATZIP_API int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
                              unsigned long *crc);
 
 QATZIP_API int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
-                             unsigned int *src_len, unsigned char *dest,
-                             unsigned int *dest_len, unsigned int last,
-                             unsigned long *crc, uint64_t *ext_rc);
+                                unsigned int *src_len, unsigned char *dest,
+                                unsigned int *dest_len, unsigned int last,
+                                unsigned long *crc, uint64_t *ext_rc);
 
 /**
  *****************************************************************************
@@ -818,11 +819,11 @@ QATZIP_API int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
  * @param[in,out]  dest_len Length of destination buffer. Modified
  *                          to length of decompressed data when
  *                          function returns
- * @param[in,out]   ext_rc  qzDecompressExt only. 
+ * @param[in,out]   ext_rc  qzDecompressExt only.
  *                          If not NULL, ext_rc point to a location where
  *                          extended return codes may be returned. See
  *                          extended return code section for details.
- *                          if NULL, no extended information will be 
+ *                          if NULL, no extended information will be
  *                          provided.
  *
  * @retval QZ_OK            Function executed successfully
@@ -844,8 +845,8 @@ QATZIP_API int qzDecompress(QzSession_T *sess, const unsigned char *src,
                             unsigned int *dest_len);
 
 QATZIP_API int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
-                            unsigned int *src_len, unsigned char *dest,
-                            unsigned int *dest_len, uint64_t *ext_rc);
+                               unsigned int *src_len, unsigned char *dest,
+                               unsigned int *dest_len, uint64_t *ext_rc);
 
 /**
  *****************************************************************************
@@ -940,7 +941,7 @@ QATZIP_API int qzClose(QzSession_T *sess);
  *    This function retrieves the status of QAT in the platform.
  *    The status structure will be filled in as follows:
  *    qat_hw_count         Number of discovered QAT devices on PCU bus
- *    qat_service_stated   1 if qzInit has been successfully run, 0 otherwise
+ *    qat_service_init     1 if qzInit has been successfully run, 0 otherwise
  *    qat_mem_drvr         1 if the QAT memory driver is installed, 0 otherwise
  *    qat_instance_attach  1 if session has attached to a hardware instance,
  *                         0 otherwise
@@ -961,39 +962,40 @@ QATZIP_API int qzClose(QzSession_T *sess);
  *                                            QZ_NOSW_LOW_MEM
  *                                            QZ_NO_SW_AVAIL
  *
+ * Applications should verify the elements of the status structure are
+ * correct for the required operations. It should be noted that some
+ * information will be available only after qzInit has been called, either
+ * implicitly or explicitly.  The qat_service_init element of the status
+ * structure will indicate if initialization has taken place.
+ *
  * The hw_session_status will depend on the availability of hardware based
  * compression and software based compression. The following table indicates
  * what hw_session_status based on the availability of compression engines
  * and the sw_backup flag.
- *     
- *   ---------------------------------------------------------------------
- *   |   sw_backup  |  QAT hw     |   SW engine  |   hw_session_status   |
- *   |   setting    |  available? |   available? |                       |
- *   ---------------------------------------------------------------------
- *   |   0 (no sw ) |     Y       |       Y      | QZ_OK (success)       |
- *   ---------------------------------------------------------------------
- *   |   1 ( sw )   |     Y       |       Y      | QZ_OK (success)       |
- *   ---------------------------------------------------------------------
- *   |   0 (no sw ) |     Y       |       N      | QZ_OK (success)       |
- *   ---------------------------------------------------------------------
- *   |   1 ( sw )   |     Y       |       N      | QZ_NO_SW_AVAIL        |
- *   |              |             |              | (see note below)      |
- *   ---------------------------------------------------------------------
- *   |   0 (no sw ) |     N       |       Y      | QZ_FAIL (fail)        |
- *   ---------------------------------------------------------------------
- *   |   1 ( sw )   |     N       |       Y      | QZ_NO_HW (success)    |
- *   ---------------------------------------------------------------------
- *   |   0 (no sw ) |     N       |       N      | QZ_NOSW_NO_HW (fail)  |
- *   ---------------------------------------------------------------------
- *   |   1 ( sw )   |     N       |       N      | QZ_NOSW_NO_HW (fail)  |
- *   ---------------------------------------------------------------------
  *
+ * | HW    | SW Engine | sw_backup | hw_session_stat   |
+ * | avail | avail     | setting   |                   |
+ * |-------|-----------|-----------|-------------------|
+ * | N     | N         | 0         | QZ_NOSW_NO_HW     |
+ * | N     | N         | 1         | QZ_NOSW_NO_HW     |
+ * | N     | Y         | 0         | QZ_FAIL           |
+ * | N     | Y         | 1         | QZ_NO_HW (1)      |
+ * | Y     | N         | 0         | QZ_OK             |
+ * | Y     | N         | 1         | QZ_NO_SW_AVAIL (2)|
+ * | Y     | Y         | 0         | QZ_OK             |
+ * | Y     | Y         | 1         | QZ_OK             |
  *
- * Note:
- *     If an application indicate software backup is required by setting 
+ * Note 1:
+ *     If an application indicates software backup is required by setting
+ *     sw_backup=1, and a software engine is available and if no hardware based
+ *     compression engine is available then the hw_session_status will be set
+ *     to QZ_NO_HW.  All compression and decompression will use the software
+ *     engine.
+ * Note 2:
+ *     If an application indicates software backup is required by setting
  *     sw_backup=1, and if no software based compression engine is available
- *     then the hw_saession_status will be set to QZ_NO_SW_AVAIL.  In this 
- *     case, QAT based compression may be used however no software backup 
+ *     then the hw_session_status will be set to QZ_NO_SW_AVAIL.  In this
+ *     case, QAT based compression may be used however no software backup
  *     will available.
  *     If the application relies on software backup being avialable, then
  *     this return code can be treated as an error.
