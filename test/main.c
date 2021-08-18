@@ -3238,7 +3238,8 @@ int qzCompressSWL9DecompressHW(void)
     }
 
     qzGetDefaults(&params);
-    params.comp_lvl = 9;
+    params.input_sz_thrshold = orig_sz + 1;
+    params.comp_lvl = QZ_DEFLATE_COMP_LVL_MAXIMUM;
     rc = qzSetupSession(&sess, &params);
     if (rc != QZ_OK) {
         QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
@@ -3258,6 +3259,12 @@ int qzCompressSWL9DecompressHW(void)
     }
 
     /*decompress data by hardware*/
+    params.input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT;
+    rc = qzSetupSession(&sess, &params);
+    if (rc != QZ_OK) {
+        QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
+        goto done;
+    }
     rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
                       (uint32_t *)(&decomp_sz));
     if (rc != QZ_OK          ||
