@@ -67,7 +67,7 @@ extern"C" {
 #error QZ_REQ_THRESHOLD_MAXIMUM should not be larger than NUM_BUFF
 #endif
 
-#define QAT_MAX_DEVICES     32
+#define QAT_MAX_DEVICES     (32 * 32)
 #define STORED_BLK_MAX_LEN  65535
 #define STORED_BLK_HDR_SZ   5
 
