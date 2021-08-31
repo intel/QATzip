@@ -81,37 +81,39 @@ const unsigned int g_polling_interval[] = { 10, 10, 20, 30, 60, 100, 200, 400,
 #define GET_BUFFER_SLEEP_NSEC   10
 #define QAT_SECTION_NAME_SIZE   32
 
-#define RESTORE_DEST_CPASTREAM_BUFFER(i, j)                                 \
+#define RESTORE_DEST_CPASTREAM_BUFFER(a, i, j)                              \
 do {                                                                        \
-    if (1 == g_process.qz_inst[i].stream[j].dest_pinned) {                  \
+    if (PINNED_MEM == g_process.qz_inst[i].stream[j].dest_pinned || !a) {   \
         g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =             \
             g_process.qz_inst[i].stream[j].orig_dest;                       \
-        g_process.qz_inst[i].stream[j].dest_pinned = 0;                     \
+        g_process.qz_inst[i].stream[j].dest_pinned = a ?                    \
+            COMMON_MEM : SV_MEM;                                            \
     }                                                                       \
 }while (0);
 
-#define RESTORE_SRC_CPASTREAM_BUFFER(i, j)                                  \
+#define RESTORE_SRC_CPASTREAM_BUFFER(a, i, j)                               \
 do {                                                                        \
-    if (1 == g_process.qz_inst[i].stream[j].src_pinned) {                   \
+    if (PINNED_MEM == g_process.qz_inst[i].stream[j].src_pinned || !a) {    \
         g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =              \
             g_process.qz_inst[i].stream[j].orig_src;                        \
-        g_process.qz_inst[i].stream[j].src_pinned = 0;                      \
+        g_process.qz_inst[i].stream[j].src_pinned = a ?                     \
+            COMMON_MEM : SV_MEM;                                            \
     }                                                                       \
 } while (0);
 
-#define RESTORE_CPASTREAM_BUFFER(i, j)                                      \
+#define RESTORE_CPASTREAM_BUFFER(a, i, j)                                   \
 do {                                                                        \
-    RESTORE_SRC_CPASTREAM_BUFFER(i, j)                                      \
-    RESTORE_DEST_CPASTREAM_BUFFER(i, j)                                     \
+    RESTORE_SRC_CPASTREAM_BUFFER(a, i, j)                                   \
+    RESTORE_DEST_CPASTREAM_BUFFER(a, i, j)                                  \
     qz_sess->processed++;                                                   \
     qz_sess->stop_submitting = 1;                                           \
     g_process.qz_inst[i].stream[j].sink2++;                                 \
 } while (0);
 
-#define RESTORE_SWAP_CPASTREAM_BUFFER(i, j)                                 \
+#define RESTORE_SWAP_CPASTREAM_BUFFER(a, i, j)                              \
 do {                                                                        \
-    RESTORE_SRC_CPASTREAM_BUFFER(i, j)                                      \
-    RESTORE_DEST_CPASTREAM_BUFFER(i, j)                                     \
+    RESTORE_SRC_CPASTREAM_BUFFER(a, i, j)                                   \
+    RESTORE_DEST_CPASTREAM_BUFFER(a, i, j)                                  \
     swapDataBuffer(i, j);                                                   \
     qz_sess->processed++;                                                   \
     qz_sess->stop_submitting = 1;                                           \
@@ -1171,7 +1173,6 @@ static void *doCompressIn(void *in)
             g_process.qz_inst[i].stream[j].src_pinned = COMMON_MEM;
         } else {
             QZ_DEBUG("changing src_ptr to 0x%lx\n", (unsigned long)src_ptr);
-            g_process.qz_inst[i].stream[j].src_pinned = 1;
             g_process.qz_inst[i].src_buffers[j]->pBuffers->pData = src_ptr;
             g_process.qz_inst[i].stream[j].src_pinned = need_cont_mem ? PINNED_MEM : SV_MEM;
         }
@@ -1318,7 +1319,7 @@ static void *doCompressOut(void *in)
                     QZ_ERROR("Error(%d) in callback: %ld, %ld, ReqStatus: %d\n",
                              g_process.qz_inst[i].stream[j].job_status, i, j,
                              g_process.qz_inst[i].stream[j].res.status);
-                    RESTORE_CPASTREAM_BUFFER(i, j);
+                    RESTORE_CPASTREAM_BUFFER(need_cont_mem, i, j);
                     sess->thd_sess_stat = QZ_FAIL;
                     continue;
                 }
@@ -1327,7 +1328,7 @@ static void *doCompressOut(void *in)
                              QZ_BUF_ERROR == sess->thd_sess_stat)) {
                     // There is an error in previous process,
                     // we just restore buffer here.
-                    RESTORE_CPASTREAM_BUFFER(i, j);
+                    RESTORE_CPASTREAM_BUFFER(need_cont_mem, i, j);
                     continue;
                 }
 
@@ -1365,7 +1366,7 @@ static void *doCompressOut(void *in)
                         if (dest_avail_len < 0) {
                             QZ_ERROR("do_compress_out: inadequate output buffer length for stored block: %ld\n",
                                      (long)(*qz_sess->dest_sz));
-                            RESTORE_CPASTREAM_BUFFER(i, j);
+                            RESTORE_CPASTREAM_BUFFER(need_cont_mem, i, j);
                             sess->thd_sess_stat = QZ_BUF_ERROR;
                             continue;
                         }
@@ -1453,7 +1454,7 @@ static void *doCompressOut(void *in)
                     if (unlikely(dest_avail_len < 0)) {
                         QZ_DEBUG("doCompressOut: inadequate output buffer length: %ld, outlen: %ld\n",
                                  (long)(*qz_sess->dest_sz), qz_sess->qz_out_len);
-                        RESTORE_CPASTREAM_BUFFER(i, j);
+                        RESTORE_CPASTREAM_BUFFER(need_cont_mem, i, j);
                         sess->thd_sess_stat = QZ_BUF_ERROR;
                         continue;
                     }
@@ -2170,7 +2171,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                     QZ_ERROR("Error(%d) in callback: %ld, %ld, ReqStatus: %d\n",
                              g_process.qz_inst[i].stream[j].job_status, i, j,
                              g_process.qz_inst[i].stream[j].res.status);
-                    RESTORE_SWAP_CPASTREAM_BUFFER(i, j);
+                    RESTORE_SWAP_CPASTREAM_BUFFER(need_cont_mem, i, j);
                     sess->thd_sess_stat = QZ_FAIL;
                     continue;
                 }
@@ -2178,7 +2179,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                 if (unlikely(QZ_FAIL == sess->thd_sess_stat)) {
                     // There is an error in previous process,
                     // we just restore buffer here.
-                    RESTORE_SWAP_CPASTREAM_BUFFER(i, j);
+                    RESTORE_SWAP_CPASTREAM_BUFFER(need_cont_mem, i, j);
                     continue;
                 }
 
