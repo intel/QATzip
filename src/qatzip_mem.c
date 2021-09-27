@@ -52,7 +52,7 @@
 
 static QzPageTable_T g_qz_page_table = {{{0}}};
 static pthread_mutex_t g_qz_table_lock = PTHREAD_MUTEX_INITIALIZER;
-static int g_table_init = 0;
+static volatile int g_table_init = 0;
 static __thread unsigned char *g_a;
 extern processData_T g_process;
 
@@ -164,9 +164,11 @@ void *qzMalloc(size_t sz, int numa, int pinned)
             return NULL;
         }
 
-        qzMemSet(&g_qz_page_table, 0, sizeof(QzPageTable_T));
-        g_table_init = 1;
-        atexit(qzMemDestory);
+        if (0 == g_table_init) {
+            qzMemSet(&g_qz_page_table, 0, sizeof(QzPageTable_T));
+            g_table_init = 1;
+            atexit(qzMemDestory);
+        }
 
         if (0 != pthread_mutex_unlock(&g_qz_table_lock)) {
             return NULL;
