@@ -152,6 +152,8 @@ static pthread_cond_t g_start_cond = PTHREAD_COND_INITIALIZER;
 static int g_ready_to_start;
 static int g_ready_thread_count;
 char *g_input_file_name = NULL;
+static bool g_perf_svm = false;
+
 
 static struct timeval g_timers[100][100];
 static struct timeval g_timer_start;
@@ -1081,14 +1083,14 @@ void *qzCompressAndDecompress(void *arg)
     //timeCheck(3, tid);
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);
 
-    if (gen_data) {
+    if (gen_data && !g_perf_svm) {
         src = qzMalloc(src_sz, 0, PINNED_MEM);
         comp_out = qzMalloc(comp_out_sz, 0, PINNED_MEM);
         decomp_out = qzMalloc(decomp_out_sz, 0, PINNED_MEM);
     } else {
-        src = ((TestArg_T *)arg)->src;
-        comp_out = ((TestArg_T *)arg)->comp_out;
-        decomp_out = ((TestArg_T *)arg)->decomp_out;
+        src = g_perf_svm ? malloc(src_sz) : ((TestArg_T *)arg)->src;
+        comp_out = g_perf_svm ? malloc(comp_out_sz) : ((TestArg_T *)arg)->comp_out;
+        decomp_out = g_perf_svm ? malloc(decomp_out_sz) : ((TestArg_T *)arg)->decomp_out;
     }
 
     if (!src || !comp_out || !decomp_out) {
@@ -1317,10 +1319,14 @@ void *qzCompressAndDecompress(void *arg)
     pthread_mutex_unlock(&g_lock_print);
 
 done:
-    if (gen_data) {
+    if (gen_data && !g_perf_svm) {
         qzFree(src);
         qzFree(comp_out);
         qzFree(decomp_out);
+    } else if (g_perf_svm) {
+        free(src);
+        free(comp_out);
+        free(decomp_out);
     }
     if (compressed_blocks_sz != NULL) {
         free(compressed_blocks_sz);
@@ -3720,6 +3726,10 @@ done:
     "    -r req_cnt_thrshold   max inflight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
     "    -P polling            set polling mode, default is periodical polling\n" \
+    "    -M svm                set perf mode with file input, default is non\n" \
+    "                          svm mode. When set to svm, all memory will\n"    \
+    "                          be allocated with malloc instead of qzMalloc\n"  \
+    "                          This option is only applied to test case 4\n"    \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -3764,7 +3774,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:b:vh";
+    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:vh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -3921,6 +3931,14 @@ int main(int argc, char *argv[])
                 g_params_th.is_busy_polling = QZ_BUSY_POLLING;
             } else {
                 QZ_ERROR("Error set polling mode: %s\n", optarg);
+                return -1;
+            }
+            break;
+        case 'M':
+            if (strcmp(optarg, "svm") == 0) {
+                g_perf_svm = true;
+            } else {
+                QZ_ERROR("Error set perf mode: %s\n", optarg);
                 return -1;
             }
             break;
