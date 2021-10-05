@@ -81,7 +81,7 @@ extern"C" {
  *    and minor number definitions represent the complete version number for
  *    this interface.
  *****************************************************************************/
-#define QATZIP_API_VERSION_NUM_MINOR (5)
+#define QATZIP_API_VERSION_NUM_MINOR (6)
 
 /* Define a macro as an integer to test */
 #define QATZIP_API_VERSION    (QATZIP_API_VERSION_NUM_MAJOR * 10000 +      \
@@ -309,7 +309,9 @@ typedef enum QzCrcType_E {
 
 #define QZ_MAX_ALGORITHMS  ((int)255)
 #define QZ_DEFLATE         ((unsigned char)8)
+#ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
+#endif
 #ifdef __linux__
 #define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
         memcpy((void *)(dest), (void *) (src), MIN((size_t)dest_sz, \
