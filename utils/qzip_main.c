@@ -104,6 +104,8 @@ int main(int argc, char **argv)
                 g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
             } else if (strcmp(optarg, "7z") == 0) {
                 g_params_th.data_fmt = QZ_DEFLATE_RAW;
+            } else if (strcmp(optarg, "deflate_4B") == 0) {
+                g_params_th.data_fmt = QZ_DEFLATE_4B;
             } else {
                 QZ_ERROR("Error gzip header format arg: %s\n", optarg);
                 return -1;

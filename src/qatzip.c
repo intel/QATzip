@@ -1375,7 +1375,7 @@ static void *doCompressOut(void *in)
                         QZ_DEBUG("\tlen = 0x%x\n", resl->produced);
                         //Append footer
                         outputFooterGen(qz_sess, resl, data_fmt);
-                        qz_sess->next_dest += stdGzipFooterSz();
+                        qz_sess->next_dest += outputFooterSz(data_fmt);
                         if (1 == g_process.qz_inst[i].stream[j].src_pinned) {
                             g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
                                 g_process.qz_inst[i].stream[j].orig_src;
@@ -1772,8 +1772,12 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         if ((unsigned char *)qzFooter == src_ptr + src_avail_len - stdGzipFooterSz()) {
             isEndWithFooter = 1;
         }
-    } else if (QZ_OK != qzGzipHeaderExt(src_ptr, hdr)) {
-        return QZ_FAIL;
+    } else if (QZ_DEFLATE_4B == data_fmt) {
+        hdr->extra.qz_e.dest_sz = *(int *)src_ptr;
+        hdr->extra.qz_e.src_sz = qz_sess->sess_params.hw_buff_sz;
+    } else if (QZ_DEFLATE_GZIP_EXT == data_fmt) {
+        if (QZ_OK != qzGzipHeaderExt(src_ptr, hdr))
+            return QZ_FAIL;
     }
 
     src_send_sz = (long)(hdr->extra.qz_e.dest_sz);
@@ -1981,13 +1985,14 @@ static void *doDecompressIn(void *in)
             }
 
             g_process.qz_inst[i].num_retries = 0;
-            src_avail_len -= (outputHeaderSz(data_fmt) + src_send_sz + stdGzipFooterSz());
+            src_avail_len -= (outputHeaderSz(data_fmt) + src_send_sz +
+                              outputFooterSz(data_fmt));
             dest_avail_len -= dest_receive_sz;
 
             dest_ptr += dest_receive_sz;
 
-            src_ptr += (src_send_sz + stdGzipFooterSz());
-            remaining -= (src_send_sz + stdGzipFooterSz());
+            src_ptr += (src_send_sz + outputFooterSz(data_fmt));
+            remaining -= (src_send_sz + outputFooterSz(data_fmt));
             break;
 
         default:
@@ -2121,29 +2126,32 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                     g_process.qz_inst[i].stream[j].src_pinned = 0;
                 }
 
-                if (unlikely(resl->checksum !=
-                             g_process.qz_inst[i].stream[j].gzip_footer_checksum ||
-                             resl->produced != g_process.qz_inst[i].stream[j].gzip_footer_orgdatalen)) {
-                    QZ_ERROR("Error in check footer, inst %ld, stream %ld\n", i, j);
-                    QZ_DEBUG("resp checksum: %x data checksum %x\n",
-                             resl->checksum,
-                             g_process.qz_inst[i].stream[j].gzip_footer_checksum);
-                    QZ_DEBUG("resp produced :%d data produced: %d\n",
-                             resl->produced,
-                             g_process.qz_inst[i].stream[j].gzip_footer_orgdatalen);
 
-                    swapDataBuffer(i, j);
-                    sess->thd_sess_stat = QZ_DATA_ERROR;
-                    qz_sess->processed++;
-                    qz_sess->stop_submitting = 1;
-                    g_process.qz_inst[i].stream[j].sink2++;
-                    continue;
+                if (data_fmt != QZ_DEFLATE_4B) {
+                    if (unlikely(resl->checksum !=
+                                 g_process.qz_inst[i].stream[j].gzip_footer_checksum ||
+                                 resl->produced != g_process.qz_inst[i].stream[j].gzip_footer_orgdatalen)) {
+                        QZ_ERROR("Error in check footer, inst %ld, stream %ld\n", i, j);
+                        QZ_DEBUG("resp checksum: %x data checksum %x\n",
+                                 resl->checksum,
+                                 g_process.qz_inst[i].stream[j].gzip_footer_checksum);
+                        QZ_DEBUG("resp produced :%d data produced: %d\n",
+                                 resl->produced,
+                                 g_process.qz_inst[i].stream[j].gzip_footer_orgdatalen);
+
+                        swapDataBuffer(i, j);
+                        sess->thd_sess_stat = QZ_DATA_ERROR;
+                        qz_sess->processed++;
+                        qz_sess->stop_submitting = 1;
+                        g_process.qz_inst[i].stream[j].sink2++;
+                        continue;
+                    }
                 }
 
                 src_send_sz = g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
                 qz_sess->next_dest += resl->produced;
                 qz_sess->qz_in_len += (outputHeaderSz(data_fmt) + src_send_sz +
-                                       stdGzipFooterSz());
+                                       outputFooterSz(data_fmt));
                 qz_sess->qz_out_len += resl->produced;
 
                 QZ_DEBUG("qz_sess->next_dest = %p\n", qz_sess->next_dest);
@@ -2268,6 +2276,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
 
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
     if (unlikely(data_fmt != QZ_DEFLATE_RAW &&
+                 data_fmt != QZ_DEFLATE_4B &&
                  data_fmt != QZ_DEFLATE_GZIP &&
                  data_fmt != QZ_DEFLATE_GZIP_EXT)) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
@@ -2277,12 +2286,13 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     }
 
     QZ_DEBUG("qzDecompress data_fmt: %d\n", data_fmt);
-    if (hdr->extra.qz_e.src_sz < qz_sess->sess_params.input_sz_thrshold ||
+    if (data_fmt == QZ_DEFLATE_RAW ||
+        (data_fmt == QZ_DEFLATE_GZIP_EXT &&
+         hdr->extra.qz_e.src_sz < qz_sess->sess_params.input_sz_thrshold) ||
         g_process.qz_init_status == QZ_NO_HW                            ||
         sess->hw_session_stat == QZ_NO_HW                               ||
         !(isQATProcessable(src, src_len, qz_sess))                      ||
-        qz_sess->inflate_stat == InflateOK                              ||
-        QZ_DEFLATE_RAW == data_fmt) {
+        qz_sess->inflate_stat == InflateOK) {
         QZ_DEBUG("decompression src_len=%u, hdr->extra.qz_e.src_sz = %u, "
                  "g_process.qz_init_status = %d, sess->hw_session_stat = %d, "
                  "isQATProcessable = %d, switch to software.\n",

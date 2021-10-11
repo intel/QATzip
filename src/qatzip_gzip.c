@@ -58,6 +58,11 @@ inline unsigned long stdGzipHeaderSz(void)
     return sizeof(StdGzH_T);
 }
 
+inline unsigned long qz4BHeaderSz(void)
+{
+    return sizeof(Qz4BH_T);
+}
+
 inline unsigned long stdGzipFooterSz(void)
 {
     return sizeof(StdGzF_T);
@@ -67,6 +72,8 @@ inline unsigned long outputFooterSz(QzDataFormat_T data_fmt)
 {
     unsigned long size = 0;
     switch (data_fmt) {
+    case QZ_DEFLATE_4B:
+    /* fall through */
     case QZ_DEFLATE_RAW:
         size = 0;
         break;
@@ -84,6 +91,9 @@ unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
     unsigned long size = 0;
 
     switch (data_fmt) {
+    case QZ_DEFLATE_4B:
+        size = qz4BHeaderSz();
+        break;
     case QZ_DEFLATE_RAW:
         break;
     case QZ_DEFLATE_GZIP:
@@ -150,6 +160,13 @@ void stdGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
     hdr->os       = 255;
 }
 
+void qz4BHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
+{
+    Qz4BH_T *hdr;
+    hdr = (Qz4BH_T *)ptr;
+    hdr->blk_size = res->produced;
+}
+
 void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      QzDataFormat_T data_fmt)
@@ -157,6 +174,9 @@ void outputHeaderGen(unsigned char *ptr,
     QZ_DEBUG("Generate header\n");
 
     switch (data_fmt) {
+    case QZ_DEFLATE_4B:
+        qz4BHeaderGen(ptr, res);
+        break;
     case QZ_DEFLATE_RAW:
         break;
     case QZ_DEFLATE_GZIP:
@@ -174,9 +194,18 @@ int isQATProcessable(const unsigned char *ptr,
                      QzSess_T *const qz_sess)
 {
     QzGzH_T *h = (QzGzH_T *)ptr;
+    Qz4BH_T *h_4B;
     StdGzF_T *qzFooter = NULL;
     long buff_sz = (DEST_SZ(qz_sess->sess_params.hw_buff_sz) < *src_len ? DEST_SZ(
                         qz_sess->sess_params.hw_buff_sz) : *src_len);
+
+    if (qz_sess->sess_params.data_fmt == QZ_DEFLATE_4B) {
+        h_4B = (Qz4BH_T *)ptr;
+        if (h_4B->blk_size > DEST_SZ(qz_sess->sess_params.hw_buff_sz)) {
+            return 0;
+        }
+        return 1;
+    }
 
     /*check if HW can process*/
     if (h->std_hdr.id1 == 0x1f       && \

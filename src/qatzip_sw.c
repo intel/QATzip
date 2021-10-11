@@ -90,6 +90,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     QzDataFormat_T data_fmt = QZ_DATA_FORMAT_DEFAULT;
     unsigned int chunk_sz = QZ_HW_BUFF_SZ;
     QzGzH_T *qz_hdr = NULL;
+    Qz4BH_T *qz4B_header = NULL;
 
     *src_len = 0;
     *dest_len = 0;
@@ -127,6 +128,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
         stream->total_out = 0;
 
         switch (data_fmt) {
+        case QZ_DEFLATE_4B:
         case QZ_DEFLATE_RAW:
             windows_bits = -MAX_WBITS;
             break;
@@ -158,6 +160,10 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                 return QZ_FAIL;
             }
             qz_hdr = (QzGzH_T *)dest;
+        } else if (QZ_DEFLATE_4B == data_fmt) {
+            /* Need to reserve 4 bytes to fill the compressed length. */
+            qz4B_header = (Qz4BH_T *)dest;
+            dest = dest + sizeof(Qz4BH_T);
         }
     }
 
@@ -223,10 +229,13 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
          * When data_fmt is QZ_DEFLATE_GZIP_EXT,
          * we should fill src_sz & dest_sz in gzipext header field.
          */
-        if (QZ_DEFLATE_GZIP_EXT == data_fmt && qz_hdr) {
+        if (QZ_DEFLATE_GZIP_EXT == data_fmt && qz4B_header) {
             qz_hdr->extra.qz_e.src_sz  = stream->total_in;
             qz_hdr->extra.qz_e.dest_sz = stream->total_out -
                                          outputHeaderSz(data_fmt) - outputFooterSz(data_fmt);
+        } else if (QZ_DEFLATE_4B == data_fmt && qz4B_header) {
+            qz4B_header->blk_size = stream->total_out;
+            *dest_len = *dest_len + sizeof(Qz4BH_T);
         }
         ret = deflateEnd(stream);
         stream->total_in = 0;
@@ -252,6 +261,7 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     int windows_bits = 0;
     unsigned int total_in;
     unsigned int total_out;
+    unsigned int qz4B_header_len = 0;
 
     QzSess_T *qz_sess = (QzSess_T *) sess->internal;
     qz_sess->force_sw = 1;
@@ -283,6 +293,7 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
 
     QZ_DEBUG("decomp_sw data_fmt: %d\n", data_fmt);
     switch (data_fmt) {
+    case QZ_DEFLATE_4B:
     case QZ_DEFLATE_RAW:
         windows_bits = -MAX_WBITS;
         break;
@@ -294,6 +305,12 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     }
 
     if (InflateNull == qz_sess->inflate_stat) {
+        if (QZ_DEFLATE_4B == data_fmt) {
+            /* For QZ_DEFLATE_4B, we need to skip the header. */
+            stream->next_in = (z_const Bytef *)stream->next_in + sizeof(Qz4BH_T);
+            stream->avail_in = stream->avail_in - sizeof(Qz4BH_T);
+            qz4B_header_len = sizeof(Qz4BH_T);
+        }
         ret = inflateInit2(stream, windows_bits);
         if (Z_OK != ret) {
             ret = QZ_FAIL;
@@ -339,7 +356,8 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     }
 
     *dest_len = GET_LOWER_32BITS(stream->total_out - total_out);
-    *src_len = GET_LOWER_32BITS(stream->total_in - total_in);
+    /* for Deflate_4B, we need to add the length of Deflate 4B header. */
+    *src_len = GET_LOWER_32BITS(stream->total_in - total_in + qz4B_header_len);
 
 done:
     QZ_DEBUG("Exit qzSWDecompress total_in: %u total_out: %u "

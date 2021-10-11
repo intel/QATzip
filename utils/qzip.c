@@ -62,7 +62,8 @@ const struct option g_long_opts[] = {
     {"huffmanhdr", 1, 0, 'H'}, /* set huffman header type */
     {"level",      1, 0, 'L'}, /* set compression level */
     {"chunksz",    1, 0, 'C'}, /* set chunk size */
-    {"output",     1, 0, 'O'}, /* set output header format(gzip, gzipext, 7z)*/
+    {"output",     1, 0, 'O'}, /* set output header format(gzip, gzipext, 7z,
+                                  deflate_4B) */
     {"recursive",  0, 0, 'R'}, /* set recursive mode when compressing a
                                   directory */
     {"polling",    1, 0, 'P'}, /* set polling mode when compressing and
@@ -96,7 +97,7 @@ void help(void)
         "  -V, --version     display version number",
         "  -L, --level       set compression level",
         "  -C, --chunksz     set chunk size",
-        "  -O, --output      set output header format(gzip|gzipext|7z)",
+        "  -O, --output      set output header format(gzip|gzipext|7z|deflate_4B)",
         "  -r,               set max inflight request number",
         "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
@@ -450,7 +451,7 @@ int makeOutName(const char *in_name, const char *out_name,
                  SUFFIX_GZ);
     } else {
         if (!hasSuffix(in_name)) {
-            QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz.\n",
+            QZ_ERROR("%s: Wrong suffix. Supported suffix: 7z/gz.\n",
                      in_name);
             return -1;
         }

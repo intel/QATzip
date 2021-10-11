@@ -3712,7 +3712,7 @@ done:
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
-    "    -O data_fmt           deflate | gzip | gzipext\n"                      \
+    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B\n"         \
     "    -T huffmanType        static | dynamic\n"                              \
     "    -r req_cnt_thrshold   max inflight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
@@ -3805,6 +3805,8 @@ int main(int argc, char *argv[])
                 g_params_th.data_fmt = QZ_DEFLATE_GZIP;
             } else if (strcmp(optarg, "gzipext") == 0) {
                 g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
+            } else if (strcmp(optarg, "deflate_4B") == 0) {
+                g_params_th.data_fmt = QZ_DEFLATE_4B;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;

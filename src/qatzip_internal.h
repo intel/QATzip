@@ -233,6 +233,10 @@ typedef struct QzGzH_S {
     QzExtraField_T extra;
 } QzGzH_T;
 
+typedef struct Qz4BH_S {
+    uint32_t blk_size;
+} Qz4BH_T;
+
 typedef struct StdGzF_S {
     uint32_t crc32;
     uint32_t i_size;
@@ -248,11 +252,13 @@ typedef struct QzMem_S {
 void dumpAllCounters(void);
 int qzSetupHW(QzSession_T *sess, int i);
 unsigned long qzGzipHeaderSz(void);
+unsigned long qz4BHeaderSz(void);
 unsigned long stdGzipHeaderSz(void);
 unsigned long stdGzipFooterSz(void);
 unsigned long outputHeaderSz(QzDataFormat_T data_fmt);
 unsigned long outputFooterSz(QzDataFormat_T data_fmt);
 void qzGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
+void qz4BHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 void stdGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr);
 void outputHeaderGen(unsigned char *ptr,

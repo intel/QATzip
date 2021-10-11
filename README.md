@@ -110,7 +110,7 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
 * For 7z format, decompression only supports \*.7z archives compressed by qzip.
 * For 7z format, decompression only supports software.
 * For 7z format, the header compression is not supported.
-
+* Stream APIs do not support deflate_4B compression/decompression now.
 
 
 ## Installation Instructions
