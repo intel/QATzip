@@ -654,9 +654,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
 
     if (!((TestArg_T *)arg)->init_sess_disabled) {
         rc = qzSetupSession(&g_session_th[tid], ((TestArg_T *)arg)->params);
-        if (rc != QZ_OK &&
-            rc != QZ_NO_INST_ATTACH &&
-            rc != QZ_NONE) {
+        if (QZ_SETUP_SESSION_FAIL(rc)) {
             pthread_exit((void *)"qzSetupSession failed");
         }
     }
@@ -868,7 +866,7 @@ void *qzSetupParamFuncTest(void *arg)
         goto end;
     }
     rc = qzSetupSession(&g_session_th[tid], &def_params);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("Err: fail to setup session with ret: %d\n", rc);
         goto end;
     }
@@ -1005,7 +1003,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     rc = qzSetupSession(&g_session_th[tid], &new_params);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("Err: fail to setup session with ret: %d\n", rc);
         goto end;
     }
@@ -1065,10 +1063,7 @@ void *qzCompressAndDecompress(void *arg)
     //timeCheck(2, tid);
     if (!((TestArg_T *)arg)->init_sess_disabled) {
         rc = qzSetupSession(&g_session_th[tid], ((TestArg_T *)arg)->params);
-        if (rc != QZ_OK &&
-            rc != QZ_NO_INST_ATTACH &&
-            rc != QZ_NONE &&
-            rc != QZ_NO_HW) {
+        if (QZ_SETUP_SESSION_FAIL(rc)) {
             g_ready_thread_count++;
             pthread_cond_signal(&g_ready_cond);
             pthread_exit((void *)"qzSetupSession failed");
@@ -1295,7 +1290,7 @@ void *qzCompressOnPinnedMem(void *thd_arg)
 
     //set by default configurations
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     timeCheck(2, tid);
@@ -1429,7 +1424,7 @@ void *qzCompressOnCommonMem(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
     timeCheck(1, tid);
     rc = qzSetupSession(&g_session_th[tid], test_arg->params);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     timeCheck(2, tid);
@@ -1897,7 +1892,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
 
     //set by default configurations
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     timeCheck(2, tid);
@@ -2008,7 +2003,7 @@ void *qzCompressStreamOutput(void *thd_arg)
 
     //set by default configurations
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH && rc != QZ_NO_HW) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);
@@ -2098,7 +2093,7 @@ void *qzDecompressStreamInput(void *thd_arg)
 
     //set by default configurations
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH && rc != QZ_NO_HW) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);
@@ -2239,7 +2234,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     }
 
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);
@@ -2620,7 +2615,7 @@ void *qzInitPcieCountCheck(void *thd_arg)
 
     //set by default configurations
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);
@@ -2819,7 +2814,7 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
     qzGetDefaults(&params);
     params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
     rc = qzSetupSession(&sess, &params);
-    if (rc != QZ_OK) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
@@ -2852,7 +2847,7 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
     QZ_DEBUG("produce: %u, DEST_SZ(hw_sz): %d\n", produce,
              DEST_SZ(params.hw_buff_sz));
     rc = qzSetupSession(&sess, &params);
-    if (rc != QZ_OK) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("ERROR: qzSetupSession FAILED with return value: %d\n", rc);
         goto done;
     }
@@ -2962,7 +2957,7 @@ int qzDecompressForceSW(void)
     qzGetDefaults(&params);
     params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
     rc = qzSetupSession(&sess, &params);
-    if (rc != QZ_OK) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
@@ -2993,7 +2988,7 @@ int qzDecompressForceSW(void)
     QZ_DEBUG("produce: %d, DEST_SZ(hw_sz): %d\n", produce,
              DEST_SZ(params.hw_buff_sz));
     rc = qzSetupSession(&sess, &params);
-    if (rc != QZ_OK) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("ERROR: qzSetupSession FAILED with return value: %d\n", rc);
         goto done;
     }
@@ -3017,7 +3012,7 @@ int qzDecompressForceSW(void)
     QZ_DEBUG("consume: %d, hw_sz: %d\n", consume, params.hw_buff_sz);
 
     rc = qzSetupSession(&sess, &params);
-    if (rc != QZ_OK) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("ERROR: qzSetupSession FAILED with return value: %d\n", rc);
         goto done;
     }
@@ -3241,7 +3236,7 @@ int qzCompressSWL9DecompressHW(void)
     params.input_sz_thrshold = orig_sz + 1;
     params.comp_lvl = QZ_DEFLATE_COMP_LVL_MAXIMUM;
     rc = qzSetupSession(&sess, &params);
-    if (rc != QZ_OK) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
@@ -3261,7 +3256,7 @@ int qzCompressSWL9DecompressHW(void)
     /*decompress data by hardware*/
     params.input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT;
     rc = qzSetupSession(&sess, &params);
-    if (rc != QZ_OK) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
@@ -3366,7 +3361,7 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
 
     //set by default configurations
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH && rc != QZ_NO_HW) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);
@@ -3575,7 +3570,7 @@ void *qzDecompressStreamWithBufferError(void *thd_arg)
 
     //set by default configurations
     rc = qzSetupSession(&g_session_th[tid], NULL);
-    if (rc != QZ_OK && rc != QZ_NO_INST_ATTACH && rc != QZ_NO_HW) {
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
     QZ_DEBUG("qzSetupSession rc = %d\n", rc);

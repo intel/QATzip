@@ -880,6 +880,7 @@ done_inst:
 int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
 {
     QzSess_T *qz_sess;
+    int rc = QZ_NOSW_NO_HW;
 
     if (unlikely(NULL == sess)) {
         return QZ_PARAMS;
@@ -952,20 +953,21 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
 #endif
     qz_sess->session_setup_data.checksum = CPA_DC_CRC32;
 
-    if (g_process.qz_init_status == QZ_NONE) {
-        sess->hw_session_stat = QZ_NONE;
-    } else if (g_process.qz_init_status != QZ_OK) {
+    if (g_process.qz_init_status != QZ_OK) {
         /*hw not present*/
         if (qz_sess->sess_params.sw_backup == 1) {
             sess->hw_session_stat = QZ_NO_HW;
+            rc = QZ_OK;
         } else {
             sess->hw_session_stat = QZ_NOSW_NO_HW;
+            rc = QZ_NOSW_NO_HW;
         }
     } else {
         sess->hw_session_stat = QZ_OK;
+        rc = QZ_OK;
     }
 
-    return sess->hw_session_stat;
+    return rc;
 }
 
 /* Set up the QAT session associate with current process's
@@ -1540,8 +1542,6 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
                unsigned int *src_len, unsigned char *dest,
                unsigned int *dest_len, unsigned int last)
 {
-    int rc = QZ_FAIL;
-
     if (NULL == sess || (last != 0 && last != 1)) {
         if (NULL != src_len) {
             *src_len = 0;
@@ -1552,19 +1552,6 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
         return QZ_PARAMS;
     }
 
-    /*check if setupSession called*/
-    if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
-        rc = qzSetupSession(sess, NULL);
-        if (QZ_SETUP_SESSION_FAIL(rc)) {
-            if (NULL != src_len) {
-                *src_len = 0;
-            }
-            if (NULL != dest_len) {
-                *dest_len = 0;
-            }
-            return rc;
-        }
-    }
     return qzCompressCrc(sess, src, src_len, dest, dest_len, last, NULL);
 }
 

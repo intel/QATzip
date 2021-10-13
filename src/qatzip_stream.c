@@ -246,11 +246,17 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
         return QZ_DUPLICATE;
     }
 
+    /*check if init called*/
+    rc = qzInit(sess, getSwBackup(sess));
+    if (QZ_PARAMS == rc || QZ_NOSW_NO_HW == rc || QZ_FAIL == rc) {
+        return QZ_FAIL;
+    }
+
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
-            return rc;
+            return QZ_FAIL;
         }
     }
     qz_sess = (QzSess_T *)(sess->internal);
@@ -417,13 +423,19 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         break;
     }
 
+    /*check if init called*/
+    rc = qzInit(sess, getSwBackup(sess));
+    if (QZ_PARAMS == rc || QZ_NOSW_NO_HW == rc || QZ_FAIL == rc) {
+        return QZ_FAIL;
+    }
+
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         rc = qzSetupSession(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
             strm->in_sz = 0;
             strm->out_sz = 0;
-            return rc;
+            return QZ_FAIL;
         }
     }
     qz_sess = (QzSess_T *)(sess->internal);
