@@ -130,6 +130,7 @@ typedef struct {
     int init_engine_disabled;
     int init_sess_disabled;
     int thread_sleep;
+    int block_size;
 } TestArg_T;
 
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * MB - 5 * KB);
@@ -1029,7 +1030,10 @@ void *qzCompressAndDecompress(void *arg)
 {
     int rc = -1, k;
     unsigned char *src, *comp_out, *decomp_out;
+    int *compressed_blocks_sz = NULL;
     size_t src_sz, comp_out_sz, decomp_out_sz;
+    size_t block_size, in_sz, out_sz, consumed, produced;
+    size_t num_blocks;
     struct timeval ts, te;
     unsigned long long ts_m, te_m, el_m;
     long double sec, rate;
@@ -1095,16 +1099,43 @@ void *qzCompressAndDecompress(void *arg)
     }
     //timeCheck(4, tid);
 
+    block_size = ((TestArg_T *)arg)->block_size;
+    if (-1 == block_size) {
+        block_size = src_sz;
+    }
+
+    num_blocks = src_sz / block_size + (src_sz % block_size ? 1 : 0);
+    compressed_blocks_sz = malloc(sizeof(int) * num_blocks);
+    if (NULL == compressed_blocks_sz) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+
     // Compress the data for testing
     if (DECOMP == service) {
-        rc = qzCompress(&g_session_th[tid], src, (uint32_t *)(&src_sz), comp_out,
-                        (uint32_t *)(&comp_out_sz), 1);
-        if (rc != QZ_OK) {
-            QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-            dumpInputData(src_sz, src);
-            goto done;
+        consumed = 0;
+        produced = 0;
+
+        for (int i = 0; i < num_blocks; i ++) {
+            in_sz =  block_size < (org_src_sz - consumed) ? block_size :
+                     (org_src_sz - consumed);
+            out_sz = comp_out_sz - produced;
+            rc = qzCompress(&g_session_th[tid], src + consumed, (uint32_t *)(&in_sz),
+                            comp_out + produced,
+                            (uint32_t *)(&out_sz), 1);
+            if (rc != QZ_OK) {
+                QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+                dumpInputData(in_sz, src + consumed);
+                goto done;
+            }
+
+            consumed = consumed + in_sz;
+            produced = produced + out_sz;
+            compressed_blocks_sz[i] = out_sz;
         }
 
+        src_sz = consumed;
+        comp_out_sz = produced;
         if (src_sz != org_src_sz) {
             QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
                      org_src_sz);
@@ -1145,14 +1176,30 @@ void *qzCompressAndDecompress(void *arg)
             comp_out_sz = org_comp_out_sz;
             QZ_DEBUG("thread %ld before Compressed %d bytes into %d\n", tid, src_sz,
                      comp_out_sz);
-            rc = qzCompress(&g_session_th[tid], src, (uint32_t *)(&src_sz), comp_out,
-                            (uint32_t *)(&comp_out_sz), 1);
-            if (rc != QZ_OK) {
-                QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-                dumpInputData(src_sz, src);
-                goto done;
+            consumed = 0;
+            produced = 0;
+
+            for (int i = 0; i < num_blocks; i ++) {
+                in_sz =  block_size < (org_src_sz - consumed) ? block_size :
+                         (org_src_sz - consumed);
+                out_sz = comp_out_sz - produced;
+
+                rc = qzCompress(&g_session_th[tid], src + consumed, (uint32_t *)(&in_sz),
+                                comp_out + produced,
+                                (uint32_t *)(&out_sz), 1);
+                if (rc != QZ_OK) {
+                    QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+                    dumpInputData(in_sz, src + consumed);
+                    goto done;
+                }
+
+                consumed = consumed + in_sz;
+                produced = produced + out_sz;
+                compressed_blocks_sz[i] = out_sz;
             }
 
+            src_sz = consumed;
+            comp_out_sz = produced;
             if (src_sz != org_src_sz) {
                 QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
                          org_src_sz);
@@ -1166,14 +1213,24 @@ void *qzCompressAndDecompress(void *arg)
         if (COMP != service) {
             QZ_DEBUG("thread %ld before Decompressed %d bytes into %d\n", tid, comp_out_sz,
                      decomp_out_sz);
-            rc = qzDecompress(&g_session_th[tid], comp_out, (uint32_t *)(&comp_out_sz),
-                              decomp_out, (uint32_t *)(&decomp_out_sz));
-            if (rc != QZ_OK) {
-                QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
-                dumpInputData(src_sz, src);
-                goto done;
+            consumed = 0;
+            produced = 0;
+
+            for (int i = 0; i < num_blocks; i ++) {
+                in_sz = compressed_blocks_sz[i];
+                out_sz = decomp_out_sz - produced;
+                rc = qzDecompress(&g_session_th[tid], comp_out + consumed, (uint32_t *)(&in_sz),
+                                  decomp_out + produced, (uint32_t *)(&out_sz));
+                if (rc != QZ_OK) {
+                    QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+                    dumpInputData(src_sz, src);
+                    goto done;
+                }
+                consumed += in_sz;
+                produced += out_sz;
             }
 
+            decomp_out_sz = produced;
             if (decomp_out_sz != org_src_sz) {
                 QZ_ERROR("ERROR: After Decompression decomp_out_sz: %d != org_src_sz: %d \n!",
                          decomp_out_sz, org_src_sz);
@@ -1256,6 +1313,7 @@ void *qzCompressAndDecompress(void *arg)
     pthread_mutex_unlock(&g_lock_print);
 
 done:
+    free(compressed_blocks_sz);
     if (gen_data) {
         qzFree(src);
         qzFree(comp_out);
@@ -3645,6 +3703,12 @@ done:
     "    -B swBack             0 means disable sw\n"                            \
     "                          1 means enable sw\n"                             \
     "    -C hw_buff_sz         default 64K\n"                                   \
+    "    -b block_size         If set this option, the test will split test\n"  \
+    "                          data into pieces. qzCompress/qzDecompress will\n"\
+    "                          de/compress block_size bytes every time.\n"      \
+    "                          It must be the power of 2. The minimum is 4k,\n" \
+    "                          and maximum is 1M. Default is -1, don't split \n" \
+    "                          the test data.\n"                                \
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
@@ -3685,6 +3749,7 @@ int main(int argc, char *argv[])
     pthread_t threads[100];
     TestArg_T test_arg[100];
     struct sigaction s1;
+    int block_size = -1;
 
     unsigned char *input_buf = NULL;
     unsigned int input_buf_len = QATZIP_MAX_HW_SZ;
@@ -3696,7 +3761,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:vh";
+    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:b:vh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -3854,6 +3919,15 @@ int main(int argc, char *argv[])
                 return -1;
             }
             break;
+        case 'b':
+            block_size = GET_LOWER_32BITS(strtol(optarg, &stop, 0));
+            if (*stop != '\0' || errno || ((block_size & (block_size - 1)) != 0) ||
+                block_size < 4096 || block_size > 1024 * 1024) {
+                QZ_ERROR("Error block size arg: %s, please set it to the power of 2 in range of 4k to 1M.\n",
+                         optarg);
+                return -1;
+            }
+            break;
         default:
             qzPrintUsageAndExit(argv[0]);
         }
@@ -3996,6 +4070,7 @@ int main(int argc, char *argv[])
         test_arg[i].ops = qzThdOps;
         test_arg[i].blks = qzBlocks;
         test_arg[i].thread_sleep = thread_sleep;
+        test_arg[i].block_size = block_size;
         if (!test_arg[i].comp_out || !test_arg[i].decomp_out) {
             QZ_ERROR("ERROR: fail to create memory for thread %ld\n", i);
             return -1;
