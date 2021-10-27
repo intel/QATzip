@@ -1098,6 +1098,10 @@ void *qzCompressAndDecompress(void *arg)
         goto done;
     }
 
+    if (g_perf_svm) {
+        memcpy(src, ((TestArg_T *)arg)->src, src_sz);
+    }
+
     el_m = 0;
     if (gen_data) {
         QZ_DEBUG("Gen Data...\n");
