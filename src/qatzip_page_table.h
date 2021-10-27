@@ -1,4 +1,4 @@
-/*****************************************************************************
+/***************************************************************************
  *
  *   BSD LICENSE
  *
@@ -31,15 +31,6 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- *   @file qatzip_page_table.h
- *   This file provides user-space page tables (similar to Intel x86/x64
- *   page tables) for fast continous memory lookup. Essentially, this is
- *   an implementation of the trie data structure optimized for the x86 HW
- *   constraints.
- *
- *   Memory required:
- *     - 8 Mb to cover 4 Gb address space.
- *     I.e. if only 1 Gb is used it will require additional 2 Mb.
  ***************************************************************************/
 
 

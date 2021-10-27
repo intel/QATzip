@@ -1,6 +1,5 @@
 #! /bin/bash
-#***************************************************************************
-#
+################################################################
 #   BSD LICENSE
 #
 #   Copyright(c) 2007-2021 Intel Corporation. All rights reserved.
@@ -32,7 +31,7 @@
 #   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 #   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-#**************************************************************************
+################################################################
 
 set -e
 echo "***QZ_ROOT run_perf_test.sh start"
