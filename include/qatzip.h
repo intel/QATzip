@@ -284,6 +284,8 @@ typedef enum QzCrcType_E {
 /**< Insufficient buffer error */
 #define QZ_DATA_ERROR           (-4)
 /**< Input data was corrupted */
+#define QZ_TIMEOUT              (-5)
+/**< Operation timed out */
 #define QZ_NO_HW                (11)
 /**< Using SW: No QAT HW detected */
 #define QZ_NO_MDRV              (12)
@@ -416,11 +418,12 @@ typedef struct QzSessionParams_S {
  *      QZ_SW_EXECUTION indicates if a request for services was performed in
  *      software.
  *
+ *      QZ_HW_TIMEOUT indicates if a request to hardware was timed out.
  *****************************************************************************/
-#define QZ_SW_EXECUTION_BIT           (4)
-#define QZ_SW_EXECUTION_MASK         (1 << QZ_SW_EXECUTION_BIT)
-#define QZ_SW_EXECUTION(ret, ext_rc) \
-     (!ret && (ext_rc & QZ_SW_EXECUTION_MASK))
+#define QZ_TIMEOUT_BIT                (8)
+#define QZ_TIMEOUT_MASK              (1 << QZ_TIMEOUT_BIT)
+#define QZ_HW_TIMEOUT(ret, ext_rc)   \
+     (!ret && (ext_rc & QZ_TIMEOUT_MASK))
 
 /**
  *****************************************************************************
