@@ -140,17 +140,22 @@ typedef struct {
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * MB - 5 * KB);
 const unsigned int DEFAULT_BUF_SZ    = 256 * KB;
 const unsigned int QATZIP_MAX_HW_SZ  = 512 * KB;
+const unsigned int MAX_HUGE_PAGE_SZ  = 2 * MB;
 
 QzSession_T g_session1;
 QzSession_T g_session_th[100];
 QzSessionParams_T g_params_th;
 
 static pthread_mutex_t g_lock_print = PTHREAD_MUTEX_INITIALIZER;
+#ifndef ENABLE_THREAD_BARRIER
 static pthread_mutex_t g_cond_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_ready_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t g_start_cond = PTHREAD_COND_INITIALIZER;
 static int g_ready_to_start;
 static int g_ready_thread_count;
+#else
+static pthread_barrier_t g_bar;
+#endif
 char *g_input_file_name = NULL;
 static bool g_perf_svm = false;
 
@@ -1063,8 +1068,10 @@ void *qzCompressAndDecompress(void *arg)
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
         if (QZ_INIT_FAIL(rc)) {
+#ifndef ENABLE_THREAD_BARRIER
             g_ready_thread_count++;
             pthread_cond_signal(&g_ready_cond);
+#endif
             pthread_exit((void *)"qzInit failed");
         }
     }
@@ -1074,8 +1081,10 @@ void *qzCompressAndDecompress(void *arg)
     if (!((TestArg_T *)arg)->init_sess_disabled) {
         rc = qzSetupSession(&g_session_th[tid], ((TestArg_T *)arg)->params);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
+#ifndef ENABLE_THREAD_BARRIER
             g_ready_thread_count++;
             pthread_cond_signal(&g_ready_cond);
+#endif
             pthread_exit((void *)"qzSetupSession failed");
         }
     }
@@ -1154,6 +1163,9 @@ void *qzCompressAndDecompress(void *arg)
         }
     }
 
+#ifdef ENABLE_THREAD_BARRIER
+    pthread_barrier_wait(&g_bar);
+#else
     /* mutex lock for thread count */
     rc = pthread_mutex_lock(&g_cond_mutex);
     if (rc != 0) {
@@ -1178,6 +1190,7 @@ void *qzCompressAndDecompress(void *arg)
         QZ_ERROR("Failure to release Mutex Lock, status = %d\n", rc);
         goto done;
     }
+#endif
 
     // Start the testing
     for (k = 0; k < count; k++) {
@@ -3526,8 +3539,6 @@ void *forkResourceCheck(void *arg)
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
         if (QZ_INIT_FAIL(rc)) {
-            g_ready_thread_count++;
-            pthread_cond_signal(&g_ready_cond);
             pthread_exit((void *)"qzInit failed");
         }
     }
@@ -3570,8 +3581,6 @@ void *forkResourceCheck(void *arg)
         if (!((TestArg_T *)arg)->init_engine_disabled) {
             rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
             if (QZ_INIT_FAIL(rc)) {
-                g_ready_thread_count++;
-                pthread_cond_signal(&g_ready_cond);
                 pthread_exit((void *)"qzInit failed");
             }
             QZ_PRINT("After qzInit, qz_init_status in child process is %d\n",
@@ -3734,6 +3743,11 @@ done:
     "                          svm mode. When set to svm, all memory will\n"    \
     "                          be allocated with malloc instead of qzMalloc\n"  \
     "                          This option is only applied to test case 4\n"    \
+    "    -p compress_buf_type  pinnned | common, default is common\n" \
+    "                          This option is only applied to file compression test in case 4\n"    \
+    "                          If set common, memory of compress buffer will be allocated through malloc\n" \
+    "                          If set pinned, memory of compress buffer will be allocated in huge page, the\n" \
+    "                          allocation limit is 2M\n"                        \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -3767,6 +3781,7 @@ int main(int argc, char *argv[])
     TestArg_T test_arg[100];
     struct sigaction s1;
     int block_size = -1;
+    PinMem_T compress_buf_type = COMMON_MEM;
 
     unsigned char *input_buf = NULL;
     unsigned int input_buf_len = QATZIP_MAX_HW_SZ;
@@ -3778,7 +3793,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:vh";
+    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:vh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -3955,6 +3970,16 @@ int main(int argc, char *argv[])
                 return -1;
             }
             break;
+        case 'p':
+            if (strcmp(optarg, "pinned") == 0) {
+                compress_buf_type = PINNED_MEM;
+            } else if (strcmp(optarg, "common") == 0) {
+                compress_buf_type = COMMON_MEM;
+            } else {
+                QZ_ERROR("Error compress_buf_type arg: %s\n", optarg);
+                return -1;
+            }
+            break;
         default:
             qzPrintUsageAndExit(argv[0]);
         }
@@ -3983,7 +4008,15 @@ int main(int argc, char *argv[])
         if (test == 4 || test == 10 || test == 11 || test == 12) {
             input_buf_len = GET_LOWER_32BITS(file_state.st_size);
         }
-        input_buf = qzMalloc(input_buf_len, 0, COMMON_MEM);
+        if (compress_buf_type == PINNED_MEM) {
+            if (input_buf_len > MAX_HUGE_PAGE_SZ) {
+                QZ_ERROR("ERROR: only can allocate 2M memory in huge page\n");
+                return -1;
+            }
+            input_buf = qzMalloc(input_buf_len, 0, PINNED_MEM);
+        } else {
+            input_buf = malloc(input_buf_len);
+        }
         if (!input_buf) {
             QZ_ERROR("ERROR: fail to alloc %d bytes of memory with qzMalloc\n",
                      input_buf_len);
@@ -4085,11 +4118,19 @@ int main(int argc, char *argv[])
         test_arg[i].debug = 0;
         test_arg[i].count = loop_cnt;
         test_arg[i].src_sz = GET_LOWER_32BITS(input_buf_len);
-        test_arg[i].comp_out_sz = test_arg[i].src_sz * 2;
-        test_arg[i].src = input_buf;
-        test_arg[i].comp_out = qzMalloc(test_arg[i].comp_out_sz, 0, COMMON_MEM);
-        test_arg[i].decomp_out_sz = test_arg[i].src_sz * 5;
-        test_arg[i].decomp_out = qzMalloc(test_arg[i].decomp_out_sz, 0, COMMON_MEM);
+        if (compress_buf_type == PINNED_MEM) {
+            test_arg[i].comp_out_sz = test_arg[i].src_sz;
+            test_arg[i].src = input_buf;
+            test_arg[i].comp_out = qzMalloc(test_arg[i].comp_out_sz, 0, PINNED_MEM);
+            test_arg[i].decomp_out_sz = test_arg[i].src_sz;
+            test_arg[i].decomp_out = qzMalloc(test_arg[i].decomp_out_sz, 0, PINNED_MEM);
+        } else {
+            test_arg[i].comp_out_sz = test_arg[i].src_sz * 2;
+            test_arg[i].src = input_buf;
+            test_arg[i].comp_out = malloc(test_arg[i].comp_out_sz);
+            test_arg[i].decomp_out_sz = test_arg[i].src_sz * 5;
+            test_arg[i].decomp_out = malloc(test_arg[i].decomp_out_sz);
+        }
         test_arg[i].gen_data = g_input_file_name ? 0 : 1;
         test_arg[i].init_engine_disabled = disable_init_engine;
         test_arg[i].init_sess_disabled = disable_init_session;
@@ -4106,6 +4147,9 @@ int main(int argc, char *argv[])
 
     srand((uint32_t)getpid());
     (void)gettimeofday(&g_timer_start, NULL);
+#ifdef ENABLE_THREAD_BARRIER
+    pthread_barrier_init(&g_bar, NULL, thread_count);
+#endif
     for (i = 0; i < thread_count; i++) {
         rc = pthread_create(&threads[i], NULL, test_arg[i].ops, (void *)&test_arg[i]);
         if (0 != rc) {
@@ -4114,6 +4158,7 @@ int main(int argc, char *argv[])
         }
     }
 
+#ifndef ENABLE_THREAD_BARRIER
     /*for qzCompressAndDecompress test*/
     if (test == 4 || test == 18) {
         ret = pthread_mutex_lock(&g_cond_mutex);
@@ -4140,6 +4185,7 @@ int main(int argc, char *argv[])
             goto done;
         }
     }
+#endif
 
     for (i = 0; i < thread_count; i++) {
         timeCheck(10, i);
@@ -4156,6 +4202,9 @@ int main(int argc, char *argv[])
         qzFree(test_arg[i].decomp_out);
     }
 
+#ifdef ENABLE_THREAD_BARRIER
+    pthread_barrier_destroy(&g_bar);
+#endif
     if (g_input_file_name != NULL) {
         qzFree(input_buf);
     }
