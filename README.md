@@ -26,9 +26,13 @@ QATzip is a user space library which builds on top of the Intel&reg; QuickAssist
 Technology user space library, to provide extended accelerated compression and
 decompression services by offloading the actual compression and decompression
 request(s) to the Intel&reg; Chipset Series. QATzip produces data using the standard
-gzip\* format (RFC1952) with extended headers. The data can be decompressed with a
-compliant gzip\* implementation. QATzip is designed to take full advantage of the
-performance provided by Intel&reg; QuickAssist Technology.
+gzip\* format (RFC1952) with extended headers or [lz4 blocks][*] with [lz4 frame format][**].
+The data can be decompressed with a compliant gzip\* or lz4 implementation. QATzip is
+designed to take full advantage of the performance provided by Intel&reg; QuickAssist Technology.
+
+[*]:https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md
+[**]:https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md
+
 
 ## Licensing
 
@@ -66,6 +70,10 @@ ratio and throughput for data sets that are submitted piecemeal.
 * For standard GZIP format, try hardware decompression 1st before switch to software decompression.
 * Enable adaptive polling mechanism to save CPU usage in stress mode.
 * 'qzip' utility supports compression files and directories into 7z format.
+* For 4xxx(QAT gen 4 devices), QATzip supports lz4 (de)compression algorithm.
+* For 4xxx(QAT gen 4 devices), QATzip supports lz4s compression algorithm, the QATzip can generate
+lz4s block with lz4 frame format, which can be used for software post-processing to generate
+other compressed data format.
 
 ## Hardware Requirements
 
@@ -91,6 +99,8 @@ Please download the QAT driver from the link https://01.org/intel-quickassist-te
 * QATzip has been tested by Intel&reg; on CentOS 7.8.2003 with kernel 3.10.0-1127.19.1.el7.x86\_64
 * Zlib\* library of version 1.2.7 or higher
 * Suggest GCC\* of version 4.8.5 or higher
+* lz4\* library
+* xxhash\* library
 
 ## Additional Information
 
@@ -113,6 +123,7 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
 * For 7z format, decompression only supports \*.7z archives compressed by qzip.
 * For 7z format, decompression only supports software.
 * For 7z format, the header compression is not supported.
+* For lz4(s) compression, QATzip supports 32KB history buffer.
 * Stream APIs do not support deflate_4B compression/decompression now.
 
 
