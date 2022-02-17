@@ -82,6 +82,12 @@ int main(int argc, char **argv)
         case 'A':
             if (strcmp(optarg, "deflate") == 0) {
                 g_params_th.comp_algorithm = QZ_DEFLATE;
+            } else if (strcmp(optarg, "lz4") == 0) {
+                g_params_th.comp_algorithm = QZ_LZ4;
+            } else if (strcmp(optarg, "lz4s") == 0) {
+                g_params_th.comp_algorithm = QZ_LZ4s;
+            } else if (strcmp(optarg, "zstd") == 0) {
+                g_params_th.comp_algorithm = QZ_ZSTD;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;
@@ -106,6 +112,10 @@ int main(int argc, char **argv)
                 g_params_th.data_fmt = QZ_DEFLATE_RAW;
             } else if (strcmp(optarg, "deflate_4B") == 0) {
                 g_params_th.data_fmt = QZ_DEFLATE_4B;
+            } else if (strcmp(optarg, "lz4") == 0) {
+                g_params_th.data_fmt = QZ_LZ4_FH;
+            } else if (strcmp(optarg, "lz4s") == 0) {
+                g_params_th.data_fmt = QZ_LZ4S_FH;
             } else {
                 QZ_ERROR("Error gzip header format arg: %s\n", optarg);
                 return -1;
@@ -164,6 +174,10 @@ int main(int argc, char **argv)
     }
 
     if (g_decompress) {
+        if (g_params_th.data_fmt == QZ_LZ4S_FH) {
+            QZ_ERROR("Don't support lz4s decompression.\n");
+            exit(ERROR);
+        }
         g_params_th.direction = QZ_DIR_DECOMPRESS;
     } else {
         g_params_th.direction = QZ_DIR_COMPRESS;
@@ -223,7 +237,7 @@ int main(int argc, char **argv)
             is_dir = checkDirectory(argv[optind]);
 
             if (g_decompress && !is_dir && !hasSuffix(argv[optind])) {
-                QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz.\n",
+                QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz/lz4.\n",
                          argv[optind]);
                 exit(ERROR);
             }
@@ -255,9 +269,17 @@ int main(int argc, char **argv)
                     } else if (suffix == E_SUFFIX_GZ) {
                         processFile(&g_sess, argv[optind++], out_name,
                                     g_decompress == 0);
+                    } else if (suffix == E_SUFFIX_LZ4) {
+                        if (g_params_th.data_fmt != QZ_LZ4_FH) {
+                            QZ_ERROR("Error: Suffix(.lz4) doesn't match the data format,"
+                                     "please confirm the data format\n");
+                            exit(ERROR);
+                        }
+                        processFile(&g_sess, argv[optind++], out_name,
+                                    g_decompress == 0);
                     } else {
                         QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: "
-                                 "7z/gz.\n", argv[optind]);
+                                 "7z/gz/lz4.\n", argv[optind]);
                         exit(ERROR);
                     }
                 }  else {

@@ -159,10 +159,14 @@
 #define MAX_PATH_LEN   1024 /* max pathname length */
 #define SUFFIX_GZ      ".gz"
 #define SUFFIX_7Z      ".7z"
+#define SUFFIX_LZ4     ".lz4"
+#define SUFFIX_LZ4S    ".lz4s"
 
 typedef enum QzSuffix_E {
     E_SUFFIX_GZ,
     E_SUFFIX_7Z,
+    E_SUFFIX_LZ4,
+    E_SUFFIX_LZ4S,
     E_SUFFIX_UNKNOWN = 999
 } QzSuffix_T;
 

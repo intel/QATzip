@@ -63,7 +63,7 @@ const struct option g_long_opts[] = {
     {"level",      1, 0, 'L'}, /* set compression level */
     {"chunksz",    1, 0, 'C'}, /* set chunk size */
     {"output",     1, 0, 'O'}, /* set output header format(gzip, gzipext, 7z,
-                                  deflate_4B) */
+                                  deflate_4B, lz4, lz4s) */
     {"recursive",  0, 0, 'R'}, /* set recursive mode when compressing a
                                   directory */
     {"polling",    1, 0, 'P'}, /* set polling mode when compressing and
@@ -97,7 +97,7 @@ void help(void)
         "  -V, --version     display version number",
         "  -L, --level       set compression level",
         "  -C, --chunksz     set chunk size",
-        "  -O, --output      set output header format(gzip|gzipext|7z|deflate_4B)",
+        "  -O, --output      set output header format(gzip|gzipext|7z|deflate_4B|lz4|lz4s)",
         "  -r,               set max inflight request number",
         "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
@@ -420,6 +420,12 @@ QzSuffix_T getSuffix(const char *filename)
     } else if (len >= strlen(SUFFIX_7Z) &&
                !strcmp(filename + (len - strlen(SUFFIX_7Z)), SUFFIX_7Z)) {
         s = E_SUFFIX_7Z;
+    }  else if (len >= strlen(SUFFIX_LZ4) &&
+                !strcmp(filename + (len - strlen(SUFFIX_LZ4)), SUFFIX_LZ4)) {
+        s = E_SUFFIX_LZ4;
+    }  else if (len >= strlen(SUFFIX_LZ4S) &&
+                !strcmp(filename + (len - strlen(SUFFIX_LZ4S)), SUFFIX_LZ4S)) {
+        s = E_SUFFIX_LZ4S;
     }
     return s;
 }
@@ -427,12 +433,32 @@ QzSuffix_T getSuffix(const char *filename)
 bool hasSuffix(const char *fname)
 {
     size_t len = strlen(fname);
-    if (len >= strlen(SUFFIX_GZ) &&
-        !strcmp(fname + (len - strlen(SUFFIX_GZ)), SUFFIX_GZ)) {
-        return 1;
-    } else if (len >= strlen(SUFFIX_7Z) &&
-               !strcmp(fname + (len - strlen(SUFFIX_7Z)), SUFFIX_7Z)) {
-        return 1;
+    switch (g_params_th.data_fmt) {
+    case QZ_LZ4_FH:
+        if (len >= strlen(SUFFIX_LZ4) &&
+            !strcmp(fname + (len - strlen(SUFFIX_LZ4)), SUFFIX_LZ4)) {
+            return 1;
+        }
+        break;
+    case QZ_LZ4S_FH:
+        if (len >= strlen(SUFFIX_LZ4S) &&
+            !strcmp(fname + (len - strlen(SUFFIX_LZ4S)), SUFFIX_LZ4S)) {
+            return 1;
+        }
+        break;
+    case QZ_DEFLATE_RAW:
+    case QZ_DEFLATE_GZIP_EXT:
+    case QZ_DEFLATE_GZIP:
+    case QZ_DEFLATE_4B:
+    default:
+        if (len >= strlen(SUFFIX_GZ) &&
+            !strcmp(fname + (len - strlen(SUFFIX_GZ)), SUFFIX_GZ)) {
+            return 1;
+        } else if (len >= strlen(SUFFIX_7Z) &&
+                   !strcmp(fname + (len - strlen(SUFFIX_7Z)), SUFFIX_7Z)) {
+            return 1;
+        }
+        break;
     }
     return 0;
 }
@@ -442,7 +468,7 @@ int makeOutName(const char *in_name, const char *out_name,
 {
     if (is_compress) {
         if (hasSuffix(in_name)) {
-            QZ_ERROR("Warning: %s already has .gz suffix -- unchanged\n",
+            QZ_ERROR("Warning: %s already has suffix -- unchanged\n",
                      in_name);
             return -1;
         }
@@ -450,20 +476,30 @@ int makeOutName(const char *in_name, const char *out_name,
         if (g_params_th.data_fmt == QZ_DEFLATE_RAW) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_7Z);
+        } else if (g_params_th.data_fmt == QZ_LZ4_FH) {
+            snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
+                     SUFFIX_LZ4);
+        } else if (g_params_th.data_fmt == QZ_LZ4S_FH) {
+            snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
+                     SUFFIX_LZ4S);
         } else {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_GZ);
         }
     } else {
         if (!hasSuffix(in_name)) {
-            QZ_ERROR("%s: Wrong suffix. Supported suffix: 7z/gz.\n",
+            QZ_ERROR("%s: Wrong suffix. Supported suffix: 7z/gz/lz4\n",
                      in_name);
             return -1;
         }
         /* remove suffix */
         snprintf(oname, MAX_PATH_LEN, "%s", out_name ? out_name : in_name);
         if (NULL == out_name) {
-            oname[strlen(in_name) - strlen(SUFFIX_GZ)] = '\0';
+            if (g_params_th.data_fmt == QZ_LZ4_FH) {
+                oname[strlen(in_name) - strlen(SUFFIX_LZ4)] = '\0';
+            } else {
+                oname[strlen(in_name) - strlen(SUFFIX_GZ)] = '\0';
+            }
         }
     }
 
@@ -512,6 +548,7 @@ void processFile(QzSession_T *sess, const char *in_name,
 {
     int ret;
     struct stat fstat;
+    struct timespec timebuf[2];
 
     ret = stat(in_name, &fstat);
     if (ret) {
@@ -529,6 +566,14 @@ void processFile(QzSession_T *sess, const char *in_name,
             return;
         }
         doProcessFile(sess, in_name, oname, is_compress);
+
+        if (access(oname, F_OK) == 0) {
+            //update src file stat to dst file
+            memset(timebuf, 0, sizeof(timebuf));
+            timebuf[0].tv_nsec = UTIME_NOW;
+            timebuf[1].tv_sec = fstat.st_mtime;
+            utimensat(AT_FDCWD, oname, timebuf, 0);
+        }
     }
 }
 

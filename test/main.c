@@ -335,7 +335,7 @@ static void dumpOutputData(size_t size, uint8_t *data, char *filename)
     char tmp_filename[] = "QATZip_Output_XXXXXX";
     unsigned int filename_len = 0;
     const unsigned int suffix_len = 3;
-    const char *suffix[] = {"df", "gz", "gz"};
+    const char *suffix[] = {"df", "gz", "gz", "gz", "lz4"};
 
     if (0 == size || NULL == data)
         return;
@@ -3734,7 +3734,7 @@ done:
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
-    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B\n"         \
+    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s\n"\
     "    -T huffmanType        static | dynamic\n"                              \
     "    -r req_cnt_thrshold   max inflight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
@@ -3839,6 +3839,10 @@ int main(int argc, char *argv[])
                 g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
             } else if (strcmp(optarg, "deflate_4B") == 0) {
                 g_params_th.data_fmt = QZ_DEFLATE_4B;
+            } else if (strcmp(optarg, "lz4") == 0) {
+                g_params_th.data_fmt = QZ_LZ4_FH;
+            } else if (strcmp(optarg, "lz4s") == 0) {
+                g_params_th.data_fmt = QZ_LZ4S_FH;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;
