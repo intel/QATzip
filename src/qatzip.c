@@ -2195,14 +2195,23 @@ static void *doDecompressIn(void *in)
                 remaining = 0;
                 break;
             }
-
-            sess->total_in  += qz_sess->inflate_strm->total_in;
-            sess->total_out += qz_sess->inflate_strm->total_out;
-            src_ptr         += qz_sess->inflate_strm->total_in;
-            dest_ptr        += qz_sess->inflate_strm->total_out;
-            src_avail_len   -= qz_sess->inflate_strm->total_in;
-            dest_avail_len  -= qz_sess->inflate_strm->total_out;
-            remaining       -= qz_sess->inflate_strm->total_in;
+            if (data_fmt == QZ_LZ4_FH) {
+                sess->total_in  += tmp_src_avail_len;
+                sess->total_out += tmp_dest_avail_len;
+                src_ptr         += tmp_src_avail_len;
+                dest_ptr        += tmp_dest_avail_len;
+                src_avail_len   -= tmp_src_avail_len;
+                dest_avail_len  -= tmp_dest_avail_len;
+                remaining       -= tmp_src_avail_len;
+            } else {
+                sess->total_in  += qz_sess->inflate_strm->total_in;
+                sess->total_out += qz_sess->inflate_strm->total_out;
+                src_ptr         += qz_sess->inflate_strm->total_in;
+                dest_ptr        += qz_sess->inflate_strm->total_out;
+                src_avail_len   -= qz_sess->inflate_strm->total_in;
+                dest_avail_len  -= qz_sess->inflate_strm->total_out;
+                remaining       -= qz_sess->inflate_strm->total_in;
+            }
             break;
 
         case QZ_OK:
@@ -2728,7 +2737,7 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
     return rc;
 
 sw_decompression:
-    return qzSWDecompressMultiGzip(sess, src, src_len, dest, dest_len);
+    return qzSWDecompressMulti(sess, src, src_len, dest, dest_len);
 }
 
 int qzTeardownSession(QzSession_T *sess)

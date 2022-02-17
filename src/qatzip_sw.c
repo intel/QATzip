@@ -41,6 +41,8 @@
 #include <sys/time.h>
 #include <zlib.h>
 #include <pthread.h>
+#include <lz4frame.h>
+#include <lz4.h>
 
 #include "cpa.h"
 #include "cpa_dc.h"
@@ -66,10 +68,9 @@ static void gen_qatzip_hdr(gz_header *hdr)
     hdr->os = 255;
 }
 
-/* The software failover function for compression request */
-int qzSWCompress(QzSession_T *sess, const unsigned char *src,
-                 unsigned int *src_len, unsigned char *dest,
-                 unsigned int *dest_len, unsigned int last)
+int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
+                        unsigned int *src_len, unsigned char *dest,
+                        unsigned int *dest_len, unsigned int last)
 
 {
     int ret;
@@ -249,10 +250,10 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     return QZ_OK;
 }
 
-/* The software failover function for decompression request */
-int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
-                   unsigned int *src_len, unsigned char *dest,
-                   unsigned int *dest_len)
+int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
+                          unsigned int *src_len, unsigned char *dest,
+                          unsigned int *dest_len)
+
 {
     z_stream *stream = NULL;
     int ret = QZ_OK;
@@ -401,11 +402,11 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
     *dest_len = 0;
 
     while (total_in < input_len && total_out < output_len) {
-        ret = qzSWDecompress(sess,
-                             src + total_in,
-                             &cur_input_len,
-                             dest + total_out,
-                             &cur_output_len);
+        ret = qzDeflateSWDecompress(sess,
+                                    src + total_in,
+                                    &cur_input_len,
+                                    dest + total_out,
+                                    &cur_output_len);
         if (ret != QZ_OK) {
             goto out;
         }
@@ -421,5 +422,332 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
 out:
     QZ_DEBUG("Exit qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
              *src_len, *dest_len);
+    return ret;
+}
+
+int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
+                    unsigned int *src_len, unsigned char *dest,
+                    unsigned int *dest_len, unsigned int last)
+{
+    unsigned int chunk_sz = 0;
+    size_t total_in = 0, total_out = 0;
+    size_t current_loop_in = 0;
+    size_t left_input_sz = *src_len;
+    size_t left_output_sz = *dest_len;
+    QzSess_T *qz_sess = NULL;
+    LZ4F_preferences_t preferences;
+    LZ4F_cctx *cctx;
+    size_t ret = 0;
+
+    /*check if setupSession called*/
+    if (NULL == sess->internal) {
+        ret = qzSetupSession(sess, NULL);
+        if (QZ_SETUP_SESSION_FAIL(ret)) {
+            return ret;
+        }
+    }
+
+    qz_sess = (QzSess_T *) sess->internal;
+    if (qz_sess->cctx == NULL) {
+        ret = LZ4F_createCompressionContext(&(qz_sess->cctx), LZ4F_VERSION);
+        if (LZ4F_isError(ret)) {
+            QZ_ERROR("LZ4F_createCompressionContext error: %s\n", LZ4F_getErrorName(ret));
+            goto lz4_compress_fail;
+        }
+
+        qzMemSet(&preferences, 0, sizeof(LZ4F_preferences_t));
+        preferences.frameInfo.blockMode = 0;
+        preferences.frameInfo.blockChecksumFlag = 0;
+        preferences.frameInfo.contentChecksumFlag = 1;
+        preferences.frameInfo.contentSize = left_input_sz;
+        preferences.autoFlush = 1;
+        preferences.compressionLevel = qz_sess->sess_params.comp_lvl;
+
+        /* LZ4F_compressBegin will create frame header into dest buffer. */
+        ret = LZ4F_compressBegin(qz_sess->cctx, dest, left_output_sz, &preferences);
+        if (LZ4F_isError(ret)) {
+            QZ_ERROR("LZ4F_compressBegin error: %s\n", LZ4F_getErrorName(ret));
+            goto lz4_compress_fail;
+        }
+        total_out += ret;
+        left_output_sz -= ret;
+        dest += ret;
+
+    }
+
+    cctx = qz_sess->cctx;
+    chunk_sz = qz_sess->sess_params.hw_buff_sz;
+    do {
+        current_loop_in = chunk_sz < left_input_sz ? chunk_sz : left_input_sz;
+        ret = LZ4F_compressUpdate(cctx, (void *)dest, left_output_sz,
+                                  (const void *)src, current_loop_in, NULL);
+        if (LZ4F_isError(ret)) {
+            QZ_ERROR("LZ4F_compressUpdate error: %s\n", LZ4F_getErrorName(ret));
+            goto lz4_compress_fail;
+        }
+        src += current_loop_in;
+        dest += ret;
+        left_output_sz -= ret;
+        left_input_sz -= current_loop_in;
+        total_out += ret;
+        total_in += current_loop_in;
+
+    } while (left_input_sz > 0);
+
+    /* Call LZ4F_compressEnd to finish an lz4 frame, wirte an endmark and a checksum
+     * to dest buffer. */
+    ret = LZ4F_compressEnd(cctx, (void *)dest, left_output_sz,
+                           NULL);
+    if (LZ4F_isError(ret)) {
+        QZ_ERROR("LZ4F_compressEnd error: %s\n", LZ4F_getErrorName(ret));
+        goto lz4_compress_fail;
+    }
+    total_out += ret;
+
+    LZ4F_freeCompressionContext(qz_sess->cctx);
+    qz_sess->cctx = NULL;
+
+    *src_len = total_in;
+    *dest_len = total_out;
+    QZ_DEBUG("Exit qzLZ4SWCompress: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+
+    return QZ_OK;
+
+lz4_compress_fail:
+    if (qz_sess->cctx != NULL) {
+        LZ4F_freeCompressionContext(qz_sess->cctx);
+        qz_sess->cctx = NULL;
+    }
+    *src_len = 0;
+    *dest_len = 0;
+    return QZ_FAIL;
+}
+
+int qzLZ4SWDecompress(QzSession_T *sess, const unsigned char *src,
+                      unsigned int *src_len, unsigned char *dest,
+                      unsigned int *dest_len)
+{
+    size_t in_sz = 0;
+    size_t out_sz = 0;
+    int ret = QZ_OK;
+    QzSess_T *qz_sess = NULL;
+    QZ_DEBUG("Enter qzLZ4SWDecompress: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+
+    qz_sess = (QzSess_T *) sess->internal;
+    if (qz_sess->dctx == NULL) {
+        ret = LZ4F_createDecompressionContext(&(qz_sess->dctx), LZ4F_VERSION);
+        if (LZ4F_isError(ret)) {
+            QZ_ERROR("LZ4F_createDecompressionContext error: %s\n",
+                     LZ4F_getErrorName(ret));
+            goto lz4_decompress_fail;
+        }
+    }
+
+    in_sz = *src_len;
+    out_sz = *dest_len;
+    ret = LZ4F_decompress(qz_sess->dctx, dest, (size_t *)&out_sz,
+                          src, (size_t *)&in_sz, NULL);
+    if (ret < 0) {
+        QZ_ERROR("LZ4F_decompress error: %s\n", LZ4F_getErrorName(ret));
+        goto lz4_decompress_fail;
+    } else if (ret == 0) {
+        /*
+         * when ret == 0, it means that a frame be fully decompressed,
+         * we need to free the dctx, not reuse it to decompress another frame.
+         */
+        LZ4F_freeDecompressionContext(qz_sess->dctx);
+        qz_sess->dctx = NULL;
+        ret = QZ_OK;
+    } else {
+        /*
+         * when ret > 0, it means that the compressed data is not a fully frame,
+         * it needs more compressed data to decompress.
+         */
+        QZ_DEBUG("LZ4F_decompress: incomplete compressed data, need more data\n");
+        ret = Z_DATA_ERROR;
+    }
+
+    *src_len = in_sz;
+    *dest_len = out_sz;
+    QZ_DEBUG("Exit qzLZ4SWDecompress: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+
+    return ret;
+
+lz4_decompress_fail:
+    if (qz_sess->dctx != NULL) {
+        LZ4F_freeDecompressionContext(qz_sess->dctx);
+        qz_sess->dctx = NULL;
+    }
+
+    *src_len = 0;
+    *dest_len  = 0;
+    return QZ_FAIL;
+}
+
+int qzSWDecompressMultiLZ4(QzSession_T *sess, const unsigned char *src,
+                           unsigned int *src_len, unsigned char *dest,
+                           unsigned int *dest_len)
+{
+    int ret = QZ_OK;
+    unsigned int total_in = 0;
+    unsigned int total_out = 0;
+    const unsigned int input_len = *src_len;
+    const unsigned int output_len = *dest_len;
+    unsigned int cur_input_len = input_len;
+    unsigned int cur_output_len = output_len;
+#ifdef QATZIP_DEBUG
+    insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
+#endif
+    QZ_DEBUG("Start qzSWDecompressMultiLz4: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+
+    *src_len = 0;
+    *dest_len = 0;
+
+    while (total_in < input_len && total_out < output_len) {
+        ret = qzLZ4SWDecompress(sess,
+                                src + total_in,
+                                &cur_input_len,
+                                dest + total_out,
+                                &cur_output_len);
+        if (ret != QZ_OK) {
+            goto out;
+        }
+
+        total_in  += cur_input_len;
+        total_out += cur_output_len;
+        cur_input_len  = input_len - total_in;
+        cur_output_len = output_len - total_out;
+        *src_len  = total_in;
+        *dest_len = total_out;
+    }
+
+out:
+    QZ_DEBUG("Exit qzSWDecompressMultiLz4: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+    return ret;
+}
+
+
+/* The software failover function for compression request */
+int qzSWCompress(QzSession_T *sess, const unsigned char *src,
+                 unsigned int *src_len, unsigned char *dest,
+                 unsigned int *dest_len, unsigned int last)
+{
+    int ret = QZ_FAIL;
+    QzDataFormat_T data_fmt;
+    QzSess_T *qz_sess = NULL;
+
+    /*check if setupSession called*/
+    if (NULL == sess->internal) {
+        ret = qzSetupSession(sess, NULL);
+        if (QZ_SETUP_SESSION_FAIL(ret)) {
+            return ret;
+        }
+    }
+
+    qz_sess = (QzSess_T *) sess->internal;
+    data_fmt = qz_sess->sess_params.data_fmt;
+
+    switch (data_fmt) {
+    case QZ_DEFLATE_RAW:
+    case QZ_DEFLATE_GZIP:
+    case QZ_DEFLATE_GZIP_EXT:
+    case QZ_DEFLATE_4B:
+        ret = qzDeflateSWCompress(sess, src, src_len, dest, dest_len, last);
+        break;
+    case QZ_LZ4_FH:
+        ret = qzLZ4SWCompress(sess, src, src_len, dest, dest_len, last);
+        break;
+    default:
+        QZ_ERROR("Unknown/unsupported data formt: %d\n", data_fmt);
+        *src_len = 0;
+        *dest_len = 0;
+        ret = QZ_FAIL;
+        break;
+    }
+    return ret;
+}
+
+/* The software failover function for decompression request */
+int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
+                   unsigned int *src_len, unsigned char *dest,
+                   unsigned int *dest_len)
+{
+    int ret = QZ_FAIL;
+    QzDataFormat_T data_fmt;
+    QzSess_T *qz_sess = NULL;
+
+    /*check if setupSession called*/
+    if (NULL == sess->internal) {
+        ret = qzSetupSession(sess, NULL);
+        if (QZ_SETUP_SESSION_FAIL(ret)) {
+            return ret;
+        }
+    }
+
+    qz_sess = (QzSess_T *) sess->internal;
+    data_fmt = qz_sess->sess_params.data_fmt;
+
+    switch (data_fmt) {
+    case QZ_DEFLATE_RAW:
+    case QZ_DEFLATE_GZIP:
+    case QZ_DEFLATE_GZIP_EXT:
+    case QZ_DEFLATE_4B:
+        ret = qzDeflateSWDecompress(sess, src, src_len, dest, dest_len);
+        break;
+    case QZ_LZ4_FH:
+        ret = qzLZ4SWDecompress(sess, src, src_len, dest, dest_len);
+        break;
+    default:
+        QZ_ERROR("Unknown/unsupported data formt: %d\n", data_fmt);
+        *src_len = 0;
+        *dest_len = 0;
+        ret = QZ_FAIL;
+        break;
+    }
+    return ret;
+}
+
+
+int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
+                        unsigned int *src_len, unsigned char *dest,
+                        unsigned int *dest_len)
+{
+    int ret = QZ_FAIL;
+    QzDataFormat_T data_fmt;
+    QzSess_T *qz_sess = NULL;
+
+    /*check if setupSession called*/
+    if (NULL == sess->internal) {
+        ret = qzSetupSession(sess, NULL);
+        if (QZ_SETUP_SESSION_FAIL(ret)) {
+            return ret;
+        }
+    }
+
+    qz_sess = (QzSess_T *) sess->internal;
+    data_fmt = qz_sess->sess_params.data_fmt;
+
+    switch (data_fmt) {
+    case QZ_DEFLATE_RAW:
+    case QZ_DEFLATE_GZIP:
+    case QZ_DEFLATE_GZIP_EXT:
+    case QZ_DEFLATE_4B:
+        ret = qzSWDecompressMultiGzip(sess, src, src_len, dest, dest_len);
+        break;
+    case QZ_LZ4_FH:
+        ret = qzSWDecompressMultiLZ4(sess, src, src_len, dest, dest_len);
+        break;
+    default:
+        QZ_ERROR("Unknown/unsupported data formt: %d\n", data_fmt);
+        *src_len = 0;
+        *dest_len = 0;
+        ret = QZ_FAIL;
+        break;
+    }
     return ret;
 }

@@ -352,9 +352,9 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
                    unsigned int *uncompressed_buf_len, unsigned char *dest,
                    unsigned int *compressed_buffer_len);
 
-int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
-                            unsigned int *uncompressed_buf_len, unsigned char *dest,
-                            unsigned int *compressed_buffer_len);
+int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
+                        unsigned int *uncompressed_buf_len, unsigned char *dest,
+                        unsigned int *compressed_buffer_len);
 
 int qz_sessParamsCheck(QzSessionParams_T *params);
 
