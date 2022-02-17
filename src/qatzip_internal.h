@@ -41,6 +41,7 @@ extern"C" {
 #endif
 
 #include <zlib.h>
+#include <lz4frame.h>
 
 /**
  *  define lib version
@@ -82,6 +83,38 @@ extern"C" {
 #define unlikely(x) __builtin_expect (!!(x), 0)
 #define DEST_SZ(src_sz)           (((9 * (src_sz)) / 8) + 1024)
 
+/* The minimal supported CAP_DC API version */
+#ifndef CPA_DC_API_VERSION_AT_LEAST
+#define CPA_DC_API_VERSION_AT_LEAST(major, minor)   \
+        (CPA_DC_API_VERSION_NUM_MAJOR > major ||    \
+        (CPA_DC_API_VERSION_NUM_MAJOR == major &&   \
+        CPA_DC_API_VERSION_NUM_MINOR >= minor))
+#endif
+
+/* macros for lz4 */
+#define QZ_LZ4_MAGIC         0x184D2204U
+#define QZ_LZ4_MAGIC_SKIPPABLE 0x184D2A50U
+#define QZ_LZ4_VERSION       0x1
+#define QZ_LZ4_BLK_INDEP     0x0
+#define QZ_LZ4_BLK_CKS_FLAG  0x0
+#define QZ_LZ4_DICT_ID_FLAG  0x0
+#define QZ_LZ4_CNT_SIZE_FLAG 0x1
+#define QZ_LZ4_CNT_CKS_FLAG  0x1
+#define QZ_LZ4_ENDMARK       0x0
+#define QZ_LZ4_MAX_BLK_SIZE  0x4
+
+#define QZ_LZ4_MAGIC_SIZE      4                     //lz4 magic number length
+#define QZ_LZ4_FD_SIZE         11                    //lz4 frame descriptor length
+#define QZ_LZ4_HEADER_SIZE     (QZ_LZ4_MAGIC_SIZE + \
+                                QZ_LZ4_FD_SIZE)      //lz4 frame header length
+#define QZ_LZ4_CHECKSUM_SIZE   4                     //lz4 checksum length
+#define QZ_LZ4_ENDMARK_SIZE    4                     //lz4 endmark length
+#define QZ_LZ4_FOOTER_SIZE     (QZ_LZ4_CHECKSUM_SIZE + \
+                                QZ_LZ4_ENDMARK_SIZE) //lz4 frame footer length
+#define QZ_LZ4_BLK_HEADER_SIZE 4                     //lz4 block header length
+#define QZ_LZ4_STOREDBLOCK_FLAG 0x80000000U
+#define QZ_LZ4_STORED_HEADER_SIZE 4
+
 typedef struct QzCpaStream_S {
     signed long seq;
     signed long src1;
@@ -94,8 +127,8 @@ typedef struct QzCpaStream_S {
     unsigned char *orig_dest;
     int src_pinned;
     int dest_pinned;
-    unsigned int gzip_footer_checksum;
-    unsigned int gzip_footer_orgdatalen;
+    unsigned int checksum;
+    unsigned int orgdatalen;
     CpaDcOpData opData;
 } QzCpaStream_T;
 
@@ -192,6 +225,8 @@ typedef struct QzSess_S {
 
     z_stream *deflate_strm;
     DeflateState_T deflate_stat;
+    LZ4F_cctx *cctx;
+    LZ4F_dctx *dctx;
 } QzSess_T;
 
 typedef struct QzStreamBuf_S {
@@ -253,6 +288,37 @@ typedef struct QzMem_S {
     int numa;
 } QzMem_T;
 
+#pragma pack(push, 1)
+/* lz4 flag byte */
+typedef struct QzLZ4FLG_S {
+    uint8_t dict_id : 1; /* dictionary present */
+    uint8_t resv1 : 1;
+    uint8_t cnt_cksum : 1; /* content checksum present */
+    uint8_t cnt_size : 1;  /* content size present */
+    uint8_t blk_cksum : 1; /* block checksum present */
+    uint8_t blk_indep : 1; /* block linked/independent */
+    uint8_t version : 2;   /* version */
+} QzLZ4FLG_T;
+
+/* lz4 frame header */
+typedef struct QzLZ4H_S {
+    uint32_t magic; /* LZ4 magic number */
+    QzLZ4FLG_T bit_field;
+    uint8_t resv2 : 4;
+    uint8_t blk_maxsize : 3; /* max block size */
+    uint8_t resv3 : 1;
+    uint64_t cnt_size;
+    uint8_t hdr_cksum; /* header checksum */
+} QzLZ4H_T;
+
+/* lz4 frame footer */
+typedef struct QzLZ4F_S {
+    uint32_t end_mark;  /* LZ4 end mark */
+    uint32_t cnt_cksum; /* content checksum */
+} QzLZ4F_T;
+#pragma pack(pop)
+
+
 void dumpAllCounters(void);
 int qzSetupHW(QzSession_T *sess, int i);
 unsigned long qzGzipHeaderSz(void);
@@ -312,4 +378,17 @@ void cleanUpInstMem(int i);
 void qzMemDestory(void);
 
 void streamBufferCleanup();
+
+//lz4 functions
+unsigned long qzLZ4HeaderSz(void);
+unsigned long qzLZ4FooterSz(void);
+void qzLZ4HeaderGen(unsigned char *ptr, CpaDcRqResults *res);
+void qzLZ4FooterGen(unsigned char *ptr, CpaDcRqResults *res);
+unsigned char *findLZ4Footer(const unsigned char *src_ptr,
+                             long src_avail_len);
+int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len);
+int isQATLZ4Processable(const unsigned char *ptr,
+                        const unsigned int *const src_len,
+                        QzSess_T *const qz_sess);
+
 #endif //_QATZIPP_H

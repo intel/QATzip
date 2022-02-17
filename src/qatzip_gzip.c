@@ -77,6 +77,10 @@ inline unsigned long outputFooterSz(QzDataFormat_T data_fmt)
     case QZ_DEFLATE_RAW:
         size = 0;
         break;
+    case QZ_LZ4_FH:
+    case QZ_LZ4S_FH:
+        size = qzLZ4FooterSz();
+        break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
         size = stdGzipFooterSz();
@@ -98,6 +102,10 @@ unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
         break;
     case QZ_DEFLATE_GZIP:
         size = stdGzipHeaderSz();
+        break;
+    case QZ_LZ4_FH:
+    case QZ_LZ4S_FH:
+        size = qzLZ4HeaderSz();
         break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
@@ -182,6 +190,10 @@ void outputHeaderGen(unsigned char *ptr,
     case QZ_DEFLATE_GZIP:
         stdGzipHeaderGen(ptr, res);
         break;
+    case QZ_LZ4_FH:
+    case QZ_LZ4S_FH:
+        qzLZ4HeaderGen(ptr, res);
+        break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
         qzGzipHeaderGen(ptr, res);
@@ -189,9 +201,9 @@ void outputHeaderGen(unsigned char *ptr,
     }
 }
 
-int isQATProcessable(const unsigned char *ptr,
-                     const unsigned int *const src_len,
-                     QzSess_T *const qz_sess)
+static int isQATDeflateProcessable(const unsigned char *ptr,
+                                   const unsigned int *const src_len,
+                                   QzSess_T *const qz_sess)
 {
     QzGzH_T *h = (QzGzH_T *)ptr;
     Qz4BH_T *h_4B;
@@ -234,6 +246,34 @@ int isQATProcessable(const unsigned char *ptr,
 
     return (h->extra.st1 == 'Q'  && \
             h->extra.st2 == 'Z');
+}
+
+int isQATProcessable(const unsigned char *ptr,
+                     const unsigned int *const src_len,
+                     QzSess_T *const qz_sess)
+{
+    uint32_t rc = 0;
+    QzDataFormat_T data_fmt;
+    assert(ptr != NULL);
+    assert(src_len != NULL);
+    assert(qz_sess != NULL);
+
+
+    data_fmt = qz_sess->sess_params.data_fmt;
+    switch (data_fmt) {
+    case QZ_DEFLATE_4B:
+    case QZ_DEFLATE_GZIP:
+    case QZ_DEFLATE_GZIP_EXT:
+        rc = isQATDeflateProcessable(ptr, src_len, qz_sess);
+        break;
+    case QZ_LZ4_FH:
+        rc = isQATLZ4Processable(ptr, src_len, qz_sess);
+        break;
+    default:
+        rc = 0;
+        break;
+    }
+    return rc;
 }
 
 int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr)
@@ -284,6 +324,10 @@ inline void outputFooterGen(QzSess_T *qz_sess,
     unsigned char *ptr = qz_sess->next_dest;
     switch (data_fmt) {
     case QZ_DEFLATE_RAW:
+        break;
+    case QZ_LZ4_FH:
+    case QZ_LZ4S_FH:
+        qzLZ4FooterGen(ptr, res);
         break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
