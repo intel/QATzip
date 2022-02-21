@@ -81,7 +81,7 @@ extern"C" {
  *    and minor number definitions represent the complete version number for
  *    this interface.
  *****************************************************************************/
-#define QATZIP_API_VERSION_NUM_MINOR (6)
+#define QATZIP_API_VERSION_NUM_MINOR (7)
 
 /* Define a macro as an integer to test */
 #define QATZIP_API_VERSION    (QATZIP_API_VERSION_NUM_MAJOR * 10000 +      \
@@ -569,8 +569,8 @@ QATZIP_API int qzInit(QzSession_T *sess,  unsigned char sw_backup);
  *    Before this function is called, the hardware must have been
  *    successfully started via qzInit.
  *
- *    If *sess includes an existing hardware or software session, then this
- *    session will be torn down before a new one is attempted.
+ *    If *sess includes an existing hardware or software session, then
+ *    QZ_DUPLICATE will be returned without modifying the existing session.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -593,6 +593,8 @@ QATZIP_API int qzInit(QzSession_T *sess,  unsigned char sw_backup);
  * @retval QZ_OK                   Function executed successfully. A hardware
  *                                 or software based compression session has been
  *                                 created
+ * @retval QZ_DUPLICATE            *sess includes an existing hardware or
+ *                                 software session
  * @retval QZ_PARAMS               *sess is NULL or member of params is invalid
  * @retval QZ_NOSW_NO_HW           No hardware and no sw session being
  *                                 established
