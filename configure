@@ -142,15 +142,15 @@ includedir=${includedir:-$prefix/include}
 mandir=${mandir:-$prefix/share/man}
 
 # define CFLAGS and LDFLAGS if no environment variables defined
-if test -z ${CFLAGS}; then
-  CFLAGS='-Wall -Werror -std=gnu99 -pedantic -fstack-protector -fPIE -fPIC -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv'
+if test -z "${CFLAGS}"; then
+  CFLAGS="-Wall -Werror -std=gnu99 -pedantic -fstack-protector-strong -fPIE -fPIC -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv"
 else
-  CFLAGS+=" -Wall -Werror -std=gnu99 -pedantic -fstack-protector -fPIE -fPIC"
+  CFLAGS+=" -Wall -Werror -std=gnu99 -pedantic -fstack-protector-strong -fPIE -fPIC"
 fi
-if test -z ${LDFLAGS}; then
-  LDFLAGS='-fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
+if test -z "${LDFLAGS}"; then
+  LDFLAGS="-fstack-protector-strong -fPIC -pie -z relro -z now -Wl,-z,noexecstack"
 else
-  LDFLAGS+=" -fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack"
+  LDFLAGS+=" -fstack-protector-strong -fPIC -pie -z relro -z now -Wl,-z,noexecstack"
 fi
 
 # try to build 32 or 64 bit system binary
