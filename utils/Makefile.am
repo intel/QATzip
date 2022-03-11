@@ -1,7 +1,7 @@
 ################################################################
 #   BSD LICENSE
 #
-#   Copyright(c) 2007-2021 Intel Corporation. All rights reserved.
+#   Copyright(c) 2007-2022 Intel Corporation. All rights reserved.
 #   All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or without
@@ -32,20 +32,30 @@
 #
 ################################################################
 
-LIB_STATIC = $(QATZIP_LIB_D)/$(QATZIP_LIB_STATIC)
+bin_PROGRAMS = qzip
+qzip_SOURCES = \
+               qzip_7z.c \
+               qzip_main.c \
+               qzip.c
+qzip_CFLAGS = \
+              -I$(abs_top_srcdir)/include/ \
+              -I$(abs_top_srcdir)/src/    \
+              -I$(abs_top_srcdir)/utils/  \
+              $(COMMON_CFLAGS) \
+              $(ICP_INCLUDE_CFLAGS)
+qzip_LDADD = \
+             $(abs_top_srcdir)/src/.libs/libqatzip.a \
+             $(QATLIB_FLAGS) \
+             $(USDMLIB_FLAGS)
+qzip_LDFLAGS = \
+               $(ICP_LDFLAGS)
 
-all: test  bt
+qzip_obj_CFLAGS = \
+                  -I$(abs_top_srcdir)/include/ \
+                  -I$(abs_top_srcdir)/src/    \
+                  -I$(abs_top_srcdir)/utils/  \
+                  $(COMMON_CFLAGS) \
+                  $(ICP_INCLUDE_CFLAGS)
 
-test: main.o
-	$(CC) $^ -o $@ $(LDFLAGS) $(LIB_STATIC) $(LIBADD)
-
-bt: bt.o
-	$(CC) $^ -o $@ $(LDFLAGS) $(LIB_STATIC) $(LIBADD)
-
-%.o: %.c
-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -c $< -o $@
-
-clean:
-	$(RM) *.o test bt
-
-.PHONY: all test clean
+qzip_obj_without_main: qzip.c qzip_7z.c
+	$(CC) $^ -c $(qzip_obj_CFLAGS)

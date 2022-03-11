@@ -1,7 +1,7 @@
 ################################################################
 #   BSD LICENSE
 #
-#   Copyright(c) 2007-2021 Intel Corporation. All rights reserved.
+#   Copyright(c) 2007-2022 Intel Corporation. All rights reserved.
 #   All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or without
@@ -31,34 +31,6 @@
 #   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################
-
-LIB_SOURCES = qatzip.c qatzip_counter.c qatzip_gzip.c \
-              qatzip_sw.c qatzip_mem.c qatzip_utils.c \
-			  qatzip_stream.c
-
-OBJECTS = $(foreach file,$(LIB_SOURCES),$(file:.c=.o))
-
-LDFLAGS += -shared -Wl,-soname,$(QATZIP_LIB_SHARED).$(VER_M)
-LIB_STATIC_FLAGS = rcs
-
-all: $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED)
-
-# Create the shared library
-$(QATZIP_LIB_SHARED): $(OBJECTS)
-	$(CC) $^ -o $@.$(VER) $(LDFLAGS) $(LIBADD)
-	$(LN_S) -f $@.$(VER) $@
-	$(LN_S) -f $@.$(VER) $@.$(VER_M)
-
-# Create the static library
-$(QATZIP_LIB_STATIC): $(OBJECTS)
-	$(AR) $(LIB_STATIC_FLAGS) $@ $^
-
-#Compile the object files with the CFLAGS
-$(OBJECTS): %.o: %.c
-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -c $< -o $@
-
-clean:
-	$(RM) *.o $(QATZIP_LIB_STATIC) $(QATZIP_LIB_SHARED)
-	$(RM) $(QATZIP_LIB_SHARED) $(QATZIP_LIB_SHARED).$(VER) $(QATZIP_LIB_SHARED).$(VER_M)
-
-.PHONY: all clean
+#!/bin/sh
+mkdir -p m4
+autoreconf -vif
