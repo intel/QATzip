@@ -530,7 +530,7 @@ int qzLZ4SWDecompress(QzSession_T *sess, const unsigned char *src,
 {
     size_t in_sz = 0;
     size_t out_sz = 0;
-    int ret = QZ_OK;
+    size_t ret = QZ_OK;
     QzSess_T *qz_sess = NULL;
     QZ_DEBUG("Enter qzLZ4SWDecompress: src_len %u dest_len %u\n",
              *src_len, *dest_len);
@@ -549,7 +549,7 @@ int qzLZ4SWDecompress(QzSession_T *sess, const unsigned char *src,
     out_sz = *dest_len;
     ret = LZ4F_decompress(qz_sess->dctx, dest, (size_t *)&out_sz,
                           src, (size_t *)&in_sz, NULL);
-    if (ret < 0) {
+    if (LZ4F_isError(ret)) {
         QZ_ERROR("LZ4F_decompress error: %s\n", LZ4F_getErrorName(ret));
         goto lz4_decompress_fail;
     } else if (ret == 0) {
@@ -559,14 +559,13 @@ int qzLZ4SWDecompress(QzSession_T *sess, const unsigned char *src,
          */
         LZ4F_freeDecompressionContext(qz_sess->dctx);
         qz_sess->dctx = NULL;
-        ret = QZ_OK;
     } else {
         /*
          * when ret > 0, it means that the compressed data is not a fully frame,
-         * it needs more compressed data to decompress.
+         * it needs more compressed data to decompress. The remaining compressed data
+         * was stored in dctx.
          */
         QZ_DEBUG("LZ4F_decompress: incomplete compressed data, need more data\n");
-        ret = Z_DATA_ERROR;
     }
 
     *src_len = in_sz;
@@ -574,7 +573,7 @@ int qzLZ4SWDecompress(QzSession_T *sess, const unsigned char *src,
     QZ_DEBUG("Exit qzLZ4SWDecompress: src_len %u dest_len %u\n",
              *src_len, *dest_len);
 
-    return ret;
+    return QZ_OK;
 
 lz4_decompress_fail:
     if (qz_sess->dctx != NULL) {
