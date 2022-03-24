@@ -447,8 +447,13 @@ int makeOutName(const char *in_name, const char *out_name,
             return -1;
         }
         /* add suffix */
-        snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
-                 SUFFIX_GZ);
+        if (g_params_th.data_fmt == QZ_DEFLATE_RAW) {
+            snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
+                     SUFFIX_7Z);
+        } else {
+            snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
+                     SUFFIX_GZ);
+        }
     } else {
         if (!hasSuffix(in_name)) {
             QZ_ERROR("%s: Wrong suffix. Supported suffix: 7z/gz.\n",

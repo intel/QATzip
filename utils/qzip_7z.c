@@ -727,6 +727,12 @@ exit:
 int qz7zCompress(QzSession_T *sess, Qz7zItemList_T *list,
                  const char *out_name)
 {
+    char oname[MAX_PATH_LEN];
+    qzMemSet(oname, 0, MAX_PATH_LEN);
+    //add 7z suffix
+    if (makeOutName(out_name, out_name, oname, 1) == 0) {
+        out_name = oname;
+    }
     return doCompressFile(sess, list, out_name);
 }
 
