@@ -98,7 +98,8 @@ int qzMemFindAddr(unsigned char *a)
     al = (unsigned long)a;
     b = (al & PAGE_MASK);
 
-    rc = (PINNED == loadAddr(&g_qz_page_table, (void *)b)) ? 1 : 0;
+    rc = (PINNED == loadAddr(&g_qz_page_table,
+                             (void *)b)) ? PINNED_MEM : COMMON_MEM;
     if (0 != rc) {
         QZ_DEBUG("Find 0x%lx in page table\n", b);
     }

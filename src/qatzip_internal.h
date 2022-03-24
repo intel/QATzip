@@ -125,8 +125,8 @@ typedef struct QzCpaStream_S {
     CpaStatus job_status;
     unsigned char *orig_src;
     unsigned char *orig_dest;
-    int src_pinned;
-    int dest_pinned;
+    int src_need_reset;
+    int dest_need_reset;
     unsigned int checksum;
     unsigned int orgdatalen;
     CpaDcOpData opData;
