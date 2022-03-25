@@ -67,7 +67,14 @@
 #define ARRAY_LEN(arr)      (sizeof(arr) / sizeof((arr)[0]))
 #define KB                  (1024)
 #define MB                  (KB * KB)
-
+/* According to different platforms,
+ * instance total = instance on each device * num of device */
+#define G_PROCESS_NUM_INSTANCES_4 4                                 /* instance=4 * device=1 */
+#define G_PROCESS_NUM_INSTANCES_8 8                                 /* instance=1 * device=8 */
+#define G_PROCESS_NUM_INSTANCES_12 12                               /* instance=4 * device=3 */
+#define G_PROCESS_NUM_INSTANCES_16 16                               /* instance=4 * device=4 */
+#define G_PROCESS_NUM_INSTANCES_32 32                               /* instance=4 * device=8 */
+#define G_PROCESS_NUM_INSTANCES_64 64                               /* instance=4 * device=16 */
 #define MAX_HUGEPAGE_FILE  "/sys/module/usdm_drv/parameters/max_huge_pages"
 
 #define QZ_INIT_HW_FAIL(rc)       (QZ_OK != rc        && \
@@ -3760,8 +3767,12 @@ static int qz_do_g_process_Check(void)
 {
     if (g_process.qz_init_status == QZ_OK &&
         g_process.sw_backup == 1 &&
-        (g_process.num_instances == 12 || g_process.num_instances == 4 ||
-        g_process.num_instances == 32) &&
+        (g_process.num_instances == G_PROCESS_NUM_INSTANCES_12 ||
+         g_process.num_instances == G_PROCESS_NUM_INSTANCES_4 ||
+         g_process.num_instances == G_PROCESS_NUM_INSTANCES_16 ||
+         g_process.num_instances == G_PROCESS_NUM_INSTANCES_32 ||
+         g_process.num_instances == G_PROCESS_NUM_INSTANCES_8 ||
+         g_process.num_instances == G_PROCESS_NUM_INSTANCES_64) &&
         g_process.qat_available == CPA_TRUE) {
         return QZ_OK;
     } else {
