@@ -1905,8 +1905,6 @@ exit:
     qzEndStream(&comp_sess, &comp_strm);
     (void)qzTeardownSession(&comp_sess);
     (void)qzTeardownSession(&decomp_sess);
-    qzClose(&comp_sess);
-    qzClose(&decomp_sess);
     return NULL;
 }
 
