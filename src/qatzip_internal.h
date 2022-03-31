@@ -114,6 +114,7 @@ extern"C" {
 #define QZ_LZ4_BLK_HEADER_SIZE 4                     //lz4 block header length
 #define QZ_LZ4_STOREDBLOCK_FLAG 0x80000000U
 #define QZ_LZ4_STORED_HEADER_SIZE 4
+#define QZ_MAX_ZSTD_BLK_SZ          (128 * 1024)
 
 typedef struct QzCpaStream_S {
     signed long seq;
@@ -227,6 +228,7 @@ typedef struct QzSess_S {
     DeflateState_T deflate_stat;
     LZ4F_cctx *cctx;
     LZ4F_dctx *dctx;
+    void *callback_external;
 } QzSess_T;
 
 typedef struct QzStreamBuf_S {
@@ -390,5 +392,9 @@ int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len);
 int isQATLZ4Processable(const unsigned char *ptr,
                         const unsigned int *const src_len,
                         QzSess_T *const qz_sess);
+
+unsigned long qzLZ4SHeaderSz(void);
+void qzLZ4SHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
+
 
 #endif //_QATZIPP_H

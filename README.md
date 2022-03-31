@@ -13,6 +13,7 @@
     - [Build Intel&reg; QuickAssist Technology Driver](#build-intel-quickassist-technology-driver)
     - [Install QATzip As Root User](#install-qatzip-as-root-user)
     - [Install QATzip As Non-root User](#install-qatzip-as-non-root-user)
+    - [Enable qzstd](#enable-qzstd)
     - [Test QATzip](#test-qatzip)
     - [Performance Test With QATzip](#performance-test-with-qatzip)
 - [QATzip API manual](#qatzip-api-manual)
@@ -74,6 +75,8 @@ ratio and throughput for data sets that are submitted piecemeal.
 * For 4xxx(QAT gen 4 devices), QATzip supports lz4s compression algorithm, the QATzip can generate
 lz4s block with lz4 frame format, which can be used for software post-processing to generate
 other compressed data format.
+* For 4xxx(QAT gen 4 devices), QATzip supports ZSTD format compression, through import post-process 
+mechanism. this feature request to enable qzstd. 
 
 ## Hardware Requirements
 
@@ -101,6 +104,7 @@ Please download the QAT driver from the link https://01.org/intel-quickassist-te
 * Suggest GCC\* of version 4.8.5 or higher
 * lz4\* library
 * xxhash\* library
+* zstd\* static library
 
 ## Additional Information
 
@@ -124,6 +128,7 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
 * For 7z format, decompression only supports software.
 * For 7z format, the header compression is not supported.
 * For lz4(s) compression, QATzip supports 32KB history buffer.
+* For zstd format compression, qzstd only supprots `hw_buffer_sz` which is less than 128KB. 
 * Stream APIs do not support deflate_4B compression/decompression now.
 
 
@@ -274,6 +279,36 @@ With current configuration, each PCI-e device in C6XX platform could support
 ```
 
 For more configure options, please run "./configure -h" for help
+
+### Enable qzstd
+if you want to enable lz4s + postprocessing pipeline, you have to compile qzstd. which
+is a sample app to support ZSTD format compression/decompression. before enabling qzstd,
+make sure that you have installed zstd static lib.
+
+**Compile qzstd**
+
+```bash
+    cd $QZ_ROOT
+    ./configure --enable-lz4s-postprocessing
+    make clean
+    make qzstd
+```
+**test qzstd**
+
+```bash
+    qzstd -h
+    
+    it could support below options:
+    "Compress or uncompress a file with zstandard format.",
+    "",
+    "  -d,       decompress",
+    "  -h,       show help information",
+    "  -L,       set compression level of QAT",
+    "  -o,       set output file name",
+    "  -C,       set chunk size",
+    "  -r,       set max inflight request number",
+    "  -P,       set polling mode, only supports busy polling settings", 
+```
 
 ### Test QATzip
 

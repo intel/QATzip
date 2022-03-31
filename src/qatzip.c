@@ -132,7 +132,9 @@ QzSessionParams_T g_sess_params_default = {
     .input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
     .req_cnt_thrshold  = QZ_REQ_THRESHOLD_DEFAULT,
     .wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT,
-    .is_busy_polling   = QZ_PERIODICAL_POLLING
+    .is_busy_polling   = QZ_PERIODICAL_POLLING,
+    .qzCallback        = NULL,
+    .qzCallback_external = NULL
 };
 
 processData_T g_process = {
@@ -287,6 +289,7 @@ static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
         return QZ_FAIL;
 #endif
         break;
+    case QZ_ZSTD_RAW:
     case QZ_DEFLATE_4B:
     case QZ_DEFLATE_GZIP:
     case QZ_DEFLATE_GZIP_EXT:
@@ -414,6 +417,14 @@ int qz_sessParamsCheck(QzSessionParams_T *params)
         params->req_cnt_thrshold < QZ_REQ_THRESHOLD_MINIMUM   ||
         params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXIMUM) {
         return FAILURE;
+    }
+
+    //limit hw buffer size for zstd
+    if (likely(params->data_fmt == QZ_LZ4S_FH && params->qzCallback != NULL)) {
+        if (params->hw_buff_sz > QZ_MAX_ZSTD_BLK_SZ) {
+            QZ_ERROR("max chunksize can't exceed 128 KB when data format is zstd\n");
+            return FAILURE;
+        }
     }
 
     return SUCCESS;
@@ -1009,7 +1020,7 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
     }
 
     qz_sess->force_sw = 0;
-
+    qz_sess->callback_external = qz_sess->sess_params.qzCallback_external;
     /*set up cpaDc Session params*/
     qz_sess->session_setup_data.compLevel = qz_sess->sess_params.comp_lvl;
     switch (qz_sess->sess_params.data_fmt) {
@@ -1051,6 +1062,16 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
         break;
 #else
         QZ_ERROR("QAT driver does not support lz4s algorithm\n");
+        return QZ_PARAMS;
+#endif
+    case QZ_ZSTD_RAW:
+#if CPA_DC_API_VERSION_AT_LEAST(3,1)
+        qz_sess->session_setup_data.compType = CPA_DC_LZ4S;
+        qz_sess->session_setup_data.minMatch = CPA_DC_MIN_3_BYTE_MATCH;
+        qz_sess->session_setup_data.checksum = CPA_DC_XXHASH32;
+        break;
+#else
+        QZ_DEBUG("QAT driver does not support zstd algorithm\n");
         return QZ_PARAMS;
 #endif
     default:
@@ -1869,7 +1890,8 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
                  data_fmt != QZ_DEFLATE_GZIP &&
                  data_fmt != QZ_DEFLATE_GZIP_EXT &&
                  data_fmt != QZ_LZ4_FH &&
-                 data_fmt != QZ_LZ4S_FH)) {
+                 data_fmt != QZ_LZ4S_FH &&
+                 data_fmt != QZ_ZSTD_RAW)) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
         *src_len = 0;
         *dest_len = 0;
@@ -1981,6 +2003,29 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     QZ_DEBUG("\n********* total_in = %lu total_out = %lu src_len = %u dest_len = %u\n",
              sess->total_in, sess->total_out, *src_len, *dest_len);
     assert(*dest_len == sess->total_out);
+
+    //trigger post-processing
+    if (data_fmt == QZ_LZ4S_FH && qz_sess->sess_params.qzCallback) {
+        if (sess->thd_sess_stat == QZ_OK ||
+            (sess->thd_sess_stat == QZ_BUF_ERROR && 0 != *src_len)) {
+            int error_code = qz_sess->sess_params.qzCallback(qz_sess->callback_external,
+                             src, src_len, dest, dest_len);
+            if (error_code >= 0) {
+                sess->total_out = *dest_len;
+                sess->post_process_stat = 0;
+            } else {
+                QZ_DEBUG("Error when call lz4s post-processing callback\n");
+                sess->thd_sess_stat = QZ_POST_PROCESS_ERROR;
+                sess->post_process_stat = error_code;
+                *src_len = 0;
+                *dest_len = 0;
+            }
+        } else {
+            QZ_DEBUG("Error lz4s compresse failed\n");
+            *src_len = 0;
+            *dest_len = 0;
+        }
+    }
 
     return sess->thd_sess_stat;
 

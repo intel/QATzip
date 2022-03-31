@@ -339,6 +339,9 @@ typedef enum QzCrcType_E {
 /**<Session may require software, but no software is available */
 #define QZ_NOSW_UNSUPPORTED_FMT (-116)
 /**< Not using SW: QAT device does not support data format */
+#define QZ_POST_PROCESS_ERROR   (-117)
+/**< Using post process: post process callback returned an error */
+/**< The specific error code can be checked in QzSession_S   */
 
 #define QZ_MAX_ALGORITHMS  ((int)255)
 #define QZ_DEFLATE         ((unsigned char)8)

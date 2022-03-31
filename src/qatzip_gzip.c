@@ -68,6 +68,15 @@ inline unsigned long stdGzipFooterSz(void)
     return sizeof(StdGzF_T);
 }
 
+// LZ4S header should have the same size with LZ4.
+// Note: QAT HW compressed LZ4S block without block size at block beginning.
+//      Combind LZ4 frame header size and SW block size as LZ4S header size.
+inline unsigned long qzLZ4SHeaderSz(void)
+{
+    //Lz4 frame header size + block header size
+    return qzLZ4HeaderSz() + QZ_LZ4_BLK_HEADER_SIZE;
+}
+
 inline unsigned long outputFooterSz(QzDataFormat_T data_fmt)
 {
     unsigned long size = 0;
@@ -79,6 +88,7 @@ inline unsigned long outputFooterSz(QzDataFormat_T data_fmt)
         break;
     case QZ_LZ4_FH:
     case QZ_LZ4S_FH:
+    case QZ_ZSTD_RAW:   //same as lz4 footer
         size = qzLZ4FooterSz();
         break;
     case QZ_DEFLATE_GZIP_EXT:
@@ -100,12 +110,16 @@ unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
         break;
     case QZ_DEFLATE_RAW:
         break;
+    case QZ_ZSTD_RAW:
+        break;
     case QZ_DEFLATE_GZIP:
         size = stdGzipHeaderSz();
         break;
     case QZ_LZ4_FH:
-    case QZ_LZ4S_FH:
         size = qzLZ4HeaderSz();
+        break;
+    case QZ_LZ4S_FH:
+        size = qzLZ4SHeaderSz();
         break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
@@ -175,6 +189,24 @@ void qz4BHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
     hdr->blk_size = res->produced;
 }
 
+/* Because QAT HW generate LZ4S block without block size at block beginning.
+*  if just add LZ4 frame header and frame footer to those block, it's going
+*  to be very hard to find out where is block ending. so Append block size to
+*  every LZ4S block. it will make LZ4S frame have the same format just like
+*  LZ4 frame.
+*/
+void qzLZ4SHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
+{
+    assert(ptr != NULL);
+    assert(res != NULL);
+    //frame header contains content size
+    qzLZ4HeaderGen(ptr, res);
+
+    //block header contains block size
+    unsigned int *blk_size = (unsigned int *)(ptr + sizeof(QzLZ4H_T));
+    *blk_size = (unsigned int)res->produced;
+}
+
 void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      QzDataFormat_T data_fmt)
@@ -191,8 +223,12 @@ void outputHeaderGen(unsigned char *ptr,
         stdGzipHeaderGen(ptr, res);
         break;
     case QZ_LZ4_FH:
-    case QZ_LZ4S_FH:
         qzLZ4HeaderGen(ptr, res);
+        break;
+    case QZ_LZ4S_FH:
+        qzLZ4SHeaderGen(ptr, res);
+        break;
+    case QZ_ZSTD_RAW:
         break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
@@ -327,6 +363,7 @@ inline void outputFooterGen(QzSess_T *qz_sess,
         break;
     case QZ_LZ4_FH:
     case QZ_LZ4S_FH:
+    case QZ_ZSTD_RAW:
         qzLZ4FooterGen(ptr, res);
         break;
     case QZ_DEFLATE_GZIP_EXT:
