@@ -165,6 +165,7 @@ static void *streamBufferAlloc(size_t sz, int numa, int pinned)
 
     void *ret  = NULL;
     StreamBuffNode_T *node;
+    int i;
 
     for (node = g_strm_buff_list_free.head; node != NULL; node = node->next) {
         if (pinned == node->pinned && sz <= node->size) {
@@ -182,7 +183,7 @@ static void *streamBufferAlloc(size_t sz, int numa, int pinned)
         }
     }
 
-    for (int i = 0; i < STREAM_BUFF_LIST_SZ; ++i) {
+    for (i = 0; i < STREAM_BUFF_LIST_SZ; ++i) {
         node = malloc(sizeof(StreamBuffNode_T));
         if (NULL == node) {
             break;
@@ -205,7 +206,7 @@ static void *streamBufferAlloc(size_t sz, int numa, int pinned)
         }
     }
 
-    for (node = g_strm_buff_list_free.head; node != NULL; node = node->next) {
+    for (node = g_strm_buff_list_free.tail; node != NULL; node = node->prev) {
         if (pinned == node->pinned && sz <= node->size) {
             if (!removeNodeFromList(node, &g_strm_buff_list_free)) {
                 ret = NULL;
