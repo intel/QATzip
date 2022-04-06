@@ -135,7 +135,7 @@ static void qzMemRegAddr(unsigned char *a, size_t sz)
     pthread_mutex_unlock(&g_qz_table_lock);
 }
 
-static void qzMemDestory(void)
+void qzMemDestory(void)
 {
     if (0 == g_table_init) {
         return;
@@ -167,7 +167,6 @@ void *qzMalloc(size_t sz, int numa, int pinned)
         if (0 == g_table_init) {
             qzMemSet(&g_qz_page_table, 0, sizeof(QzPageTable_T));
             g_table_init = 1;
-            atexit(qzMemDestory);
         }
 
         if (0 != pthread_mutex_unlock(&g_qz_table_lock)) {

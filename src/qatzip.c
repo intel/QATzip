@@ -420,7 +420,17 @@ reset:
 
 static void exitFunc(void)
 {
+    int i = 0;
+
+    for (i = 0; i <  g_process.num_instances; i++) {
+        removeSession(i);
+        cleanUpInstMem(i);
+    }
+
+    streamBufferCleanup();
+
     stopQat();
+    qzMemDestory();
 #ifdef QATZIP_DEBUG
     dumpThreadInfo();
 #endif
@@ -681,7 +691,7 @@ done:
  * internally, those buffers are source buffer,
  * intermeidate buffer and destination buffer
  */
-static void cleanUpInstMem(int i)
+void cleanUpInstMem(int i)
 {
     int j;
 
@@ -2473,27 +2483,9 @@ void removeSession(int i)
 
 int qzClose(QzSession_T *sess)
 {
-    int i;
-
     if (unlikely(sess == NULL)) {
         return QZ_PARAMS;
     }
-
-    if (unlikely(0 != pthread_mutex_lock(&g_lock))) {
-        return QZ_FAIL;
-    }
-
-    for (i = 0; i <  g_process.num_instances; i++) {
-        removeSession(i);
-        cleanUpInstMem(i);
-    }
-
-    stopQat();
-    if (unlikely(0 != pthread_mutex_unlock(&g_lock))) {
-        return QZ_FAIL;
-    }
-
-    streamBufferCleanup();
 
     return QZ_OK;
 }

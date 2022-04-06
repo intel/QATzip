@@ -220,10 +220,6 @@ static void allocSomeNodesForFreeList(size_t sz, int numa, int pinned)
         node->pinned = pinned;
         node->size = sz;
 
-        if (NULL == g_strm_buff_list_free.head) {
-            atexit(streamBufferCleanup);
-        }
-
         if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_free.mutex))) {
             QZ_ERROR("Failed to get Mutex Lock.\n");
             free(node);
