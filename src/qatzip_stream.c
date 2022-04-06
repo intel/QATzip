@@ -132,9 +132,7 @@ void streamBufferCleanup()
     while (node != NULL) {
         next = node->next;
         removeNodeFromList(node, &g_strm_buff_list_used);
-        if (NULL != node->buffer) {
-            qzFree(node->buffer);
-        }
+        qzFree(node->buffer);
         free(node);
         node = next;
     }
@@ -143,9 +141,7 @@ void streamBufferCleanup()
     while (node != NULL) {
         next = node->next;
         removeNodeFromList(node, &g_strm_buff_list_free);
-        if (NULL != node->buffer) {
-            qzFree(node->buffer);
-        }
+        qzFree(node->buffer);
         free(node);
         node = next;
     }
