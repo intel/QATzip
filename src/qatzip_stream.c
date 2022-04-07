@@ -226,10 +226,12 @@ static void allocSomeNodesForFreeList(size_t sz, int numa, int pinned)
 
         if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_free.mutex))) {
             QZ_ERROR("Failed to get Mutex Lock.\n");
+            free(node);
             return;
         }
 
         if (!addNodeToList(node, &g_strm_buff_list_free)) {
+            free(node);
             if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_free.mutex))) {
                 QZ_ERROR("Failed to release Mutex Lock.\n");
                 return;
@@ -238,6 +240,7 @@ static void allocSomeNodesForFreeList(size_t sz, int numa, int pinned)
 
         if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_free.mutex))) {
             QZ_ERROR("Failed to release Mutex Lock.\n");
+            free(node);
             return;
         }
     }
