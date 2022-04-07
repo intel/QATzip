@@ -75,7 +75,6 @@ StreamBuffNodeList_T g_strm_buff_list_used = {
     .mutex = PTHREAD_MUTEX_INITIALIZER
 };
 
-
 static inline int addNodeToList(StreamBuffNode_T *node,
                                 StreamBuffNodeList_T *buff_list)
 {
