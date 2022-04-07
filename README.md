@@ -107,6 +107,8 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
   object with qzTeardownSession(). Otherwise, memory leak happens.
 * For stream object, stream lenth must be smaller than `strm_buff_sz`, or QATzip would generate multiple
   deflate block in order and has the last block with BFIN set.
+* For stream object, we will optimize the performance of pre-allocation process using thread-local
+  stream buffer list in futhrer release.
 * For 7z format, decompression only supports \*.7z archives compressed by qzip.
 * For 7z format, decompression only supports software.
 * For 7z format, the header compression is not supported.

@@ -75,7 +75,6 @@ StreamBuffNodeList_T g_strm_buff_list_used = {
     .mutex = PTHREAD_MUTEX_INITIALIZER
 };
 
-pthread_mutex_t g_strm_buff_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static inline int addNodeToList(StreamBuffNode_T *node,
                                 StreamBuffNodeList_T *buff_list)
@@ -123,7 +122,7 @@ void streamBufferCleanup()
     StreamBuffNode_T *node;
     StreamBuffNode_T *next;
 
-    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_mutex))) {
+    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_used.mutex))) {
         QZ_ERROR("Failed to get Mutex Lock.\n");
         return;
     }
@@ -137,6 +136,16 @@ void streamBufferCleanup()
         node = next;
     }
 
+    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_used.mutex))) {
+        QZ_ERROR("Failed to release Mutex Lock.\n");
+        return;
+    }
+
+    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_free.mutex))) {
+        QZ_ERROR("Failed to get Mutex Lock.\n");
+        return;
+    }
+
     node = g_strm_buff_list_free.head;
     while (node != NULL) {
         next = node->next;
@@ -146,39 +155,58 @@ void streamBufferCleanup()
         node = next;
     }
 
-    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_mutex))) {
+    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_free.mutex))) {
         QZ_ERROR("Failed to release Mutex Lock.\n");
         return;
     }
 }
 
-static void *streamBufferAlloc(size_t sz, int numa, int pinned)
+static void *getNodeBuffFromFreeList(size_t sz, int pinned)
 {
-    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_mutex))) {
+    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_free.mutex))) {
+        QZ_ERROR("Failed to get Mutex Lock.\n");
+        return NULL;
+    }
+    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_used.mutex))) {
         QZ_ERROR("Failed to get Mutex Lock.\n");
         return NULL;
     }
 
-    void *ret  = NULL;
+    void *retval  = NULL;
     StreamBuffNode_T *node;
-    int i;
 
     for (node = g_strm_buff_list_free.head; node != NULL; node = node->next) {
         if (pinned == node->pinned && sz <= node->size) {
             if (!removeNodeFromList(node, &g_strm_buff_list_free)) {
-                ret = NULL;
+                retval = NULL;
                 goto done;
             }
             if (!addNodeToList(node, &g_strm_buff_list_used)) {
-                ret = NULL;
+                retval = NULL;
                 goto done;
             }
 
-            ret = node->buffer;
+            retval = node->buffer;
             goto done;
         }
     }
 
+done:
+    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_used.mutex))) {
+        QZ_ERROR("Failed to release Mutex Lock.\n");
+        return NULL;
+    }
+    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_free.mutex))) {
+        QZ_ERROR("Failed to release Mutex Lock.\n");
+        return NULL;
+    }
+    return retval;
+}
+
+static void allocSomeNodesForFreeList(size_t sz, int numa, int pinned)
+{
+    StreamBuffNode_T *node;
+    int i;
     for (i = 0; i < STREAM_BUFF_LIST_SZ; ++i) {
         node = malloc(sizeof(StreamBuffNode_T));
         if (NULL == node) {
@@ -196,41 +224,43 @@ static void *streamBufferAlloc(size_t sz, int numa, int pinned)
         if (NULL == g_strm_buff_list_free.head) {
             atexit(streamBufferCleanup);
         }
+
+        if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_free.mutex))) {
+            QZ_ERROR("Failed to get Mutex Lock.\n");
+            return;
+        }
+
         if (!addNodeToList(node, &g_strm_buff_list_free)) {
-            ret = NULL;
-            goto done;
+            if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_free.mutex))) {
+                QZ_ERROR("Failed to release Mutex Lock.\n");
+                return;
+            }
+        }
+
+        if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_free.mutex))) {
+            QZ_ERROR("Failed to release Mutex Lock.\n");
+            return;
         }
     }
+}
 
-    for (node = g_strm_buff_list_free.tail; node != NULL; node = node->prev) {
-        if (pinned == node->pinned && sz <= node->size) {
-            if (!removeNodeFromList(node, &g_strm_buff_list_free)) {
-                ret = NULL;
-                goto done;
-            }
-            if (!addNodeToList(node, &g_strm_buff_list_used)) {
-                ret = NULL;
-                goto done;
-            }
-
-            ret = node->buffer;
-            goto done;
-        }
+static void *streamBufferAlloc(size_t sz, int numa, int pinned)
+{
+    StreamBuffNode_T *node = getNodeBuffFromFreeList(sz, pinned);
+    if (NULL == node) { //try to add some nodes to free list
+        allocSomeNodesForFreeList(sz, numa, pinned);
+        node = getNodeBuffFromFreeList(sz, pinned);
     }
-
-
-done:
-    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_mutex))) {
-        QZ_ERROR("Failed to release Mutex Lock.\n");
-        return NULL;
-    }
-
-    return ret;
+    return node;
 }
 
 static void streamBufferFree(void *addr)
 {
-    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_mutex))) {
+    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_free.mutex))) {
+        QZ_ERROR("Failed to get Mutex Lock.\n");
+        return;
+    }
+    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_used.mutex))) {
         QZ_ERROR("Failed to get Mutex Lock.\n");
         return;
     }
@@ -255,7 +285,11 @@ static void streamBufferFree(void *addr)
     }
 
 done:
-    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_mutex))) {
+    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_used.mutex))) {
+        QZ_ERROR("Failed to release Mutex Lock.\n");
+        return;
+    }
+    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_free.mutex))) {
         QZ_ERROR("Failed to release Mutex Lock.\n");
         return;
     }
