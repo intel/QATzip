@@ -49,7 +49,7 @@ fi
 
 #get the type of QAT hardware
 platform=`lspci | grep Co-processor | awk '{print $6}' | head -1`
-if [ $platform != "37c8" ]
+if [[ $platform != "37c8" && $platform != "4940" ]]
 then
     platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
     if [[ $platform != "DH895XCC" && $platform != "C62x" ]]
@@ -73,6 +73,10 @@ elif [ $platform = "DH895XCC" ]
 then
     process=8
     \cp $CURRENT_PATH/config_file/dh895xcc/dh895xcc_dev0.conf /etc
+elif [ $platform = "4940" ]
+then
+    process=48
+    \cp $CURRENT_PATH/config_file/4xxx/4xxx*.conf /etc
 fi
 service qat_service restart
 echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
@@ -83,20 +87,28 @@ sleep 5
 #Perform performance test
 echo "Perform performance test"
 thread=4
+if [ $platform = "4940" ]
+then
+    thread=1
+fi
 
 echo > result_comp
+cpu_list=0
 for((numProc_comp = 0; numProc_comp < $process; numProc_comp ++))
 do
-    $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D comp >> result_comp 2>> result_comp_stderr &
+    taskset -c $cpu_list $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D comp >> result_comp 2>> result_comp_stderr &
+    cpu_list=$(($cpu_list + 1))
 done
 wait
 compthroughput=`awk '{sum+=$8} END{print sum}' result_comp`
 echo "compthroughput=$compthroughput Gbps"
 
 echo > result_decomp
+cpu_list=0
 for((numProc_decomp = 0; numProc_decomp < $process; numProc_decomp ++))
 do
-    $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D decomp >> result_decomp 2>> result_decomp_stderr &
+    taskset -c $cpu_list $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D decomp >> result_decomp 2>> result_decomp_stderr &
+    cpu_list=$(($cpu_list + 1))
 done
 wait
 decompthroughput=`awk '{sum+=$8} END{print sum}' result_decomp`
