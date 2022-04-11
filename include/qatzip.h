@@ -191,6 +191,8 @@ typedef enum QzHuffmanHdr_E {
  *
  *****************************************************************************/
 typedef enum PinMem_E {
+    UNSPECIFIED = 0,
+    /**< Type of memory is not specified */
     COMMON_MEM = 0,
     /**< Allocate non-contiguous memory */
     PINNED_MEM
@@ -238,7 +240,14 @@ typedef enum QzDataFormat_E {
     /**< Data is in deflate wrapped by GZip extended header and footer */
     QZ_DEFLATE_RAW,
     /**< Data is in raw deflate format */
-    QZ_FMT_NUM
+    QZ_LZ4_FH,
+    /**< Data is in LZ4 format with frame headers */
+    QZ_LZ4S_FH,
+    /**< Data is in LZ4s format with frame headers */
+    QZ_LZ4S_PP,
+    /**< Data is in LZ4s format and has been post processed */
+    QZ_ZSTD_RAW,
+    /**< Data is in raw zStandard format */
 } QzDataFormat_T;
 
 /**
@@ -252,12 +261,12 @@ typedef enum QzDataFormat_E {
  *
  *****************************************************************************/
 typedef enum QzCrcType_E {
-    QZ_CRC32 = 0,
-    /**< CRC32 checksum */
-    QZ_ADLER,
-    /**< Adler checksum */
-    NONE
+    NONE = 0,
     /**< No checksum */
+    QZ_CRC32,
+    /**< CRC32 checksum */
+    QZ_ADLER
+    /**< Adler checksum */
 } QzCrcType_T;
 
 /**
@@ -327,6 +336,73 @@ typedef enum QzCrcType_E {
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      Post processing callback after LZ4s compression
+ *
+ * @description
+ *        This function will be called in qzCompressCrc for post processing
+ *      of lz4s payloads. Function implementation should be provided by user
+ *      and comply with this prototype's rules. The input paramter 'dest'
+ *      will contain the compressed lz4s format data.
+ *
+ *      The user callback function should be provided through the
+ *      QzSessionParams_T. And set data format of compression to
+ *      'QZ_LZ4S_FH', then post-processing will be trigger.
+ *
+ *      qzCallback's first parameter 'external' can be a customized
+ *      compression context which can be setup before QAT qzSetupSession.
+ *      It can be provided to QATZip though the 'qzCallback_external'
+ *      variable in the QzSessionParams_T structure.
+ *
+ *      ExtStatus will be embedded into extended return codes when
+ *      qzCallbackFn return `QZ_POST_PROCESS_ERROR`. See extended return
+ *      code section and *Ext API for details.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       external    User context provided through the
+ *                              'qzCallback_external' pointer in the
+ *                              QzSessionParams_T structure.
+ * @param[in]       src         Point to source buffer
+ * @param[in,out]   src_len     Length of source buffer. Modified to number
+ *                              of bytes consumed
+ * @param[in]       dest        Point to destination buffer
+ * @param[in,out]   dest_len    Length of destination buffer. Modified
+ *                              to length of compressed data when
+ *                              function returns
+ * @param[in,out]   ExtStatus   'qzCallback' customized error code.
+ *
+ * @retval QZ_OK                    Function executed successfully
+ * @retval QZ_FAIL                  Function did not succeed
+ * @retval QZ_PARAMS                params are invalid
+ * @retval QZ_POST_PROCESS_ERROR    post processing error
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+typedef int (*qzCallbackFn)(void *external, const unsigned char *src,
+                            unsigned int *src_len, unsigned char *dest,
+                            unsigned int *dest_len, int *ExtStatus);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      QATzip Session Initialization parameters
  *
  * @description
@@ -366,13 +442,25 @@ typedef struct QzSessionParams_S {
     unsigned int wait_cnt_thrshold;
     /**< When previous try failed, wait for specific number of calls */
     /**< before retrying to open device. Default threshold is 8 */
+    PinMem_T mem_type;
+    /**< If not specified, default will be Pinned for qat 1.x */
+    /**< and common for QAT 2.0 */
+    qzCallbackFn qzCallback;
+    /**< post processing callback for zstd compression*/
+    void *qzCallback_external;
+    /**< An opaque pointer provided by the user to be passed */
+    /**< into qzCallback during post processing*/
+    unsigned int is_busy_polling;
+    /**< 0 means no busy polling, 1 means busy polling */
+    unsigned int is_sensitive_mode;
+    /**< 0 means disable sensitive mode, 1 means enable sensitive mode*/
+    unsigned int lz4s_mini_match;
+    /**< Set lz4s dictionary mini match, which would be 3 or 4 */
 #ifdef ERR_INJECTION
     FallbackError *fbError;
     FallbackError *fbErrorCurr;
     /* Linked list for simulated errors from HW */
 #endif
-    bool is_busy_polling;
-    /**< true means busy polling */
 } QzSessionParams_T;
 
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
@@ -475,10 +563,14 @@ typedef struct QzStatus_S {
     /**< Are memory slabs coming from huge pages? */
     signed long int hw_session_status;
     /**< One of QATzip Session Status */
-    unsigned char algo_sw[QZ_MAX_ALGORITHMS];
-    /**< Support software algorithms */
-    unsigned char algo_hw[QZ_MAX_ALGORITHMS];
-    /**< Count of hardware devices supporting algorithms */
+    unsigned char algo_sw_comp[QZ_MAX_ALGORITHMS];
+    /**< Support software algorithms for compression*/
+    unsigned char algo_hw_comp[QZ_MAX_ALGORITHMS];
+    /**< Count of hardware devices supporting algorithms for compression */
+    unsigned char algo_sw_decomp[QZ_MAX_ALGORITHMS];
+    /**< Support software algorithms for decompresson */
+    unsigned char algo_hw_decomp[QZ_MAX_ALGORITHMS];
+    /**< Count of hardware devices supporting algorithms for decompression */
 } QzStatus_T;
 
 /**

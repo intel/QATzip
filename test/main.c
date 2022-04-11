@@ -324,7 +324,7 @@ static void dumpOutputData(size_t size, uint8_t *data, char *filename)
     char tmp_filename[] = "QATZip_Output_XXXXXX";
     unsigned int filename_len = 0;
     const unsigned int suffix_len = 3;
-    const char *suffix[QZ_FMT_NUM] = {"df", "gz", "gz"};
+    const char *suffix[] = {"df", "gz", "gz"};
 
     if (0 == size || NULL == data)
         return;
