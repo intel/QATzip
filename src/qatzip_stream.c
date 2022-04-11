@@ -309,7 +309,7 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
 
     /*check if init called*/
     rc = qzInit(sess, getSwBackup(sess));
-    if (QZ_PARAMS == rc || QZ_NOSW_NO_HW == rc || QZ_FAIL == rc) {
+    if (QZ_INIT_FAIL(rc)) {
         return QZ_FAIL;
     }
 
@@ -486,7 +486,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
     /*check if init called*/
     rc = qzInit(sess, getSwBackup(sess));
-    if (QZ_PARAMS == rc || QZ_NOSW_NO_HW == rc || QZ_FAIL == rc) {
+    if (QZ_INIT_FAIL(rc)) {
         return QZ_FAIL;
     }
 

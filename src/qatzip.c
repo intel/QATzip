@@ -70,9 +70,6 @@ const unsigned int g_polling_interval[] = { 10, 10, 20, 30, 60, 100, 200, 400,
 #define INTER_SZ(src_sz)          (2 * (src_sz))
 #define msleep(x)                 usleep((x) * 1000)
 
-#define QZ_INIT_FAIL(rc)          (QZ_PARAMS == rc     || \
-                                   QZ_NOSW_NO_HW == rc || \
-                                   QZ_FAIL == rc)
 #define POLLING_LIST_NUM          (sizeof(g_polling_interval) \
                                     / sizeof(unsigned int))
 #define MAX_GRAB_RETRY            (10)
@@ -369,9 +366,16 @@ static void stopQat(void)
     int i;
     CpaStatus status = CPA_STATUS_SUCCESS;
 
-    if (QZ_NONE == g_process.qz_init_status ||
+    // Those all show No HW, stopQAT do nothing
+    if (CPA_FALSE == g_process.qat_available ||
+        QZ_NONE == g_process.qz_init_status  ||
         QZ_NO_HW == g_process.qz_init_status ||
         QZ_NOSW_NO_HW == g_process.qz_init_status) {
+        goto reset;
+    }
+
+    // scenario: it's called from inside qzinit, Hw init failed
+    if (QZ_NO_INST_ATTACH == g_process.qz_init_status) {
         if (NULL != g_process.dc_inst_handle) {
             free(g_process.dc_inst_handle);
             g_process.dc_inst_handle = NULL;
@@ -380,25 +384,33 @@ static void stopQat(void)
             free(g_process.qz_inst);
             g_process.qz_inst = NULL;
         }
+        (void)icp_sal_userStop();
         goto reset;
     }
 
     QZ_DEBUG("Call stopQat.\n");
-    if (NULL != g_process.dc_inst_handle && NULL != g_process.qz_inst) {
-        for (i = 0; i < g_process.num_instances; i++) {
-            status = cpaDcStopInstance(g_process.dc_inst_handle[i]);
-            if (CPA_STATUS_SUCCESS != status) {
-                QZ_ERROR("Stop instance failed, status=%d\n", status);
+
+    // scenario: qzinit succeed. outside qzinit.
+    if (QZ_OK == g_process.qz_init_status) {
+        if (NULL != g_process.dc_inst_handle && NULL != g_process.qz_inst) {
+            for (i = 0; i < g_process.num_instances; i++) {
+                status = cpaDcStopInstance(g_process.dc_inst_handle[i]);
+                if (CPA_STATUS_SUCCESS != status) {
+                    QZ_ERROR("Stop instance failed, status=%d\n", status);
+                }
             }
+
+            free(g_process.dc_inst_handle);
+            g_process.dc_inst_handle = NULL;
+            free(g_process.qz_inst);
+            g_process.qz_inst = NULL;
         }
-
-        free(g_process.dc_inst_handle);
-        g_process.dc_inst_handle = NULL;
-        free(g_process.qz_inst);
-        g_process.qz_inst = NULL;
+        (void)icp_sal_userStop();
+    } else {
+        QZ_ERROR("qz init status is invalid, status=%d\n",
+                 g_process.qz_init_status);
+        goto reset;
     }
-
-    (void)icp_sal_userStop();
 
 reset:
     g_process.num_instances = (Cpa16U)0;
@@ -426,24 +438,25 @@ static unsigned int getWaitCnt(QzSession_T *sess)
     }
 }
 
-#define BACKOUT                                                    \
+#define BACKOUT(hw_status)                                         \
     stopQat();                                                     \
     if (1 == sw_backup) {                                          \
         g_process.qz_init_status = QZ_NO_HW;                       \
         QZ_ERROR("g_process.qz_init_status = QZ_NO_HW\n");         \
+        rc = QZ_OK;                                                \
     } else if (0 == sw_backup) {                                   \
         g_process.qz_init_status = QZ_NOSW_NO_HW;                  \
         QZ_ERROR("g_process.qz_init_status = QZ_NOSW_NO_HW\n");    \
+        rc = hw_status;                                            \
     }                                                              \
-    rc = g_process.qz_init_status;                                 \
     goto done;
 
-#define QZ_HW_BACKOUT                                              \
+#define QZ_HW_BACKOUT(hw_status)                                   \
     if(qat_hw) {                                                   \
         clearDevices(qat_hw);                                      \
         free(qat_hw);                                              \
     }                                                              \
-    BACKOUT;
+    BACKOUT(hw_status);
 
 const char *getSectionName(void)
 {
@@ -467,12 +480,19 @@ const char *getSectionName(void)
 }
 
 /* Initialize the QAT hardware, get the QAT instance for current
- * process
+ * process.
+ * Note: return value dosen't same as qz_init_status, because return
+ * value align limitation.
+ *
+ * After qzInit, there only are three status to qz_init_status
+ *      1. QZ_OK
+ *      2. QZ_NO_HW
+ *      3. QZ_NOSW_NO_HW
  */
 int qzInit(QzSession_T *sess, unsigned char sw_backup)
 {
     CpaStatus status;
-    int rc = QZ_FAIL, i;
+    int rc = QZ_NOSW_NO_HW, i;
     unsigned int dev_id = 0;
     QzHardware_T *qat_hw = NULL;
     unsigned int instance_found = 0;
@@ -502,12 +522,12 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     waiting = 0;
 
     if (unlikely(0 != pthread_mutex_lock(&g_lock))) {
-        return QZ_FAIL;
+        return QZ_NOSW_NO_HW;
     }
 
     if (QZ_OK == g_process.qz_init_status) {
         if (unlikely(0 != pthread_mutex_unlock(&g_lock))) {
-            return QZ_FAIL;
+            return QZ_NOSW_NO_HW;
         }
         if (g_process.sw_backup != sw_backup) {
             g_process.sw_backup = sw_backup;
@@ -521,11 +541,15 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     init_timers();
     g_process.sw_backup = sw_backup;
 
+    // Start HW initilization. it could be first call qzinit or
+    // Before HW init failed, which mean qz_init_status may be
+    // QZ_NOSW_NO_HW or QZ_NO_HW
+
 #ifdef SAL_DEV_API
     g_process.qat_available = icp_sal_userIsQatAvailable();
     if (CPA_FALSE == g_process.qat_available) {
         QZ_ERROR("Error no hardware, switch to SW if permitted\n");
-        BACKOUT;
+        BACKOUT(QZ_NOSW_NO_HW);
     }
 #else
     status = icp_adf_get_numDevices(&pcie_count);
@@ -541,7 +565,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
 
     if (CPA_FALSE == g_process.qat_available) {
         QZ_ERROR("Error no hardware, switch to SW if permitted\n", status);
-        BACKOUT;
+        BACKOUT(QZ_NOSW_NO_HW);
     }
 #endif
 
@@ -551,13 +575,17 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
                  status);
         waiting = 1;
         wait_cnt = getWaitCnt(sess);
-        BACKOUT;
+        BACKOUT(QZ_NOSW_NO_HW);
     }
+
+    // This status only show inside qzinit. And will replace to others
+    // when qzinit finished.
+    g_process.qz_init_status = QZ_NO_INST_ATTACH;
 
     status = cpaDcGetNumInstances(&g_process.num_instances);
     if (CPA_STATUS_SUCCESS != status) {
         QZ_ERROR("Error in cpaDcGetNumInstances status = %d\n", status);
-        BACKOUT;
+        BACKOUT(QZ_NOSW_NO_INST_ATTACH);
     }
     QZ_DEBUG("Number of instance: %u\n", g_process.num_instances);
 
@@ -566,39 +594,39 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     g_process.qz_inst = calloc(g_process.num_instances, sizeof(QzInstance_T));
     if (unlikely(NULL == g_process.dc_inst_handle || NULL == g_process.qz_inst)) {
         QZ_ERROR("malloc failed\n");
-        BACKOUT;
+        BACKOUT(QZ_NOSW_LOW_MEM);
     }
 
     status = cpaDcGetInstances(g_process.num_instances, g_process.dc_inst_handle);
     if (CPA_STATUS_SUCCESS != status) {
         QZ_ERROR("Error in cpaDcGetInstances status = %d\n", status);
-        BACKOUT;
+        BACKOUT(QZ_NOSW_NO_INST_ATTACH);
     }
 
     qat_hw = calloc(1, sizeof(QzHardware_T));
     if (unlikely(NULL == qat_hw)) {
         QZ_ERROR("malloc failed\n");
-        BACKOUT;
+        BACKOUT(QZ_NOSW_LOW_MEM);
     }
     for (i = 0; i < g_process.num_instances; i++) {
         QzInstanceList_T *new_inst = calloc(1, sizeof(QzInstanceList_T));
         if (unlikely(NULL == new_inst)) {
             QZ_ERROR("malloc failed\n");
-            QZ_HW_BACKOUT;
+            QZ_HW_BACKOUT(QZ_NOSW_LOW_MEM);
         }
 
         status = cpaDcInstanceGetInfo2(g_process.dc_inst_handle[i],
                                        &new_inst->instance.instance_info);
         if (CPA_STATUS_SUCCESS != status) {
             QZ_ERROR("Error in cpaDcInstanceGetInfo2 status = %d\n", status);
-            QZ_HW_BACKOUT;
+            QZ_HW_BACKOUT(QZ_NOSW_NO_HW);
         }
 
         status = cpaDcQueryCapabilities(g_process.dc_inst_handle[i],
                                         &new_inst->instance.instance_cap);
         if (CPA_STATUS_SUCCESS != status) {
             QZ_ERROR("Error in cpaDcQueryCapabilities status = %d\n", status);
-            QZ_HW_BACKOUT;
+            QZ_HW_BACKOUT(QZ_NOSW_NO_HW);
         }
 
         new_inst->instance.lock = 0;
@@ -611,7 +639,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         dev_id = new_inst->instance.instance_info.physInstId.packageId;
         if (unlikely(QZ_OK != setInstance(dev_id, new_inst, qat_hw))) {
             QZ_ERROR("Insert instance on device %d failed\n", dev_id);
-            QZ_HW_BACKOUT;
+            QZ_HW_BACKOUT(QZ_NOSW_NO_INST_ATTACH);
         }
     }
 
@@ -635,7 +663,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     rc = atexit(exitFunc);
     if (unlikely(QZ_OK != rc)) {
         QZ_ERROR("Error in register exit hander rc = %d\n", rc);
-        BACKOUT;
+        BACKOUT(QZ_NOSW_NO_HW);
     }
 
     rc = g_process.qz_init_status = QZ_OK;
@@ -643,7 +671,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
 done:
     initDebugLock();
     if (unlikely(0 != pthread_mutex_unlock(&g_lock))) {
-        return QZ_FAIL;
+        return QZ_NOSW_NO_HW;
     }
 
     return rc;

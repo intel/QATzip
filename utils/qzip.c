@@ -386,7 +386,7 @@ int qatzipSetup(QzSession_T *sess, QzSessionParams_T *params)
 
     QZ_DEBUG("mw>>> sess=%p\n", sess);
     status = qzInit(sess, getSwBackup(sess));
-    if (QZ_OK != status && QZ_DUPLICATE != status && QZ_NO_HW != status) {
+    if (QZ_INIT_FAIL(status)) {
         QZ_ERROR("QAT init failed with error: %d\n", status);
         return ERROR;
     }

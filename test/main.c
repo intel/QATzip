@@ -70,6 +70,10 @@
 
 #define MAX_HUGEPAGE_FILE  "/sys/module/usdm_drv/parameters/max_huge_pages"
 
+#define QZ_INIT_HW_FAIL(rc)       (QZ_OK != rc        && \
+                                   QZ_DUPLICATE != rc && \
+                                   g_process.qz_init_status != QZ_NO_HW)
+
 typedef void *(QzThdOps)(void *);
 
 typedef enum {
@@ -647,7 +651,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
 
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
-        if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+        if (QZ_INIT_HW_FAIL(rc)) {
             pthread_exit((void *)"qzInit failed");
         }
     }
@@ -862,7 +866,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     rc = qzInit(&g_session_th[tid], 0);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         QZ_ERROR("Err: fail to init HW with ret: %d.\n", rc);
         goto end;
     }
@@ -1056,7 +1060,7 @@ void *qzCompressAndDecompress(void *arg)
 
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
-        if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+        if (QZ_INIT_FAIL(rc)) {
             g_ready_thread_count++;
             pthread_cond_signal(&g_ready_cond);
             pthread_exit((void *)"qzInit failed");
@@ -1340,7 +1344,7 @@ void *qzCompressOnPinnedMem(void *thd_arg)
 
     timeCheck(0, tid);
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
@@ -1475,7 +1479,7 @@ void *qzCompressOnCommonMem(void *thd_arg)
 
     timeCheck(0, tid);
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
 
@@ -1929,7 +1933,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     timeCheck(0, tid);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
@@ -2042,7 +2046,7 @@ void *qzCompressStreamOutput(void *thd_arg)
     QZ_DEBUG("Hello from qzCompressStreamOutput id %d\n", tid);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+    if (QZ_INIT_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
@@ -2132,7 +2136,7 @@ void *qzDecompressStreamInput(void *thd_arg)
     QZ_DEBUG("Hello from qzDecompressStreamInput id %d\n", tid);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+    if (QZ_INIT_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
@@ -2222,7 +2226,7 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
     timeCheck(0, tid);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
@@ -2277,7 +2281,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     QZ_PRINT("Hello from qzCompressStreamInvalidQzStreamParam id %d\n", tid);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
@@ -2639,7 +2643,7 @@ void *qzInitPcieCountCheck(void *thd_arg)
     QZ_DEBUG("Start qzInitPcieCountCheck test\n");
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         QZ_ERROR("qzInit1 error. rc = %d\n", rc);
     }
 
@@ -2652,7 +2656,7 @@ void *qzInitPcieCountCheck(void *thd_arg)
              g_process.qat_available);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         QZ_ERROR("qzInit2 error. rc = %d\n", rc);
     }
 
@@ -2862,7 +2866,7 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
     }
 
     rc = qzInit(&sess, 1);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
@@ -3005,7 +3009,7 @@ int qzDecompressForceSW(void)
     }
 
     rc = qzInit(&sess, 1);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
@@ -3283,7 +3287,7 @@ int qzCompressSWL9DecompressHW(void)
     }
 
     rc = qzInit(&sess, 1);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+    if (QZ_INIT_HW_FAIL(rc)) {
         QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
@@ -3400,7 +3404,7 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
     QZ_DEBUG("Hello from qzCompressStreamWithPendingOut id %d\n", tid);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+    if (QZ_INIT_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
@@ -3510,7 +3514,7 @@ void *forkResourceCheck(void *arg)
              g_process.qz_init_status);
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
-        if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+        if (QZ_INIT_FAIL(rc)) {
             g_ready_thread_count++;
             pthread_cond_signal(&g_ready_cond);
             pthread_exit((void *)"qzInit failed");
@@ -3554,7 +3558,7 @@ void *forkResourceCheck(void *arg)
                  g_process.qz_init_status);
         if (!((TestArg_T *)arg)->init_engine_disabled) {
             rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
-            if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+            if (QZ_INIT_FAIL(rc)) {
                 g_ready_thread_count++;
                 pthread_cond_signal(&g_ready_cond);
                 pthread_exit((void *)"qzInit failed");
@@ -3609,7 +3613,7 @@ void *qzDecompressStreamWithBufferError(void *thd_arg)
     QZ_DEBUG("Hello from qzDecompressStreamWithBufferError id %ld\n", tid);
 
     rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (rc != QZ_OK && rc != QZ_DUPLICATE && rc != QZ_NO_HW) {
+    if (QZ_INIT_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);

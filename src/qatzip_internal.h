@@ -71,6 +71,9 @@ extern"C" {
 #define STORED_BLK_MAX_LEN  65535
 #define STORED_BLK_HDR_SZ   5
 
+#define QZ_INIT_FAIL(rc)          (QZ_OK != rc     &&  \
+                                   QZ_DUPLICATE != rc)
+
 #define QZ_SETUP_SESSION_FAIL(rc) (QZ_PARAMS == rc     || \
                                    QZ_NOSW_NO_HW == rc || \
                                    QZ_NOSW_LOW_MEM == rc)

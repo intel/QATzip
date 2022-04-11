@@ -177,8 +177,7 @@ void *qzMalloc(size_t sz, int numa, int pinned)
 
     if (1 == pinned && QZ_NONE == g_process.qz_init_status) {
         status = qzInit(&temp_sess, 1);
-        if (QZ_OK != status && QZ_DUPLICATE != status && QZ_NO_HW != status &&
-            QZ_NOSW_NO_HW != status) {
+        if (QZ_INIT_FAIL(status)) {
             QZ_ERROR("QAT init failed with error: %d\n", status);
             return NULL;
         }
