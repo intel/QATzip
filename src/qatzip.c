@@ -1057,7 +1057,11 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
          * note that when it is CPA_DC_MIN_4_BYTE_MATCH, the LZ4MINMATCH
          * should be 3.
          * */
-        qz_sess->session_setup_data.minMatch = CPA_DC_MIN_3_BYTE_MATCH;
+        if (qz_sess->sess_params.lz4s_mini_match == 4) {
+            qz_sess->session_setup_data.minMatch = CPA_DC_MIN_4_BYTE_MATCH;
+        } else {
+            qz_sess->session_setup_data.minMatch = CPA_DC_MIN_3_BYTE_MATCH;
+        }
         qz_sess->session_setup_data.checksum = CPA_DC_XXHASH32;
         break;
 #else
@@ -1067,7 +1071,11 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
     case QZ_ZSTD_RAW:
 #if CPA_DC_API_VERSION_AT_LEAST(3,1)
         qz_sess->session_setup_data.compType = CPA_DC_LZ4S;
-        qz_sess->session_setup_data.minMatch = CPA_DC_MIN_3_BYTE_MATCH;
+        if (qz_sess->sess_params.lz4s_mini_match == 4) {
+            qz_sess->session_setup_data.minMatch = CPA_DC_MIN_4_BYTE_MATCH;
+        } else {
+            qz_sess->session_setup_data.minMatch = CPA_DC_MIN_3_BYTE_MATCH;
+        }
         qz_sess->session_setup_data.checksum = CPA_DC_XXHASH32;
         break;
 #else
@@ -1826,6 +1834,13 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
                unsigned int *src_len, unsigned char *dest,
                unsigned int *dest_len, unsigned int last)
 {
+    return qzCompressExt(sess, src, src_len, dest, dest_len, last, NULL);
+}
+
+int qzCompressExt(QzSession_T *sess, const unsigned char *src,
+                  unsigned int *src_len, unsigned char *dest,
+                  unsigned int *dest_len, unsigned int last, uint64_t *ext_rc)
+{
     if (NULL == sess || (last != 0 && last != 1)) {
         if (NULL != src_len) {
             *src_len = 0;
@@ -1836,12 +1851,21 @@ int qzCompress(QzSession_T *sess, const unsigned char *src,
         return QZ_PARAMS;
     }
 
-    return qzCompressCrc(sess, src, src_len, dest, dest_len, last, NULL);
+    return qzCompressCrcExt(sess, src, src_len, dest, dest_len, last, NULL, ext_rc);
 }
 
 int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
                   unsigned int *src_len, unsigned char *dest,
-                  unsigned int *dest_len, unsigned int last, unsigned long *crc)
+                  unsigned int *dest_len, unsigned int last,
+                  unsigned long *crc)
+{
+    return qzCompressCrcExt(sess, src, src_len, dest, dest_len, last, crc, NULL);
+}
+
+int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
+                     unsigned int *src_len, unsigned char *dest,
+                     unsigned int *dest_len, unsigned int last,
+                     unsigned long *crc, uint64_t *ext_rc)
 {
     int i, reqcnt;
     unsigned int out_len;
@@ -2008,17 +2032,28 @@ int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
     if (data_fmt == QZ_LZ4S_FH && qz_sess->sess_params.qzCallback) {
         if (sess->thd_sess_stat == QZ_OK ||
             (sess->thd_sess_stat == QZ_BUF_ERROR && 0 != *src_len)) {
-            int error_code = qz_sess->sess_params.qzCallback(qz_sess->callback_external,
-                             src, src_len, dest, dest_len);
-            if (error_code >= 0) {
+            int error_code = 0;
+            int callback_status = qz_sess->sess_params.qzCallback(
+                                      qz_sess->callback_external,
+                                      src, src_len, dest, dest_len,
+                                      &error_code);
+            if (callback_status == QZ_OK) {
                 sess->total_out = *dest_len;
-                sess->post_process_stat = 0;
+                if (!ext_rc) {
+                    QZ_ERROR("Invaild ext_rc pointer!");
+                } else {
+                    *ext_rc = 0;
+                }
             } else {
                 QZ_DEBUG("Error when call lz4s post-processing callback\n");
-                sess->thd_sess_stat = QZ_POST_PROCESS_ERROR;
-                sess->post_process_stat = error_code;
+                sess->thd_sess_stat = callback_status;
                 *src_len = 0;
                 *dest_len = 0;
+                if (!ext_rc) {
+                    QZ_ERROR("Invaild ext_rc pointer!");
+                } else {
+                    *ext_rc = (uint64_t)error_code;
+                }
             }
         } else {
             QZ_DEBUG("Error lz4s compresse failed\n");
@@ -2589,6 +2624,13 @@ static void *doQzDecompressSingleThread(void *in)
 int qzDecompress(QzSession_T *sess, const unsigned char *src,
                  unsigned int *src_len, unsigned char *dest,
                  unsigned int *dest_len)
+{
+    return qzDecompressExt(sess, src, src_len, dest, dest_len, NULL);
+}
+
+int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
+                    unsigned int *src_len, unsigned char *dest,
+                    unsigned int *dest_len, uint64_t *ext_rc)
 {
     int rc;
     int i, reqcnt;

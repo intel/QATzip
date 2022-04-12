@@ -297,6 +297,7 @@ int compressFile(char *input_file_name, char *output_file_name)
     int need_free = 0;
     int rc = QZSTD_OK;
     int is_compress = 1;
+    uint64_t callback_error_code = 0;
 
     //initial zstd contex
     ZSTD_CCtx *zc = ZSTD_createCCtx();
@@ -387,8 +388,9 @@ int compressFile(char *input_file_name, char *output_file_name)
             }
         } else {
             //compress by qat
-            int ret = qzCompress(&qzstd_g_sess, src_buffer, (unsigned int *)(&bytes_read),
-                                 dst_buffer, &dst_buffer_size, 1);
+            int ret = qzCompressExt(&qzstd_g_sess, src_buffer,
+                                    (unsigned int *)(&bytes_read),
+                                    dst_buffer, &dst_buffer_size, 1, &callback_error_code);
             if (QZ_BUF_ERROR == ret && 0 != bytes_read) {
                 if (-1 == fseek(src_file, bytes_read - src_buffer_size, SEEK_CUR)) {
                     QZ_ERROR("%s : failed to re-seek input file\n", QZSTD_ERROR_TYPE);
@@ -396,9 +398,8 @@ int compressFile(char *input_file_name, char *output_file_name)
                     goto done;
                 }
             } else if (QZ_POST_PROCESS_ERROR == ret) {
-                ret = qzstd_g_sess.post_process_stat;
                 QZ_ERROR("%s : ZSTD API ZSTD_compressSequences failed with error code, %d, %s\n",
-                         ZSTD_ERROR_TYPE, ret, DECODE_ZSTD_ERROR_CODE(ret));
+                         ZSTD_ERROR_TYPE, ret, DECODE_ZSTD_ERROR_CODE((size_t)callback_error_code));
                 rc = QZSTD_ERROR;
                 goto done;
             } else if (QZ_OK != ret) {
