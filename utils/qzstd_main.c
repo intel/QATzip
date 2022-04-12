@@ -49,7 +49,7 @@ int main(int argc, char **argv)
         return QZSTD_ERROR;
     }
 
-    const char *optPatten = "dhC:L:o:r:P:";
+    const char *optPatten = "dhC:L:o:r:P:m:";
     char *stop = NULL;
     int ch;
     while ((ch = getopt(argc, argv, optPatten)) >= 0) {
@@ -82,6 +82,14 @@ int main(int argc, char **argv)
                 g_sess_params.is_busy_polling = QZ_BUSY_POLLING;
             } else {
                 QZ_ERROR("%s : set wrong polling mode: %s\n", QZSTD_ERROR_TYPE, optarg);
+                return QZSTD_ERROR;
+            }
+            break;
+        case 'm':
+            g_sess_params.lz4s_mini_match = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            if (g_sess_params.lz4s_mini_match != 3 &&
+                g_sess_params.lz4s_mini_match != 4) {
+                printf("Error! mini_match can only set 3 or 4!\n");
                 return QZSTD_ERROR;
             }
             break;

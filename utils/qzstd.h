@@ -87,7 +87,6 @@
 #define ML_MASK ((1U << ML_BITS) - 1)
 #define RUN_BITS (8 - ML_BITS)
 #define RUN_MASK ((1U << RUN_BITS) - 1)
-#define LZ4MINMATCH 2
 
 typedef uint8_t BYTE;
 typedef uint16_t U16;
@@ -118,8 +117,9 @@ int compressFile(char *input_file_name, char *output_file_name);
 
 int decompressFile(const char *const input_file_name, char *output_file_name);
 
-int zstdCallBack(void *sess, const unsigned char *src,
-                 unsigned int *src_len, unsigned char *dest, unsigned int *dest_len);
+int zstdCallBack(void *external, const unsigned char *src,
+                 unsigned int *src_len, unsigned char *dest,
+                 unsigned int *dest_len, int *ExtStatus);
 
 int getLz4FrameHeaderSz();
 

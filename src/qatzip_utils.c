@@ -38,6 +38,7 @@
 
 static QatThread_T g_qat_thread;
 
+#ifdef QATZIP_DEBUG
 static void doInsertThread(unsigned int th_id,
                            ThreadList_T **thd_list,
                            unsigned int *num_thd,
@@ -165,6 +166,7 @@ void dumpThreadInfo(void)
                      th_list->num_decomp_th,
                      DECOMPRESSION);
 }
+#endif
 
 void initDebugLock(void)
 {

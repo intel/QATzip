@@ -51,9 +51,12 @@ QzSessionParams_T sess_params_zstd_default = {
     .req_cnt_thrshold  = 32,
     .wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT,
     .is_busy_polling   = QZ_PERIODICAL_POLLING,
+    .lz4s_mini_match   = 3,
     .qzCallback        = zstdCallBack,
     .qzCallback_external = NULL
 };
+
+static unsigned int LZ4MINMATCH = 2;
 
 void qzstd_help()
 {
@@ -67,6 +70,8 @@ void qzstd_help()
         "  -C,       set zstd block size && QAT hw buffer size",
         "  -r,       set max inflight request number",
         "  -P,       set polling mode, only supports busy polling settings",
+        "  -m,       set the mini match size for the lz4s search algorithm, \
+                     only support mini_match 3 and 4",
         "",
         "Only support one input file.",
         0
@@ -206,9 +211,10 @@ unsigned int getBlockSize(unsigned char *const ptr)
 }
 
 int zstdCallBack(void *external, const unsigned char *src,
-                 unsigned int *src_len, unsigned char *dest, unsigned int *dest_len)
+                 unsigned int *src_len, unsigned char *dest,
+                 unsigned int *dest_len, int *ExtStatus)
 {
-    int ret = 0;
+    int ret = QZ_OK;
     //copied data is used to decode
     //original data will be overwrote by ZSTD_compressSequences
     unsigned char *dest_data = (unsigned char *)malloc(*dest_len);
@@ -245,9 +251,10 @@ int zstdCallBack(void *external, const unsigned char *src,
                             dest + produced,
                             *dest_len, zstd_seqs, dec_offset + 1, src + consumed, cnt_sz);
         if (compressed_sz < 0) {
-            ret = compressed_sz;
+            ret = QZ_POST_PROCESS_ERROR;
+            *ExtStatus = compressed_sz;
             QZ_ERROR("%s : ZSTD API ZSTD_compressSequences failed with error code, %d, %s\n",
-                     ZSTD_ERROR_TYPE, ret, DECODE_ZSTD_ERROR_CODE(ret));
+                     ZSTD_ERROR_TYPE, *ExtStatus, DECODE_ZSTD_ERROR_CODE(*ExtStatus));
             goto done;
         }
         //reuse zstd_seqs
@@ -308,6 +315,11 @@ int compressFile(char *input_file_name, char *output_file_name)
     ZSTD_CCtx_setParameter(zc, ZSTD_c_blockDelimiters,
                            ZSTD_sf_explicitBlockDelimiters);
     g_sess_params.qzCallback_external = (void *)zc;
+
+    /* Different mini_match would use different LZ4MINMATCH to decode
+    * lz4s sequence. note that when it is mini_match is 4, the LZ4MINMATCH
+    * should be 3. if mini match is 3, then LZ4MINMATCH should be 2*/
+    LZ4MINMATCH = g_sess_params.lz4s_mini_match == 4 ? 3 : 2;
 
     //setup session
     int ret = qzInit(&qzstd_g_sess, g_sess_params.sw_backup);
