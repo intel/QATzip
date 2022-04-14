@@ -17,6 +17,7 @@
     - [Performance Test With QATzip](#performance-test-with-qatzip)
 - [QATzip API manual](#qatzip-api-manual)
 - [Intended Audience](#intended-audience)
+- [Open Issues](#open-issues)
 - [Legal](#legal)
 
 ## Introduction
@@ -107,7 +108,7 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
   object with qzTeardownSession(). Otherwise, memory leak happens.
 * For stream object, stream lenth must be smaller than `strm_buff_sz`, or QATzip would generate multiple
   deflate block in order and has the last block with BFIN set.
-* For stream object, we will optimize the performance of the pre-allocation process using a thread-local 
+* For stream object, we will optimize the performance of the pre-allocation process using a thread-local
   stream buffer list in a future release.
 * For 7z format, decompression only supports \*.7z archives compressed by qzip.
 * For 7z format, decompression only supports software.
@@ -154,6 +155,7 @@ These instructions can be found on the 01.org website in the following section:
 
 ```bash
     cd $QZ_ROOT
+    ./autogen.sh
     ./configure --with-ICP_ROOT=$ICP_ROOT
     make clean
     make all install
@@ -247,6 +249,7 @@ With current configuration, each PCI-e device in C6XX platform could support
 
 ```bash
     cd $QZ_ROOT
+    ./autogen.sh
     ./configure --with-ICP_ROOT=$ICP_ROOT
     make clean
     make all
@@ -319,6 +322,18 @@ in run_perf_test.sh should be changed accordingly, at least 6 times of threads n
 ## QATzip API Manual
 
 Please refer to file `QATzip-man.pdf` under the `docs` folder
+
+## Open Issues
+Known issues relating to the QATzip are described in this section.
+
+### QATAPP-26069
+| Title      |     Buffers allocated with qzMalloc() can't be freed after calling qzMemDestory    |
+|----------|:-------------
+| Reference   | QATAPP-26069 |
+| Description | If the users call qzFree after qzMemDestory, they may encounter free memory error "free(): invalid pointe" |
+| Implication | User use qzMalloc API to allocte continuous memory |
+| Resolution | Ensure qzFree is invoked before qzMemDestory |
+| Affected OS | Linux |
 
 ## Intended Audience
 
