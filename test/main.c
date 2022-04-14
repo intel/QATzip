@@ -1317,13 +1317,14 @@ void *qzCompressAndDecompress(void *arg)
     pthread_mutex_unlock(&g_lock_print);
 
 done:
-    free(compressed_blocks_sz);
     if (gen_data) {
         qzFree(src);
         qzFree(comp_out);
         qzFree(decomp_out);
     }
-
+    if (compressed_blocks_sz != NULL) {
+        free(compressed_blocks_sz);
+    }
     (void)qzTeardownSession(&g_session_th[tid]);
     pthread_exit((void *)NULL);
 }

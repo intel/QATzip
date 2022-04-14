@@ -96,6 +96,7 @@ typedef struct QzCpaStream_S {
     int dest_pinned;
     unsigned int gzip_footer_checksum;
     unsigned int gzip_footer_orgdatalen;
+    CpaDcOpData opData;
 } QzCpaStream_T;
 
 typedef struct QzInstance_S {

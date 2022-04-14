@@ -1096,15 +1096,12 @@ static void *doCompressIn(void *in)
     QzDataFormat_T data_fmt;
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
-    CpaDcOpData opData = (const CpaDcOpData) {0};
+    CpaDcOpData *opData = NULL;
     struct timespec my_time;
 
     my_time.tv_sec = 0;
     my_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
-    opData.inputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
-    opData.outputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
     QZ_DEBUG("Always enable CnV\n");
-    opData.compressAndVerify = CPA_TRUE;
 
     i = qz_sess->inst_hint;
     j = -1;
@@ -1116,8 +1113,6 @@ static void *doCompressIn(void *in)
     src_sz = qz_sess->sess_params.hw_buff_sz;
     dest_sz = *qz_sess->dest_sz;
     data_fmt = qz_sess->sess_params.data_fmt;
-    opData.flushFlag = IS_DEFLATE(data_fmt) ? CPA_DC_FLUSH_FULL :
-                       CPA_DC_FLUSH_FINAL;
     QZ_DEBUG("doCompressIn: Need to g_process %ld bytes\n", remaining);
 
     while (!done) {
@@ -1131,14 +1126,23 @@ static void *doCompressIn(void *in)
 
         g_process.qz_inst[i].stream[j].src1++; /*this buffer is in use*/
         src_send_sz = (remaining < src_sz) ? remaining : src_sz;
+
+        //setup opData
+        opData = &g_process.qz_inst[i].stream[j].opData;
+        opData->inputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
+        opData->outputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
+        opData->compressAndVerify = CPA_TRUE;
+        opData->flushFlag = IS_DEFLATE(data_fmt) ? CPA_DC_FLUSH_FULL :
+                            CPA_DC_FLUSH_FINAL;
         if (unlikely(IS_DEFLATE(data_fmt) &&
                      1 == qz_sess->last &&
                      remaining <= src_sz)) {
-            opData.flushFlag = CPA_DC_FLUSH_FINAL;
+            opData->flushFlag = CPA_DC_FLUSH_FINAL;
         }
+
         g_process.qz_inst[i].stream[j].seq = qz_sess->seq; /*this buffer is in use*/
         QZ_DEBUG("sending seq number %d %d %ld, opData.flushFlag %d\n", i, j,
-                 qz_sess->seq, opData.flushFlag);
+                 qz_sess->seq, opData->flushFlag);
         qz_sess->seq++;
         qz_sess->submitted++;
         /*send to compression engine here*/
@@ -1177,13 +1181,14 @@ static void *doCompressIn(void *in)
         do {
             tag = (i << 16) | j;
             QZ_DEBUG("Comp Sending %u bytes ,opData.flushFlag = %d, i = %ld j = %d seq = %ld tag = %ld\n",
-                     g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes, opData.flushFlag,
+                     g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes,
+                     opData->flushFlag,
                      i, j, g_process.qz_inst[i].stream[j].seq, tag);
             rc = cpaDcCompressData2(g_process.dc_inst_handle[i],
                                     g_process.qz_inst[i].cpaSess,
                                     g_process.qz_inst[i].src_buffers[j],
                                     g_process.qz_inst[i].dest_buffers[j],
-                                    &opData,
+                                    opData,
                                     &g_process.qz_inst[i].stream[j].res,
                                     (void *)(tag));
             if (unlikely(CPA_STATUS_RETRY == rc)) {
