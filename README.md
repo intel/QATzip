@@ -75,8 +75,8 @@ ratio and throughput for data sets that are submitted piecemeal.
 * For 4xxx(QAT gen 4 devices), QATzip supports lz4s compression algorithm, the QATzip can generate
 lz4s block with lz4 frame format, which can be used for software post-processing to generate
 other compressed data format.
-* For 4xxx(QAT gen 4 devices), QATzip supports ZSTD format compression, through import post-process 
-mechanism. this feature request to enable qzstd. 
+* For 4xxx(QAT gen 4 devices), QATzip supports ZSTD format compression, through import post-process
+mechanism. this feature request to enable qzstd.
 
 ## Hardware Requirements
 
@@ -127,10 +127,9 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
 * For 7z format, decompression only supports \*.7z archives compressed by qzip.
 * For 7z format, decompression only supports software.
 * For 7z format, the header compression is not supported.
-* For lz4(s) compression, QATzip supports 32KB history buffer.
-* For zstd format compression, qzstd only supprots `hw_buffer_sz` which is less than 128KB. 
+* For lz4(s) compression, QATzip only supports 32KB history buffer.
+* For zstd format compression, qzstd only supprots `hw_buffer_sz` which is less than 128KB.
 * Stream APIs do not support deflate_4B compression/decompression now.
-
 
 ## Installation Instructions
 
@@ -281,7 +280,7 @@ With current configuration, each PCI-e device in C6XX platform could support
 For more configure options, please run "./configure -h" for help
 
 ### Enable qzstd
-if you want to enable lz4s + postprocessing pipeline, you have to compile qzstd. which
+If you want to enable lz4s + postprocessing pipeline, you have to compile qzstd. which
 is a sample app to support ZSTD format compression/decompression. before enabling qzstd,
 make sure that you have installed zstd static lib.
 
@@ -289,6 +288,7 @@ make sure that you have installed zstd static lib.
 
 ```bash
     cd $QZ_ROOT
+    ./autogen.sh
     ./configure --enable-lz4s-postprocessing
     make clean
     make qzstd
@@ -297,7 +297,7 @@ make sure that you have installed zstd static lib.
 
 ```bash
     qzstd -h
-    
+
     it could support below options:
     "Compress or uncompress a file with zstandard format.",
     "",
@@ -307,7 +307,7 @@ make sure that you have installed zstd static lib.
     "  -o,       set output file name",
     "  -C,       set chunk size",
     "  -r,       set max inflight request number",
-    "  -P,       set polling mode, only supports busy polling settings", 
+    "  -P,       set polling mode, only supports busy polling settings",
 ```
 
 ### Test QATzip
@@ -385,6 +385,15 @@ Known issues relating to the QATzip are described in this section.
 | Description | If the users call qzFree after qzMemDestory, they may encounter free memory error "free(): invalid pointe" |
 | Implication | User use qzMalloc API to allocte continuous memory |
 | Resolution | Ensure qzMemDestory is invoked after qzFree, now we use attribute destructor to invoke qzMemDestory|
+| Affected OS | Linux |
+
+### QATAPP-26149
+| Title      |     dcCheckDestinationData return Invalid API Param   |
+|----------|:-------------
+| Reference   | QATAPP-26149 |
+| Description | The cpaDcCompressData return error -4 when destination buffer size is less than 512 bytes |
+| Implication | Use software to compression small block data |
+| Resolution | Set the input_sz_thrshold of QzSessionParams_T greater or equal to 512 bytes |
 | Affected OS | Linux |
 
 ## Intended Audience
