@@ -332,7 +332,7 @@ Known issues relating to the QATzip are described in this section.
 | Reference   | QATAPP-26069 |
 | Description | If the users call qzFree after qzMemDestory, they may encounter free memory error "free(): invalid pointe" |
 | Implication | User use qzMalloc API to allocte continuous memory |
-| Resolution | Ensure qzFree is invoked before qzMemDestory |
+| Resolution | Ensure qzMemDestory is invoked after qzFree, now we use attribute destructor to invoke qzMemDestory|
 | Affected OS | Linux |
 
 ## Intended Audience

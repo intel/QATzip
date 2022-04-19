@@ -418,6 +418,8 @@ reset:
     g_process.qat_available = QZ_NONE;
 }
 
+static void exitFunc(void) __attribute__((destructor));
+
 static void exitFunc(void)
 {
     int i = 0;
@@ -669,12 +671,6 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
     clearDevices(qat_hw);
     free(qat_hw);
-
-    rc = atexit(exitFunc);
-    if (unlikely(QZ_OK != rc)) {
-        QZ_ERROR("Error in register exit hander rc = %d\n", rc);
-        BACKOUT(QZ_NOSW_NO_HW);
-    }
 
     rc = g_process.qz_init_status = QZ_OK;
 
