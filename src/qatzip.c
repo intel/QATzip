@@ -965,7 +965,6 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
         qz_sess->session_setup_data.huffType = CPA_DC_HT_STATIC;
     }
 
-    qz_sess->session_setup_data.fileType = CPA_DC_FT_ASCII;
     qz_sess->session_setup_data.autoSelectBestHuffmanTree =
         CPA_DC_ASB_UNCOMP_STATIC_DYNAMIC_WITH_STORED_HDRS;
 
@@ -985,6 +984,7 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
     qz_sess->session_setup_data.windowSize = (Cpa32U)7;
 #else
     qz_sess->session_setup_data.deflateWindowSize = (Cpa32U)7;
+    qz_sess->session_setup_data.fileType = CPA_DC_FT_ASCII;
 #endif
     qz_sess->session_setup_data.checksum = CPA_DC_CRC32;
 
