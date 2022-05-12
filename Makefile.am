@@ -76,6 +76,12 @@ test:$(QATZIP_LIB)
 
 bt:$(QATZIP_LIB)
 	@make -C $(TEST_DIR) bt
+qzstd: $(QATZIP_LIB)
+if QATZIP_LZ4S_POSTPROCESS_AC
+	@make -C $(QZIP_DIR) qzstd
+else
+	@echo "Error : please enable lz4s postprocessing in configure!"
+endif
 
 check_code:
 	@echo -e "\n\nPerforming code formatting tests..."
@@ -100,4 +106,5 @@ rpmclean:
 	@rm -fr rpmbuild
 
 .PHONY: rpm rpmclean libqatzip qzip test check_code \
-	qzip_obj_without_main bt $(QATZIP_LIB) clean-local
+	qzip_obj_without_main bt $(QATZIP_LIB) clean-local \
+	qzstd

@@ -40,7 +40,8 @@ libqatzip_la_SOURCES = \
                        qatzip_mem.c \
                        qatzip_stream.c \
                        qatzip_sw.c \
-                       qatzip_utils.c
+                       qatzip_utils.c \
+                       qatzip_lz4.c
 libqatzip_la_CFLAGS = \
                       -I./ \
                       -I../include/ \
@@ -51,7 +52,6 @@ libqatzip_la_CFLAGS = \
 libqatzip_la_LDFLAGS = \
                        -version-info $(LIBQATZIP_VERSION) \
 		       $(ICP_LDFLAGS)
-
 
 libqatzip_la_LIBADD= $(QATLIB_FLAGS) \
                      $(USDMLIB_FLAGS)

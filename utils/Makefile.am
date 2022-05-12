@@ -57,5 +57,25 @@ qzip_obj_CFLAGS = \
                   $(COMMON_CFLAGS) \
                   $(ICP_INCLUDE_CFLAGS)
 
+if QATZIP_LZ4S_POSTPROCESS_AC
+noinst_PROGRAMS = qzstd
+qzstd_SOURCES = \
+                qzstd.c \
+                qzstd_main.c
+qzstd_CFLAGS = \
+               -I$(abs_top_srcdir)/include/ \
+               -I$(abs_top_srcdir)/src/    \
+               -I$(abs_top_srcdir)/utils/  \
+               $(COMMON_CFLAGS) \
+               $(ICP_INCLUDE_CFLAGS)
+qzstd_LDADD = \
+              $(abs_top_srcdir)/src/.libs/libqatzip.a \
+              $(QATLIB_FLAGS) \
+              $(USDMLIB_FLAGS) \
+              $(ZSTD_LIBADD)
+qzstd_LDFLAGS = \
+                $(ICP_LDFLAGS)
+endif
+
 qzip_obj_without_main: qzip.c qzip_7z.c
 	$(CC) $^ -c $(qzip_obj_CFLAGS)

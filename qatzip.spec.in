@@ -39,6 +39,7 @@ the QATzip APIs.
 
 %package        devel
 Summary:        Development components for the libqatzip package
+Requires:       %{name}%{?_isa} = %{version}-%{release}
 Requires:       %{name}-libs%{?_isa} = %{version}-%{release}
 
 %description    devel
@@ -79,7 +80,7 @@ rm  %{buildroot}/%{_libdir}/libqatzip.la
 %{_libdir}/libqatzip.so.%{version}
 
 %files devel
-%doc docs/QATzip-man.pdf
+%doc %{_mandir}/QATzip-man.pdf
 %{_includedir}/qatzip.h
 %{_libdir}/libqatzip.so
 
