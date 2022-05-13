@@ -738,6 +738,19 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         free(new_inst);
         instance_found++;
     }
+
+    /* Get the device info by the device id,
+     * assume there is only one QAT device type.
+     * If want to support multiple device types later,
+     * need to refactor this part of the codes. */
+    dev_id = g_process.qz_inst[0].instance_info.physInstId.packageId;
+    status = cpaGetDeviceInfo(dev_id,
+                              &g_process.device_info);
+    if (CPA_STATUS_SUCCESS != status) {
+        QZ_ERROR("Error in cpaGetDeviceInfo status = %d\n", status);
+        QZ_HW_BACKOUT(QZ_NOSW_NO_INST_ATTACH);
+    }
+
     clearDevices(qat_hw);
     free(qat_hw);
 
@@ -1482,7 +1495,6 @@ static int qzDeflateStoredBlocks(QzSess_T *qz_sess, const unsigned char *src,
     CpaDcRqResults resl;
     unsigned int block_size = STORED_BLK_MAX_LEN;
     QzDataFormat_T data_fmt = qz_sess->sess_params.data_fmt;
-
 
     block_count = src_len / block_size +
                   src_len % block_size > 0 ? 1 : 0;
@@ -2908,7 +2920,7 @@ int qzGetDefaults(QzSessionParams_T *defaults)
     return QZ_OK;
 }
 
-unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
+static unsigned int qzDeflateBoundGen2(unsigned int src_sz, QzSession_T *sess)
 {
     unsigned int dest_sz = 0;
     unsigned int qz_header_footer_sz = qzGzipHeaderSz() + stdGzipFooterSz();
@@ -2943,7 +2955,200 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
         dest_sz = 0;
     }
 
-    QZ_DEBUG("src_sz is %u, dest_sz is %u\n", src_sz, (unsigned int)dest_sz);
+    return dest_sz;
+}
 
+static unsigned int qzDeflateBoundGen4(unsigned int src_sz, QzSession_T *sess)
+{
+    unsigned long dest_sz = 0;
+    unsigned int header_footer_sz = 0;
+    unsigned int chunk_cnt = 0;
+    unsigned long chunk_sz = 0;
+    unsigned int last_chunk_sz = 0;
+    QzDataFormat_T data_fmt;
+    QzHuffmanHdr_T huffman_type;
+    QzSess_T *qz_sess = NULL;
+
+    assert(sess);
+    assert(sess->internal);
+
+    qz_sess = (QzSess_T *)sess->internal;
+    chunk_sz = qz_sess->sess_params.hw_buff_sz;
+    data_fmt = qz_sess->sess_params.data_fmt;
+    huffman_type = qz_sess->sess_params.huffman_hdr;
+    header_footer_sz = outputHeaderSz(data_fmt) +
+                       outputFooterSz(data_fmt);
+
+    /* if input size is 0, return min length */
+    if (!src_sz) {
+        if (huffman_type == QZ_DYNAMIC_HDR) {
+            return (QZ_DEFLATE_SKID_PAD_GEN4_DYN + header_footer_sz);
+        } else {
+            return (QZ_DEFLATE_SKID_PAD_GEN4_STATIC + header_footer_sz);
+        }
+    }
+
+    chunk_cnt = src_sz / chunk_sz;
+    last_chunk_sz = src_sz % chunk_sz;
+
+    if (huffman_type == QZ_DYNAMIC_HDR) {
+        dest_sz = (QZ_CEIL_DIV(9 * chunk_sz, 8) +
+                   QZ_DEFLATE_SKID_PAD_GEN4_DYN +
+                   (((8 * chunk_sz * 155) / 7) / (16 * 1024)) +
+                   header_footer_sz) * chunk_cnt;
+        if (last_chunk_sz) {
+            dest_sz += (QZ_CEIL_DIV(9 * last_chunk_sz, 8) +
+                        QZ_DEFLATE_SKID_PAD_GEN4_DYN +
+                        (((8 * last_chunk_sz * 155) / 7) / (16 * 1024)) +
+                        header_footer_sz);
+        }
+    } else {
+        dest_sz = (QZ_CEIL_DIV(9 * chunk_sz, 8) +
+                   QZ_DEFLATE_SKID_PAD_GEN4_STATIC +
+                   header_footer_sz) * chunk_cnt;
+        if (last_chunk_sz) {
+            dest_sz += (QZ_CEIL_DIV(last_chunk_sz, 8) +
+                        QZ_DEFLATE_SKID_PAD_GEN4_STATIC +
+                        header_footer_sz);
+        }
+    }
+
+    /* If output size overflow, set dest_sz to 0 */
+    if (dest_sz & 0xffffffff00000000UL) {
+        dest_sz = 0;
+    }
+
+    return dest_sz;
+}
+
+static unsigned int qzDeflateBound(unsigned int src_sz, QzSession_T *sess)
+{
+    unsigned int dest_sz = 0;
+
+    assert(sess);
+    assert(sess->internal);
+
+    if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
+        dest_sz = qzDeflateBoundGen4(src_sz, sess);
+    } else {
+        dest_sz = qzDeflateBoundGen2(src_sz, sess);
+    }
+
+    return dest_sz;
+}
+
+static unsigned int qzLZ4SBound(unsigned int src_sz, QzSession_T *sess)
+{
+    unsigned long dest_sz = 0;
+    unsigned int header_footer_sz = 0;
+    unsigned int chunk_cnt = 0;
+    unsigned long chunk_sz = 0;
+    unsigned int last_chunk_sz = 0;
+    QzSess_T *qz_sess = NULL;
+
+    assert(sess);
+    assert(sess->internal);
+
+    header_footer_sz = qzLZ4SHeaderSz() + qzLZ4FooterSz();
+
+    /* if input size is 0, return min length */
+    if (!src_sz) {
+        return (QZ_LZ4S_SKID_PAD_GEN4 + header_footer_sz);
+    }
+
+    qz_sess = (QzSess_T *)sess->internal;
+    chunk_sz = qz_sess->sess_params.hw_buff_sz;
+    chunk_cnt = src_sz / chunk_sz;
+    last_chunk_sz = src_sz % chunk_sz;
+
+    dest_sz = (chunk_sz + QZ_CEIL_DIV(chunk_sz, 2000) * 11 +
+               QZ_LZ4S_SKID_PAD_GEN4 + header_footer_sz) * chunk_cnt;
+
+    if (last_chunk_sz) {
+        dest_sz += (last_chunk_sz + QZ_CEIL_DIV(last_chunk_sz, 2000) * 11 +
+                    QZ_LZ4S_SKID_PAD_GEN4 + header_footer_sz);
+    }
+
+    /* If output size overflow, set dest_sz to 0 */
+    if (dest_sz & 0xffffffff00000000UL) {
+        dest_sz = 0;
+    }
+
+    return dest_sz;
+}
+
+static unsigned int qzLZ4Bound(unsigned int src_sz, QzSession_T *sess)
+{
+    unsigned long dest_sz = 0;
+    unsigned int header_footer_sz = 0;
+    unsigned int chunk_cnt = 0;
+    unsigned long chunk_sz = 0;
+    unsigned int last_chunk_sz = 0;
+    QzSess_T *qz_sess = NULL;
+
+    assert(sess);
+    assert(sess->internal);
+
+    header_footer_sz = qzLZ4HeaderSz() + qzLZ4FooterSz();
+
+    /* if input size is 0, return min length */
+    if (!src_sz) {
+        return (QZ_LZ4_SKID_PAD_GEN4 + header_footer_sz);
+    }
+
+    qz_sess = (QzSess_T *)sess->internal;
+    chunk_sz = qz_sess->sess_params.hw_buff_sz;
+    chunk_cnt = src_sz / chunk_sz;
+    last_chunk_sz = src_sz % chunk_sz;
+
+    dest_sz = (chunk_sz + QZ_CEIL_DIV(chunk_sz, 1520) * 13 +
+               QZ_LZ4_SKID_PAD_GEN4 + header_footer_sz) * chunk_cnt;
+
+    if (last_chunk_sz) {
+        dest_sz += (last_chunk_sz + QZ_CEIL_DIV(last_chunk_sz, 1520) * 13 +
+                    QZ_LZ4_SKID_PAD_GEN4 + header_footer_sz);
+    }
+
+    /* If output size overflow, set dest_sz to 0 */
+    if (dest_sz & 0xffffffff00000000UL) {
+        dest_sz = 0;
+    }
+
+    return dest_sz;
+}
+
+unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
+{
+    unsigned int dest_sz = 0;
+    QzSess_T *qz_sess = NULL;
+
+    if (NULL == sess ||
+        NULL == sess->internal ||
+        QZ_OK != sess->hw_session_stat) {
+        return qzDeflateBoundGen2(src_sz, sess);
+    }
+
+    qz_sess = (QzSess_T *)sess->internal;
+    switch (qz_sess->sess_params.data_fmt) {
+    case QZ_DEFLATE_RAW:
+    case QZ_DEFLATE_GZIP:
+    case QZ_DEFLATE_GZIP_EXT:
+        dest_sz = qzDeflateBound(src_sz, sess);
+        break;
+    case QZ_LZ4_FH:
+        dest_sz = qzLZ4Bound(src_sz, sess);
+        break;
+    case QZ_LZ4S_FH:
+        dest_sz = qzLZ4SBound(src_sz, sess);
+        break;
+    case QZ_ZSTD_RAW:
+        dest_sz = qzLZ4SBound(src_sz, sess);
+        break;
+    default:
+        dest_sz = 0;
+        break;
+    }
+
+    QZ_DEBUG("src_sz is %u, dest_sz is %u\n", src_sz, (unsigned int)dest_sz);
     return dest_sz;
 }

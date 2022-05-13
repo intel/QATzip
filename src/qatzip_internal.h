@@ -40,6 +40,8 @@
 extern"C" {
 #endif
 
+#include <cpa_dev.h>
+
 #include <zlib.h>
 #include <lz4frame.h>
 
@@ -90,6 +92,18 @@ extern"C" {
         (CPA_DC_API_VERSION_NUM_MAJOR == major &&   \
         CPA_DC_API_VERSION_NUM_MINOR >= minor))
 #endif
+
+#define QZ_4XXX_PCI_DEVICE_ID 0x4940
+#define QZ_4XXXIOV_PCI_DEVICE_ID 0x4941
+#define IS_QAT_GEN4(device_id)                       \
+    (device_id == QZ_4XXX_PCI_DEVICE_ID ||           \
+     device_id == QZ_4XXXIOV_PCI_DEVICE_ID)
+
+#define QZ_CEIL_DIV(x, y) (((x) + (y)-1) / (y))
+#define QZ_DEFLATE_SKID_PAD_GEN4_STATIC (1029)
+#define QZ_DEFLATE_SKID_PAD_GEN4_DYN (512)
+#define QZ_LZ4_SKID_PAD_GEN4 (1024)
+#define QZ_LZ4S_SKID_PAD_GEN4 (1024)
 
 /* macros for lz4 */
 #define QZ_LZ4_MAGIC         0x184D2204U
@@ -175,6 +189,7 @@ typedef struct ProccesData_S {
     QzInstance_T *qz_inst;
     Cpa16U num_instances;
     char qat_available;
+    CpaDeviceInfo device_info;
 } processData_T;
 
 typedef enum {
