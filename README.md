@@ -191,16 +191,29 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 With current configuration, each PCI-e device in C6XX platform could support
 32 processes in maximum.
 
-**Enable QATzip For Non-root user**
+### Install QATzip As Non-root User
 
-Execute the following script as root user to modify the file properties.
+**Add Non-root user to qat group**
+
+The installation of QAT driver package configures the driver to allow applications
+to run as Non-root user. The users must be added to the 'qat' group after QAT drvier
+is installed.
 
 ```bash
-    cd $QZ_ROOT
-    ./setenv.sh
+    sudo usermod -g qat username # need to relogin
 ```
 
-### Install QATzip As Non-root User
+    or
+```bash
+    sudo newgrp username  # effective immediately
+```
+
+Change the amount of max locked memory for the username that is included in the group
+name. This can be done by specifying the limit in /etc/security/limits.conf.
+```bash
+   cat /etc/security/limits.conf |grep qat
+   @qat - memlock 4096
+```
 
 **Enable huge page as root user**
 
@@ -208,13 +221,6 @@ Execute the following script as root user to modify the file properties.
     echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
     insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=16
-```
-
-**Execute the following script as root user to modify the file properties**
-
-```bash
-    cd $QZ_ROOT
-    ./setenv.sh
 ```
 
 **Update the configuration files as root user**
@@ -245,7 +251,7 @@ With current configuration, each PCI-e device in C6XX platform could support
 
 `QZ_ROOT`: the root directory of your QATzip source tree
 
-**Compile and install QATzip as non-root user**
+**Compile and install QATzip as root user**
 
 ```bash
     cd $QZ_ROOT
@@ -253,7 +259,7 @@ With current configuration, each PCI-e device in C6XX platform could support
     ./configure --with-ICP_ROOT=$ICP_ROOT
     make clean
     make all
-    export LD_LIBRARY_PATH=$QZ_ROOT/utils:$LD_LIBRARY_PATH
+    make install
 ```
 
 For more configure options, please run "./configure -h" for help
