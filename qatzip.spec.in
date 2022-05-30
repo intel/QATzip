@@ -13,11 +13,12 @@ Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  gcc >= 4.8.5
 BuildRequires:  zlib-devel >= 1.2.7
-BuildRequires:  qatlib-devel >= 20.10.0
+BuildRequires:  qatlib-devel >= 22.07.0
 BuildRequires:  lz4-devel
 BuildRequires:  xxhash-devel
-# Placeholder comment, will be replaced with bugzilla reporting unsupported architectures
-ExcludeArch:    %{arm} aarch64 %{power64} s390x i686
+# The purpose of the package is to support hardware that only exists on x86_64 platforms
+# https://bugzilla.redhat.com/show_bug.cgi?id=1987280
+ExclusiveArch:  x86_64
 
 %description
 QATzip is a user space library which builds on top of the Intel
