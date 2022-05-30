@@ -473,10 +473,7 @@ int makeOutName(const char *in_name, const char *out_name,
             return -1;
         }
         /* add suffix */
-        if (g_params_th.data_fmt == QZ_DEFLATE_RAW) {
-            snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
-                     SUFFIX_7Z);
-        } else if (g_params_th.data_fmt == QZ_LZ4_FH) {
+        if (g_params_th.data_fmt == QZ_LZ4_FH) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4);
         } else if (g_params_th.data_fmt == QZ_LZ4S_FH) {

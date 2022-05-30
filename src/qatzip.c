@@ -2040,7 +2040,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
             if (callback_status == QZ_OK) {
                 sess->total_out = *dest_len;
                 if (!ext_rc) {
-                    QZ_ERROR("Invaild ext_rc pointer!");
+                    QZ_ERROR("Invaild ext_rc pointer!\n");
                 } else {
                     *ext_rc = 0;
                 }
@@ -2050,7 +2050,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
                 *src_len = 0;
                 *dest_len = 0;
                 if (!ext_rc) {
-                    QZ_ERROR("Invaild ext_rc pointer!");
+                    QZ_ERROR("Invaild ext_rc pointer!\n");
                 } else {
                     *ext_rc = (uint64_t)error_code;
                 }
@@ -2191,7 +2191,7 @@ static void *doDecompressIn(void *in)
     int j;
     unsigned int done = 0;
     unsigned int remaining;
-    unsigned int src_send_sz;
+    unsigned int src_send_sz = 0;
     unsigned int dest_receive_sz;
     long src_avail_len, dest_avail_len;
     long tmp_src_avail_len, tmp_dest_avail_len;

@@ -44,9 +44,9 @@ extern"C" {
 #include <lz4frame.h>
 
 /**
- *  define lib version
+ *  define release version
  */
-#define QATZIP_VERSION "1.0.8"
+#define QATZIP_VERSION "1.0.9"
 
 #define SUCCESS              1
 #define FAILURE              0

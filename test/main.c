@@ -1106,7 +1106,8 @@ void *qzCompressAndDecompress(void *arg)
     } else {
         src = g_perf_svm ? malloc(src_sz) : ((TestArg_T *)arg)->src;
         comp_out = g_perf_svm ? malloc(comp_out_sz) : ((TestArg_T *)arg)->comp_out;
-        decomp_out = g_perf_svm ? malloc(decomp_out_sz) : ((TestArg_T *)arg)->decomp_out;
+        decomp_out = g_perf_svm ? malloc(decomp_out_sz) : ((TestArg_T *)
+                     arg)->decomp_out;
     }
 
     if (!src || !comp_out || !decomp_out) {
@@ -4156,7 +4157,7 @@ int main(int argc, char *argv[])
         test_arg[i].block_size = block_size;
         if (!test_arg[i].comp_out || !test_arg[i].decomp_out) {
             QZ_ERROR("ERROR: fail to create memory for thread %ld\n", i);
-            return -1;
+            goto done;
         }
     }
 
@@ -4169,7 +4170,7 @@ int main(int argc, char *argv[])
         rc = pthread_create(&threads[i], NULL, test_arg[i].ops, (void *)&test_arg[i]);
         if (0 != rc) {
             QZ_ERROR("Error from pthread_create %d\n", rc);
-            return rc;
+            goto done;
         }
     }
 
@@ -4213,16 +4214,11 @@ int main(int argc, char *argv[])
             QZ_ERROR("Error from pthread_exit %s\n", p_rc);
             ret = -1;
         }
-        qzFree(test_arg[i].comp_out);
-        qzFree(test_arg[i].decomp_out);
     }
 
 #ifdef ENABLE_THREAD_BARRIER
     pthread_barrier_destroy(&g_bar);
 #endif
-    if (g_input_file_name != NULL) {
-        qzFree(input_buf);
-    }
 
     if (test == 18) {
         rc_check = qz_do_g_process_Check();
@@ -4243,6 +4239,32 @@ done:
             tmp = blk;
             blk = blk->next;
             free(tmp);
+        }
+    }
+
+    /* free memory */
+    if (NULL != input_buf) {
+        if (compress_buf_type == PINNED_MEM) {
+            qzFree(input_buf);
+        } else {
+            free(input_buf);
+        }
+    }
+
+    for (i = 0; i < thread_count; i++) {
+        if (NULL != test_arg[i].comp_out) {
+            if (compress_buf_type == PINNED_MEM) {
+                qzFree(test_arg[i].comp_out);
+            } else {
+                free(test_arg[i].comp_out);
+            }
+        }
+        if (NULL != test_arg[i].decomp_out) {
+            if (compress_buf_type == PINNED_MEM) {
+                qzFree(test_arg[i].decomp_out);
+            } else {
+                free(test_arg[i].decomp_out);
+            }
         }
     }
 
