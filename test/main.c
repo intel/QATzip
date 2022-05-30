@@ -4010,51 +4010,6 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    if (g_input_file_name != NULL) {
-        FILE *file;
-        struct stat file_state;
-
-        if (stat(g_input_file_name, &file_state)) {
-            QZ_ERROR("ERROR: fail to get stat of file %s\n", g_input_file_name);
-            return -1;
-        }
-
-        input_buf_len = GET_LOWER_32BITS((file_state.st_size > QATZIP_MAX_HW_SZ ?
-                                          QATZIP_MAX_HW_SZ : file_state.st_size));
-        if (test == 4 || test == 10 || test == 11 || test == 12) {
-            input_buf_len = GET_LOWER_32BITS(file_state.st_size);
-        }
-        if (compress_buf_type == PINNED_MEM) {
-            if (input_buf_len > MAX_HUGE_PAGE_SZ) {
-                QZ_ERROR("ERROR: only can allocate 2M memory in huge page\n");
-                return -1;
-            }
-            input_buf = qzMalloc(input_buf_len, 0, PINNED_MEM);
-        } else {
-            input_buf = malloc(input_buf_len);
-        }
-        if (!input_buf) {
-            QZ_ERROR("ERROR: fail to alloc %d bytes of memory with qzMalloc\n",
-                     input_buf_len);
-            return -1;
-        }
-
-        file = fopen(g_input_file_name, "rb");
-        if (!file) {
-            QZ_ERROR("ERROR: fail to read file %s\n", g_input_file_name);
-            return -1;
-        }
-
-        if (fread(input_buf, 1, input_buf_len, file) != input_buf_len) {
-            QZ_ERROR("ERROR: fail to read file %s\n", g_input_file_name);
-            fclose(file);
-            return -1;
-        } else {
-            QZ_DEBUG("Read %d bytes from file %s\n", input_buf_len, g_input_file_name);
-        }
-        fclose(file);
-    }
-
     switch (test) {
     case 1:
         qzThdOps = qzCompressOnCommonMem;
@@ -4125,6 +4080,51 @@ int main(int argc, char *argv[])
         break;
     default:
         goto done;
+    }
+
+    if (g_input_file_name != NULL) {
+        FILE *file;
+        struct stat file_state;
+
+        if (stat(g_input_file_name, &file_state)) {
+            QZ_ERROR("ERROR: fail to get stat of file %s\n", g_input_file_name);
+            return -1;
+        }
+
+        input_buf_len = GET_LOWER_32BITS((file_state.st_size > QATZIP_MAX_HW_SZ ?
+                                          QATZIP_MAX_HW_SZ : file_state.st_size));
+        if (test == 4 || test == 10 || test == 11 || test == 12) {
+            input_buf_len = GET_LOWER_32BITS(file_state.st_size);
+        }
+        if (compress_buf_type == PINNED_MEM) {
+            if (input_buf_len > MAX_HUGE_PAGE_SZ) {
+                QZ_ERROR("ERROR: only can allocate 2M memory in huge page\n");
+                return -1;
+            }
+            input_buf = qzMalloc(input_buf_len, 0, PINNED_MEM);
+        } else {
+            input_buf = malloc(input_buf_len);
+        }
+        if (!input_buf) {
+            QZ_ERROR("ERROR: fail to alloc %d bytes of memory with qzMalloc\n",
+                     input_buf_len);
+            return -1;
+        }
+
+        file = fopen(g_input_file_name, "rb");
+        if (!file) {
+            QZ_ERROR("ERROR: fail to read file %s\n", g_input_file_name);
+            goto done;
+        }
+
+        if (fread(input_buf, 1, input_buf_len, file) != input_buf_len) {
+            QZ_ERROR("ERROR: fail to read file %s\n", g_input_file_name);
+            fclose(file);
+            goto done;
+        } else {
+            QZ_DEBUG("Read %d bytes from file %s\n", input_buf_len, g_input_file_name);
+        }
+        fclose(file);
     }
 
     for (i = 0; i < thread_count; i++) {
