@@ -524,7 +524,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         }
     }
 
-    while (0 == strm->pending_out) {
+    while (0 == strm->pending_out && NULL != strm->in) {
 
         if (copy_more == 1 && stream_buf->flush_more != 1) {
             copied_input_last = copied_input;
