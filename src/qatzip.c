@@ -280,6 +280,7 @@ static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
 #endif
         break;
     case QZ_LZ4S_FH:
+    case QZ_ZSTD_RAW:
 #if CPA_DC_API_VERSION_AT_LEAST(3,1)
         if (!inst_cap->checksumXXHash32 ||
             !inst_cap->statelessLZ4SCompression) {
@@ -289,7 +290,6 @@ static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
         return QZ_FAIL;
 #endif
         break;
-    case QZ_ZSTD_RAW:
     case QZ_DEFLATE_4B:
     case QZ_DEFLATE_GZIP:
     case QZ_DEFLATE_GZIP_EXT:
@@ -1050,6 +1050,7 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
         return QZ_PARAMS;
 #endif
     case QZ_LZ4S_FH:
+    case QZ_ZSTD_RAW:
 #if CPA_DC_API_VERSION_AT_LEAST(3,1)
         qz_sess->session_setup_data.compType = CPA_DC_LZ4S;
         /* Set the min match size for the lz4s search algorithm,
@@ -1066,20 +1067,6 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
         break;
 #else
         QZ_ERROR("QAT driver does not support lz4s algorithm\n");
-        return QZ_PARAMS;
-#endif
-    case QZ_ZSTD_RAW:
-#if CPA_DC_API_VERSION_AT_LEAST(3,1)
-        qz_sess->session_setup_data.compType = CPA_DC_LZ4S;
-        if (qz_sess->sess_params.lz4s_mini_match == 4) {
-            qz_sess->session_setup_data.minMatch = CPA_DC_MIN_4_BYTE_MATCH;
-        } else {
-            qz_sess->session_setup_data.minMatch = CPA_DC_MIN_3_BYTE_MATCH;
-        }
-        qz_sess->session_setup_data.checksum = CPA_DC_XXHASH32;
-        break;
-#else
-        QZ_DEBUG("QAT driver does not support zstd algorithm\n");
         return QZ_PARAMS;
 #endif
     default:
@@ -1914,8 +1901,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
                  data_fmt != QZ_DEFLATE_GZIP &&
                  data_fmt != QZ_DEFLATE_GZIP_EXT &&
                  data_fmt != QZ_LZ4_FH &&
-                 data_fmt != QZ_LZ4S_FH &&
-                 data_fmt != QZ_ZSTD_RAW)) {
+                 data_fmt != QZ_LZ4S_FH)) {
         QZ_ERROR("Unknown data formt: %d\n", data_fmt);
         *src_len = 0;
         *dest_len = 0;

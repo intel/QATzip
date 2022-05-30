@@ -110,8 +110,6 @@ unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
         break;
     case QZ_DEFLATE_RAW:
         break;
-    case QZ_ZSTD_RAW:
-        break;
     case QZ_DEFLATE_GZIP:
         size = stdGzipHeaderSz();
         break;
@@ -119,6 +117,7 @@ unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
         size = qzLZ4HeaderSz();
         break;
     case QZ_LZ4S_FH:
+    case QZ_ZSTD_RAW:
         size = qzLZ4SHeaderSz();
         break;
     case QZ_DEFLATE_GZIP_EXT:
@@ -226,9 +225,8 @@ void outputHeaderGen(unsigned char *ptr,
         qzLZ4HeaderGen(ptr, res);
         break;
     case QZ_LZ4S_FH:
-        qzLZ4SHeaderGen(ptr, res);
-        break;
     case QZ_ZSTD_RAW:
+        qzLZ4SHeaderGen(ptr, res);
         break;
     case QZ_DEFLATE_GZIP_EXT:
     default:
