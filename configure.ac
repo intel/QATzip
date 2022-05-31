@@ -148,8 +148,6 @@ AS_IF([test -z "${QAT_HEADER}"],
         AC_CHECK_HEADERS(
             [qat/cpa.h qat/cpa_dc.h qat/qae_mem.h qat/icp_sal_poll.h qat/icp_sal_user.h],
             [
-                QAT_HEADER=$(find /usr -name cpa.h | xargs dirname)
-                ICP_INCLUDE_CFLAGS=" -I${QAT_HEADER}"
                 QAT_HEADER=1
             ],
             [AC_MSG_ERROR([not found qat header files])],
@@ -166,10 +164,23 @@ AC_SUBST(ICP_LDFLAGS)
 #check for qat lib.
 QATLIB_NAME=""
 QATLIB_FLAGS=""
-SAVE_CFLAGS=${CFLAGS}
-SAVE_LDFLAGS=${LDFLAGS}
-CFLAGS="${ICP_INCLUDE_CFLAGS}"
-LDFLAGS="${ICP_LDFLAGS}"
+AS_IF([test "x${CFLAGS}" = "x"],
+      [
+          CFLAGS="${ICP_INCLUDE_CFLAGS}"
+      ],
+      [
+          CFLAGS+=" ${ICP_INCLUDE_CFLAGS}"
+      ]
+)
+AS_IF([test "x${LDFLAGS}" = "x"],
+      [
+          LDFLAGS="${ICP_LDFLAGS}"
+      ],
+      [
+          LDFLAGS+=" ${ICP_LDFLAGS}"
+      ]
+)
+
 AC_CHECK_LIB(qat_s, cpaDcCompressData2,
     [
         QATLIB_NAME="qat_s"
@@ -211,35 +222,17 @@ AC_CHECK_LIB(usdm_drv_s, qaeMemAllocNUMA,
     ]
 )
 AC_SUBST(USDMLIB_FLAGS)
-CFLAGS=${SAVE_CFLAGS}
-LDFLAGS=${SAVE_LDFLAGS}
 
 #check for compile flags
 AC_MSG_CHECKING([cflags])
-AS_IF([test "x${CFLAGS}" = "x"],
-    [
-        CFLAGS=' -Wall -Werror -std=gnu99 -pedantic \
-                 -fstack-protector -fPIE -fPIC -fno-strict-overflow \
-                 -fno-delete-null-pointer-checks -fwrapv'
-    ],
-    [
-        CFLAGS+=' -Wall -Werror -std=gnu99 -pedantic \
-                  -fstack-protector -fPIE -fPIC -fno-strict-overflow \
-                  -fno-delete-null-pointer-checks -fwrapv'
-    ]
-)
+CFLAGS+=' -Wall -Werror -std=gnu99 -pedantic \
+          -fstack-protector -fPIE -fPIC -fno-strict-overflow \
+          -fno-delete-null-pointer-checks -fwrapv'
 AC_MSG_RESULT([yes])
 
 #check for compile flags
 AC_MSG_CHECKING([ldflags])
-AS_IF([test "x${LDFLAGS}" = "x"],
-    [
-        LDFLAGS=' -fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
-    ],
-    [
-        LDFLAGS+=' -fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
-    ]
-)
+LDFLAGS+=' -fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
 AC_MSG_RESULT([yes])
 
 #Enable debug mode
