@@ -38,10 +38,16 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "cpa.h"
-#include "cpa_dc.h"
+#ifdef HAVE_QAT_HEADERS
+#include <qat/cpa.h>
+#include <qat/cpa_dc.h>
+#include <qat/qae_mem.h>
+#else
+#include <cpa.h>
+#include <cpa_dc.h>
+#include <qae_mem.h>
+#endif
 #include "qatzip.h"
-#include "qae_mem.h"
 #include "qz_utils.h"
 #include "qatzip_internal.h"
 #include "qatzip_page_table.h"

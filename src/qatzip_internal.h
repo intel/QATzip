@@ -39,8 +39,11 @@
 #ifdef __cplusplus
 extern"C" {
 #endif
-
+#ifdef HAVE_QAT_HEADERS
+#include <qat/cpa_dev.h>
+#else
 #include <cpa_dev.h>
+#endif
 #include <stdbool.h>
 #include <zlib.h>
 #include <lz4frame.h>

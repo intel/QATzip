@@ -33,11 +33,19 @@
  *
  ***************************************************************************/
 
-#include "cpa.h"
-#include "cpa_dc.h"
-#include "icp_sal_poll.h"
-#include "icp_sal_user.h"
-#include "qae_mem.h"
+#ifdef HAVE_QAT_HEADERS
+#include <qat/cpa.h>
+#include <qat/cpa_dc.h>
+#include <qat/icp_sal_poll.h>
+#include <qat/icp_sal_user.h>
+#include <qat/qae_mem.h>
+#else
+#include <cpa.h>
+#include <cpa_dc.h>
+#include <icp_sal_poll.h>
+#include <icp_sal_user.h>
+#include <qae_mem.h>
+#endif
 
 #include <stdlib.h>
 #include <qatzip.h>

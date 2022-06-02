@@ -51,7 +51,11 @@
 #include <zstd_errors.h>
 #include <lz4.h>
 #include <qz_utils.h>
+#ifdef HAVE_QAT_HEADERS
+#include <qat/cpa_dc.h>
+#else
 #include <cpa_dc.h>
+#endif
 #include <qatzip_internal.h>
 
 /*  For qzstd app, there are three types of return errors.

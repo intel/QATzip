@@ -44,8 +44,13 @@
 #include <lz4frame.h>
 #include <lz4.h>
 
-#include "cpa.h"
-#include "cpa_dc.h"
+#ifdef HAVE_QAT_HEADERS
+#include <qat/cpa.h>
+#include <qat/cpa_dc.h>
+#else
+#include <cpa.h>
+#include <cpa_dc.h>
+#endif
 #include "qatzip.h"
 #include "qatzip_internal.h"
 #include "qz_utils.h"

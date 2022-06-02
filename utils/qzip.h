@@ -54,7 +54,11 @@
 #include <fcntl.h>
 #include <qz_utils.h>
 #include <qatzip.h> /* new QATzip interface */
+#ifdef HAVE_QAT_HEADERS
+#include <qat/cpa_dc.h>
+#else
 #include <cpa_dc.h>
+#endif
 #include <pthread.h>
 #include <zlib.h>
 #include <libgen.h>

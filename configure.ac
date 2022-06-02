@@ -43,7 +43,6 @@ AM_SILENT_RULES([yes])
 AC_USE_SYSTEM_EXTENSIONS
 
 AC_CONFIG_MACRO_DIRS([m4])
-AC_CONFIG_HEADERS([config.h])
 
 AC_SUBST([LIBQATZIP_VERSION], [3:0:0])
 # Checks for programs.
@@ -149,6 +148,7 @@ AS_IF([test -z "${QAT_HEADER}"],
             [qat/cpa.h qat/cpa_dc.h qat/qae_mem.h qat/icp_sal_poll.h qat/icp_sal_user.h],
             [
                 QAT_HEADER=1
+		AC_DEFINE([HAVE_QAT_HEADERS], [], [QAT header files in include/qat subdirectory])
             ],
             [AC_MSG_ERROR([not found qat header files])],
             [[#ifdef HAVE_QAT_CPA_H

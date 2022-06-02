@@ -35,7 +35,9 @@
 
 
 #define _POSIX_C_SOURCE 200112L
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <signal.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -50,13 +52,19 @@
 #include <string.h>
 
 /* QAT headers */
+#ifdef HAVE_QAT_HEADERS
+#include <qat/cpa.h>
+#include <qat/cpa_dc.h>
+#include <qat/qae_mem.h>
+#else
 #include <cpa.h>
 #include <cpa_dc.h>
+#include <qae_mem.h>
+#endif
 
 #include <qatzip.h>
 #include <qatzip_internal.h>
 #include <qz_utils.h>
-#include <qae_mem.h>
 #include <sys/wait.h>
 
 #define QZ_FMT_NAME         "QZ"
