@@ -69,7 +69,6 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
-
 # Checks for system header files.
 AC_CHECK_HEADERS([stdio.h stdarg.h fcntl.h limits.h memory.h \
     unistd.h stdint.h stdlib.h string.h sys/ioctl.h \
@@ -226,8 +225,9 @@ AC_SUBST(USDMLIB_FLAGS)
 #check for compile flags
 AC_MSG_CHECKING([cflags])
 CFLAGS+=' -Wall -Werror -std=gnu99 -pedantic \
-          -fstack-protector -fPIE -fPIC -fno-strict-overflow \
+          -fstack-protector -fPIE -fPIC \
           -fno-delete-null-pointer-checks -fwrapv'
+AS_IF([test "x${CC}" = "xgcc"], [CFLAGS+=' -fno-strict-overflow'], [])
 AC_MSG_RESULT([yes])
 
 #check for compile flags
@@ -244,7 +244,8 @@ AC_ARG_ENABLE(debug,
     ]      ,
     [
         debug=false
-        CFLAGS+=' -O2 -D_FORTIFY_SOURCE=2'
+        CFLAGS+=' -O2'
+        AS_IF([test "x${CC}" = "xgcc"], [CFLAGS+=' -D_FORTIFY_SOURCE=2'], [])
     ]
 )
 AM_CONDITIONAL([QATZIP_DEBUG_AC], [test x$debug = xtrue])
