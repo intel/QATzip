@@ -561,7 +561,7 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
     off_t dst_file_size = 0;
     unsigned char *src_buffer = NULL;
     unsigned char *dst_buffer = NULL;
-    unsigned int bytes_read = 0, bytes_processed = 0;
+    unsigned int bytes_read = 0;
     unsigned int ratio_idx = 0;
     const unsigned int ratio_limit =
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
@@ -607,7 +607,6 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
             if (!is_compress) {
                 pending_in = bytes_input - bytes_read;
             }
-            bytes_processed += bytes_read;
             if (0 != bytes_read) {
                 if (!is_compress && pending_in > 0) {
                     memmove(src_buffer, src_buffer + bytes_read,

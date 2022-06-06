@@ -2825,7 +2825,6 @@ size_t writeSubstreamsInfo(Qz7zSubstreamsInfo_T *substreams, FILE *fp,
 {
     int i, j;
     int total_index = 0;
-    int total_files = 0;
     size_t total_size = 0;
 
     if (!substreams) return 0;
@@ -2834,7 +2833,6 @@ size_t writeSubstreamsInfo(Qz7zSubstreamsInfo_T *substreams, FILE *fp,
     total_size += writeTag(PROPERTY_ID_NUM_UNPACK_STREAM, fp, crc);
 
     for (i = 0; i < substreams->numFolders; ++i) {
-        total_files += substreams->numUnPackStreams[i];
         total_size += writeNumber(substreams->numUnPackStreams[i], fp, crc);
     }
 
