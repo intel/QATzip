@@ -3906,11 +3906,11 @@ int main(int argc, char *argv[])
             break;
         case 'D':
             if (strcmp(optarg, "comp") == 0) {
-                service = QZ_DIR_COMPRESS;
+                service = COMP;
             } else if (strcmp(optarg, "decomp") == 0) {
-                service = QZ_DIR_DECOMPRESS;
+                service = DECOMP;
             } else if (strcmp(optarg, "both") == 0) {
-                service = QZ_DIR_BOTH;
+                service = BOTH;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;
