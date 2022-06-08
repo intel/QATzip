@@ -197,7 +197,8 @@ int main(int argc, char **argv)
             stdout = freopen(NULL, "w", stdout);
             processStream(&g_sess, stdin, stream_out, g_decompress == 0);
         }
-    } else if (g_params_th.data_fmt == QZ_DEFLATE_RAW) { //compress into 7z
+    } else if (g_params_th.data_fmt == QZ_DEFLATE_RAW &&
+               !g_decompress) { //compress into 7z
         QZ_DEBUG("going to compress files into 7z archive ...\n");
 
         if (!out_name) {
