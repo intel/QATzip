@@ -291,24 +291,11 @@ typedef struct QzMem_S {
 } QzMem_T;
 
 #pragma pack(push, 1)
-/* lz4 flag byte */
-typedef struct QzLZ4FLG_S {
-    uint8_t dict_id : 1; /* dictionary present */
-    uint8_t resv1 : 1;
-    uint8_t cnt_cksum : 1; /* content checksum present */
-    uint8_t cnt_size : 1;  /* content size present */
-    uint8_t blk_cksum : 1; /* block checksum present */
-    uint8_t blk_indep : 1; /* block linked/independent */
-    uint8_t version : 2;   /* version */
-} QzLZ4FLG_T;
-
 /* lz4 frame header */
 typedef struct QzLZ4H_S {
     uint32_t magic; /* LZ4 magic number */
-    QzLZ4FLG_T bit_field;
-    uint8_t resv2 : 4;
-    uint8_t blk_maxsize : 3; /* max block size */
-    uint8_t resv3 : 1;
+    uint8_t flag_desc;
+    uint8_t block_desc;
     uint64_t cnt_size;
     uint8_t hdr_cksum; /* header checksum */
 } QzLZ4H_T;

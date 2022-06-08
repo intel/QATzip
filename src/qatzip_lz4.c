@@ -65,29 +65,29 @@ int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len)
     //Skippable frames
     if ((hdr->magic & 0xFFFFFFF0U) == QZ_LZ4_MAGIC_SKIPPABLE) {
         /*for skippalbe frames, fallback to software decompression */
+        QZ_DEBUG("qzVerifyLZ4FrameHeader: skip frames, switch to software.\n");
         return  QZ_FORCE_SW;
     }
 
     //Unknown magic number
     if (hdr->magic != QZ_LZ4_MAGIC) {
+        QZ_DEBUG("qzVerifyLZ4FrameHeader: unknown lz4 frame magic number %x.\n",
+                 hdr->magic);
         return QZ_FAIL;
     }
 
     //No support for unknown lz4 version
-    if (hdr->bit_field.version   != QZ_LZ4_VERSION) {
+    if ((hdr->flag_desc >> 6 & 0x3) != QZ_LZ4_VERSION) {
+        QZ_DEBUG("qzVerifyLZ4FrameHeader: unknown lz4 frame version number.\n");
         return QZ_FAIL;
     }
 
-    if (hdr->bit_field.dict_id   != QZ_LZ4_DICT_ID_FLAG ||
-        hdr->bit_field.blk_cksum != QZ_LZ4_BLK_CKS_FLAG ||
-        hdr->bit_field.cnt_cksum != QZ_LZ4_CNT_CKS_FLAG ||
-        hdr->bit_field.cnt_size  != QZ_LZ4_CNT_SIZE_FLAG) {
-        QZ_DEBUG("qzVerifyLZ4FrameHeader: dict_id %d, blk_cksum %d, \
-		         cnt_cksum %d, cnt_size %d\n",
-                 hdr->bit_field.dict_id,
-                 hdr->bit_field.blk_cksum,
-                 hdr->bit_field.cnt_cksum,
-                 hdr->bit_field.cnt_size);
+    if ((hdr->flag_desc & 0x1)      != QZ_LZ4_DICT_ID_FLAG ||
+        (hdr->flag_desc >> 4 & 0x1) != QZ_LZ4_BLK_CKS_FLAG ||
+        (hdr->flag_desc >> 2 & 0x1) != QZ_LZ4_CNT_CKS_FLAG ||
+        (hdr->flag_desc >> 3 & 0x1) != QZ_LZ4_CNT_SIZE_FLAG) {
+        QZ_DEBUG("qzVerifyLZ4FrameHeader: unsupport lz4 frame header \
+                 switch to software.\n");
         return QZ_FORCE_SW;
     }
 
@@ -97,23 +97,23 @@ int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len)
 void qzLZ4HeaderGen(unsigned char *ptr, CpaDcRqResults *res)
 {
     QzLZ4H_T *hdr = NULL;
-    uint8_t *hc_start = NULL;
+    unsigned char *hc_start = NULL;
 
     assert(ptr != NULL);
     assert(res != NULL);
 
     hdr = (QzLZ4H_T *)ptr;
     hdr->magic = QZ_LZ4_MAGIC;
-    hdr->bit_field.version = QZ_LZ4_VERSION & 0x3;
-    hdr->bit_field.blk_indep = QZ_LZ4_BLK_INDEP & 0x01;
-    hdr->bit_field.blk_cksum = QZ_LZ4_BLK_CKS_FLAG & 0x01;
-    hdr->bit_field.cnt_size = QZ_LZ4_CNT_SIZE_FLAG & 0x01;
-    hdr->bit_field.cnt_cksum = QZ_LZ4_CNT_CKS_FLAG & 0x01;
-    hdr->bit_field.resv1 = 0;
-    hdr->bit_field.dict_id = QZ_LZ4_DICT_ID_FLAG & 0x01;
-    hdr->resv2 = 0;
-    hdr->blk_maxsize = QZ_LZ4_MAX_BLK_SIZE & 0x07;
-    hdr->resv3 = 0;
+    //flag descriptor
+    hdr->flag_desc = (unsigned char)(((QZ_LZ4_VERSION  & 0x03) << 6) +
+                                     ((QZ_LZ4_BLK_INDEP & 0x01) << 5) +
+                                     ((QZ_LZ4_BLK_CKS_FLAG & 0x01) << 4) +
+                                     ((QZ_LZ4_CNT_SIZE_FLAG & 0x01) << 3) +
+                                     ((QZ_LZ4_CNT_CKS_FLAG & 0x01) << 2) +
+                                     (QZ_LZ4_DICT_ID_FLAG & 0x01));
+
+    //block descriptot
+    hdr->block_desc = (unsigned char)((QZ_LZ4_MAX_BLK_SIZE & 0x07) << 4);
 
     //content size
     hdr->cnt_size = res->consumed;
@@ -188,20 +188,14 @@ int isQATLZ4Processable(const unsigned char *ptr,
     }
 
     //No support for unknown lz4 version
-    if (hdr->bit_field.version   != QZ_LZ4_VERSION) {
+    if ((hdr->flag_desc >> 6 & 0x3) != QZ_LZ4_VERSION) {
         return 0;
     }
 
-    if (hdr->bit_field.dict_id   != QZ_LZ4_DICT_ID_FLAG ||
-        hdr->bit_field.blk_cksum != QZ_LZ4_BLK_CKS_FLAG ||
-        hdr->bit_field.cnt_cksum != QZ_LZ4_CNT_CKS_FLAG ||
-        hdr->bit_field.cnt_size  != QZ_LZ4_CNT_SIZE_FLAG) {
-        QZ_DEBUG("isQATLZ4Processable:dict_id %d, blk_cksum %d, \
-		         cnt_cksum %d, cnt_size %d\n",
-                 hdr->bit_field.dict_id,
-                 hdr->bit_field.blk_cksum,
-                 hdr->bit_field.cnt_cksum,
-                 hdr->bit_field.cnt_size);
+    if ((hdr->flag_desc & 0x1)      != QZ_LZ4_DICT_ID_FLAG ||
+        (hdr->flag_desc >> 4 & 0x1) != QZ_LZ4_BLK_CKS_FLAG ||
+        (hdr->flag_desc >> 2 & 0x1) != QZ_LZ4_CNT_CKS_FLAG ||
+        (hdr->flag_desc >> 3 & 0x1) != QZ_LZ4_CNT_SIZE_FLAG) {
         return 0;
     }
 
