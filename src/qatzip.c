@@ -1902,7 +1902,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
                  data_fmt != QZ_DEFLATE_GZIP_EXT &&
                  data_fmt != QZ_LZ4_FH &&
                  data_fmt != QZ_LZ4S_FH)) {
-        QZ_ERROR("Unknown data formt: %d\n", data_fmt);
+        QZ_ERROR("Unknown data format: %d\n", data_fmt);
         *src_len = 0;
         *dest_len = 0;
         return QZ_PARAMS;
@@ -2668,7 +2668,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
                  data_fmt != QZ_DEFLATE_GZIP &&
                  data_fmt != QZ_LZ4_FH &&
                  data_fmt != QZ_DEFLATE_GZIP_EXT)) {
-        QZ_ERROR("Unknown/unsupported data formt: %d\n", data_fmt);
+        QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
         *src_len = 0;
         *dest_len = 0;
         return QZ_PARAMS;

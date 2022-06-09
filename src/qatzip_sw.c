@@ -662,7 +662,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
         ret = qzLZ4SWCompress(sess, src, src_len, dest, dest_len, last);
         break;
     default:
-        QZ_ERROR("Unknown/unsupported data formt: %d\n", data_fmt);
+        QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
         *src_len = 0;
         *dest_len = 0;
         ret = QZ_FAIL;
@@ -702,7 +702,7 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
         ret = qzLZ4SWDecompress(sess, src, src_len, dest, dest_len);
         break;
     default:
-        QZ_ERROR("Unknown/unsupported data formt: %d\n", data_fmt);
+        QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
         *src_len = 0;
         *dest_len = 0;
         ret = QZ_FAIL;
@@ -742,7 +742,7 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
         ret = qzSWDecompressMultiLZ4(sess, src, src_len, dest, dest_len);
         break;
     default:
-        QZ_ERROR("Unknown/unsupported data formt: %d\n", data_fmt);
+        QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
         *src_len = 0;
         *dest_len = 0;
         ret = QZ_FAIL;
