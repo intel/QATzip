@@ -89,7 +89,7 @@ int main(int argc, char **argv)
             g_sess_params.lz4s_mini_match = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (g_sess_params.lz4s_mini_match != 3 &&
                 g_sess_params.lz4s_mini_match != 4) {
-                printf("Error! mini_match can only set 3 or 4!\n");
+                QZ_ERROR("%s : mini_match can only set 3 or 4!\n", QZSTD_ERROR_TYPE);
                 return QZSTD_ERROR;
             }
             break;

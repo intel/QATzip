@@ -325,7 +325,6 @@ int compressFile(char *input_file_name, char *output_file_name)
     int ret = qzInit(&qzstd_g_sess, g_sess_params.sw_backup);
     if (ret != QZ_OK && ret != QZ_DUPLICATE) {
         QZ_ERROR("%s : qzInit failed with error code %d\n", QZ_ERROR_TYPE, ret);
-        printf("ERROR: qzInit failed\n");
         return QZSTD_ERROR;
     }
 
@@ -581,7 +580,7 @@ int decompressFile(const char *const input_file_name, char *output_file_name)
     //keep file permission
     ret = chmod(output_file_name, src_file_state.st_mode);
     if (ret != 0) {
-        printf("ERROR: failed to keep file permission\n");
+        QZ_ERROR("%s : failed to keep file permission\n", ZSTD_ERROR_TYPE);
         rc = QZSTD_ERROR;
         goto done;
     }
