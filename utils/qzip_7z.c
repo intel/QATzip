@@ -589,8 +589,9 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
 
                 puts("Compressing...");
 
+                unsigned int dest_len = dst_buffer_size;
                 ret = doCompressBuffer(sess, src_buffer, &bytes_read,
-                                       dst_buffer, &dst_buffer_size,
+                                       dst_buffer, &dest_len,
                                        time_list_head, dst_file, &dst_file_size,
                                        is_last);
 
