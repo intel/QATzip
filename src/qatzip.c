@@ -760,45 +760,74 @@ void cleanUpInstMem(int i)
 {
     int j;
 
-    if (0 == g_process.qz_inst[i].mem_setup) {
-        return;
-    }
-
-    for (j = 0; j < g_process.qz_inst[i].intermediate_cnt; j++) {
-        qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData);
-        qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData);
-        qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pBuffers);
-        qzFree(g_process.qz_inst[i].intermediate_buffers[j]);
-    }
-
     /*intermediate buffers*/
     if (NULL != g_process.qz_inst[i].intermediate_buffers) {
+        for (j = 0; j < g_process.qz_inst[i].intermediate_cnt; j++) {
+            if (NULL != g_process.qz_inst[i].intermediate_buffers[j]) {
+                if (NULL != g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData) {
+                    qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData);
+                    g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData = NULL;
+                }
+                if (NULL != g_process.qz_inst[i].intermediate_buffers[j]->pBuffers) {
+                    if (NULL != g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData) {
+                        qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData);
+                        g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData = NULL;
+                    }
+                    qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pBuffers);
+                    g_process.qz_inst[i].intermediate_buffers[j]->pBuffers = NULL;
+                }
+                qzFree(g_process.qz_inst[i].intermediate_buffers[j]);
+                g_process.qz_inst[i].intermediate_buffers[j] = NULL;
+            }
+        }
         free(g_process.qz_inst[i].intermediate_buffers);
         g_process.qz_inst[i].intermediate_buffers = NULL;
     }
 
     /*src buffers*/
-    for (j = 0; j < g_process.qz_inst[i].src_count; j++) {
-        qzFree(g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData);
-        qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData);
-        qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers);
-        qzFree(g_process.qz_inst[i].src_buffers[j]);
-    }
-
     if (NULL != g_process.qz_inst[i].src_buffers) {
+        for (j = 0; j < g_process.qz_inst[i].src_count; j++) {
+            if (NULL != g_process.qz_inst[i].src_buffers[j]) {
+                if (NULL != g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData) {
+                    qzFree(g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData);
+                    g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData = NULL;
+                }
+                if (NULL != g_process.qz_inst[i].src_buffers[j]->pBuffers) {
+                    if (NULL != g_process.qz_inst[i].src_buffers[j]->pBuffers->pData) {
+                        qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData);
+                        g_process.qz_inst[i].src_buffers[j]->pBuffers->pData = NULL;
+                    }
+                    qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers);
+                    g_process.qz_inst[i].src_buffers[j]->pBuffers = NULL;
+                }
+                qzFree(g_process.qz_inst[i].src_buffers[j]);
+                g_process.qz_inst[i].src_buffers[j] = NULL;
+            }
+        }
         free(g_process.qz_inst[i].src_buffers);
         g_process.qz_inst[i].src_buffers = NULL;
     }
 
     /*dest buffers*/
-    for (j = 0; j < g_process.qz_inst[i].dest_count; j++) {
-        qzFree(g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData);
-        qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData);
-        qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers);
-        qzFree(g_process.qz_inst[i].dest_buffers[j]);
-    }
-
     if (NULL != g_process.qz_inst[i].dest_buffers) {
+        for (j = 0; j < g_process.qz_inst[i].dest_count; j++) {
+            if (NULL != g_process.qz_inst[i].dest_buffers[j]) {
+                if (NULL != g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData) {
+                    qzFree(g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData);
+                    g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData = NULL;
+                }
+                if (NULL != g_process.qz_inst[i].dest_buffers[j]->pBuffers) {
+                    if (NULL != g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData) {
+                        qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData);
+                        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData = NULL;
+                    }
+                    qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers);
+                    g_process.qz_inst[i].dest_buffers[j]->pBuffers = NULL;
+                }
+                qzFree(g_process.qz_inst[i].dest_buffers[j]);
+                g_process.qz_inst[i].dest_buffers[j] = NULL;
+            }
+        }
         free(g_process.qz_inst[i].dest_buffers);
         g_process.qz_inst[i].dest_buffers = NULL;
     }
@@ -820,8 +849,9 @@ void cleanUpInstMem(int i)
         goto done_inst;                                              \
     }
 
-#define QZ_INST_MEM_STATUS_CHECK(status)                             \
+#define QZ_INST_MEM_STATUS_CHECK(status, i)                          \
     if (CPA_STATUS_SUCCESS != status) {                              \
+        cleanUpInstMem((i));                                         \
         rc = sw_backup ? QZ_NO_INST_ATTACH : QZ_NOSW_NO_INST_ATTACH; \
         goto done_inst;                                              \
     }
@@ -849,11 +879,11 @@ static int getInstMem(int i, QzSessionParams_T *params)
     QZ_DEBUG("getInstMem: Setting up memory for inst %d\n", i);
     status = cpaDcBufferListGetMetaSize(g_process.dc_inst_handle[i], 1,
                                         &(g_process.qz_inst[i].buff_meta_size));
-    QZ_INST_MEM_STATUS_CHECK(status);
+    QZ_INST_MEM_STATUS_CHECK(status, i);
 
     status = cpaDcGetNumIntermediateBuffers(g_process.dc_inst_handle[i],
                                             &(g_process.qz_inst[i].intermediate_cnt));
-    QZ_INST_MEM_STATUS_CHECK(status);
+    QZ_INST_MEM_STATUS_CHECK(status, i);
 
     g_process.qz_inst[i].intermediate_buffers =
         malloc((size_t)(g_process.qz_inst[i].intermediate_cnt * sizeof(
@@ -963,13 +993,13 @@ static int getInstMem(int i, QzSessionParams_T *params)
 
     status = cpaDcSetAddressTranslation(g_process.dc_inst_handle[i],
                                         qaeVirtToPhysNUMA);
-    QZ_INST_MEM_STATUS_CHECK(status);
+    QZ_INST_MEM_STATUS_CHECK(status, i);
 
     g_process.qz_inst[i].inst_start_status =
         cpaDcStartInstance(g_process.dc_inst_handle[i],
                            g_process.qz_inst[i].intermediate_cnt,
                            g_process.qz_inst[i].intermediate_buffers);
-    QZ_INST_MEM_STATUS_CHECK(g_process.qz_inst[i].inst_start_status);
+    QZ_INST_MEM_STATUS_CHECK(g_process.qz_inst[i].inst_start_status, i);
 
     g_process.qz_inst[i].mem_setup = 1;
 
