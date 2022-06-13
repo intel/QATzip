@@ -1913,7 +1913,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
         off_t          cur_offset;
         cur_offset = 0;
-        int file_read_processed_size = 0;
+        off_t file_read_processed_size = 0;
         int need_check_file_with_same_name = 1;
 
         do {
@@ -1934,16 +1934,16 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
             int buffer_remaining = bytes_read;
             do {
-                bytes_read = buffer_remaining;
-                ret = doDecompressBuffer(sess, src_buffer, &bytes_read,
+                unsigned int bytes_processed = buffer_remaining;
+                ret = doDecompressBuffer(sess, src_buffer, &bytes_processed,
                                          dst_buffer, &dst_buffer_size,
                                          time_list_head, is_last);
 
-                file_read_processed_size += bytes_read;
-                src_buffer += bytes_read;
-                buffer_remaining -= bytes_read;
+                file_read_processed_size += bytes_processed;
+                src_buffer += bytes_processed;
+                buffer_remaining -= bytes_processed;
                 if (QZ_DATA_ERROR == ret || QZ_BUF_ERROR == ret) {
-                    if (0 != bytes_read) {
+                    if (0 != bytes_processed) {
                         if (-1 == fseek(src_file, file_read_processed_size,
                                         SEEK_SET)) {
                             ret = ERROR;
@@ -2055,7 +2055,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
                     dst_buffer_size = saved_dst_buffer_size;
                 }
             } while (buffer_remaining);
-            file_remaining -= file_read_processed_size;
+            file_remaining -= bytes_read;
         } while (file_remaining > 0);
 
     } else {
