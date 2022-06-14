@@ -55,6 +55,11 @@ extern"C" {
 
 #define NODE_0               0
 #define NUM_BUFF             (32)
+/**
+ * For Gen4, 8K hardware buffer size need more inflight buffers
+ * to reach peak performance
+ */
+#define NUM_BUFF_8K_GEN4     (128)
 #define MAX_NUM_RETRY        ((int)500)
 #define MAX_BUFFERS          ((int)100)
 #define MAX_THREAD_TMR       ((int)100)

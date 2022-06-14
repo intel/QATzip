@@ -930,8 +930,19 @@ static int getInstMem(int i, QzSessionParams_T *params)
             inter_sz;
     }
 
-    g_process.qz_inst[i].src_count = NUM_BUFF;
-    g_process.qz_inst[i].dest_count = NUM_BUFF;
+    if (IS_QAT_GEN4(g_process.device_info.deviceId) &&
+        src_sz < 16384) {
+        /* For QAT gen4, it has higher perfomance than gen2, shorter processing
+         * time for a single request, especially the small block data.
+         * Setting the src_count and dest_count to 128(NUM_BUFF_8K_GEN4) to improve
+         * 8k decompression performance.
+        */
+        g_process.qz_inst[i].src_count = NUM_BUFF_8K_GEN4;
+        g_process.qz_inst[i].dest_count = NUM_BUFF_8K_GEN4;
+    } else {
+        g_process.qz_inst[i].src_count = NUM_BUFF;
+        g_process.qz_inst[i].dest_count = NUM_BUFF;
+    }
 
     g_process.qz_inst[i].src_buffers = calloc(1, (size_t)(
                                            g_process.qz_inst[i].src_count *
