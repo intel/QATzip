@@ -496,8 +496,8 @@ int decompressFile(const char *const input_file_name, char *output_file_name)
                      input_file_name);
             return QZSTD_ERROR;
         }
-        char zst[] = ".zst";
-        if (!strcmp(input_file_name + str_len - 5, zst)) {
+        char *zst = ".zst";
+        if (strncmp(input_file_name + str_len - 4, zst, 4)) {
             QZ_ERROR("%s : unsupported file format\n", QZSTD_ERROR_TYPE);
             return QZSTD_ERROR;
         }
