@@ -886,8 +886,8 @@ static int getInstMem(int i, QzSessionParams_T *params)
     QZ_INST_MEM_STATUS_CHECK(status, i);
 
     g_process.qz_inst[i].intermediate_buffers =
-        malloc((size_t)(g_process.qz_inst[i].intermediate_cnt * sizeof(
-                            CpaBufferList *)));
+        calloc(1, (size_t)(g_process.qz_inst[i].intermediate_cnt * sizeof(
+                               CpaBufferList *)));
     QZ_INST_MEM_CHECK(g_process.qz_inst[i].intermediate_buffers, i);
 
     for (j = 0; j < g_process.qz_inst[i].intermediate_cnt; j++) {
@@ -920,12 +920,12 @@ static int getInstMem(int i, QzSessionParams_T *params)
     g_process.qz_inst[i].src_count = NUM_BUFF;
     g_process.qz_inst[i].dest_count = NUM_BUFF;
 
-    g_process.qz_inst[i].src_buffers = malloc((size_t)(
+    g_process.qz_inst[i].src_buffers = calloc(1, (size_t)(
                                            g_process.qz_inst[i].src_count *
                                            sizeof(CpaBufferList *)));
     QZ_INST_MEM_CHECK(g_process.qz_inst[i].src_buffers, i);
 
-    g_process.qz_inst[i].dest_buffers = malloc(g_process.qz_inst[i].dest_count *
+    g_process.qz_inst[i].dest_buffers = calloc(1, g_process.qz_inst[i].dest_count *
                                         sizeof(CpaBufferList *));
     QZ_INST_MEM_CHECK(g_process.qz_inst[i].dest_buffers, i);
 
