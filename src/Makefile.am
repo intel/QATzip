@@ -41,7 +41,8 @@ libqatzip_la_SOURCES = \
                        qatzip_stream.c \
                        qatzip_sw.c \
                        qatzip_utils.c \
-                       qatzip_lz4.c
+                       qatzip_lz4.c \
+                       xxhash.c
 libqatzip_la_CFLAGS = \
                       -I./ \
                       -I../include/ \

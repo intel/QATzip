@@ -47,7 +47,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
-#include <xxhash.h>
+#include "xxhash.h"
 
 #include "cpa.h"
 #include "cpa_dc.h"

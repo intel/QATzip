@@ -103,7 +103,6 @@ Please download the QAT driver from the link https://01.org/intel-quickassist-te
 * Zlib\* library of version 1.2.7 or higher
 * Suggest GCC\* of version 4.8.5 or higher
 * lz4\* library
-* xxhash\* library
 * zstd\* static library
 
 ## Additional Information

@@ -34,7 +34,7 @@
  ***************************************************************************/
 
 #include <assert.h>
-#include <xxhash.h>
+#include "xxhash.h"
 
 #include "cpa.h"
 #include "cpa_dc.h"

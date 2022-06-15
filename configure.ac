@@ -115,9 +115,9 @@ AC_CHECK_HEADER([lz4.h],,[AC_MSG_ERROR([not found lz4.h])])
 AC_CHECK_HEADER([lz4frame.h],,[AC_MSG_ERROR([not found lz4frame.h])])
 AC_CHECK_LIB([lz4], [LZ4F_compressBegin], ,AC_MSG_ERROR([not found LZ4F_compressBegin in -llz4]))
 
-#check for xxhash lib
-AC_CHECK_HEADER([xxhash.h],,[AC_MSG_ERROR([not found xxhash.h])])
-AC_CHECK_LIB([xxhash], [XXH32_update], ,AC_MSG_ERROR([not found XXH32_update in -lxxhash]))
+##check for xxhash lib
+#AC_CHECK_HEADER([xxhash.h],,[AC_MSG_ERROR([not found xxhash.h])])
+#AC_CHECK_LIB([xxhash], [XXH32_update], ,AC_MSG_ERROR([not found XXH32_update in -lxxhash]))
 
 #check for qat header file.
 QAT_HEADER=
