@@ -2149,7 +2149,8 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         break;
     case QZ_DEFLATE_4B:
         compressed_sz = *(int *)src_ptr;
-        uncompressed_sz = qz_sess->sess_params.hw_buff_sz;
+        uncompressed_sz = (qz_sess->sess_params.hw_buff_sz > dest_avail_len) ?
+                          dest_avail_len : qz_sess->sess_params.hw_buff_sz;
         break;
     case QZ_LZ4_FH:
         ret = qzVerifyLZ4FrameHeader(src_ptr, src_avail_len);
