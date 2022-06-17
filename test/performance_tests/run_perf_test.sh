@@ -54,8 +54,12 @@ then
     platform=`lspci | grep Co-processor | awk '{print $5}' | head -1`
     if [[ $platform != "DH895XCC" && $platform != "C62x" ]]
     then
-        echo "Unsupport Platform: `lspci | grep Co-processor` "
-        exit 1
+        platform=`lspci | grep Co-processor | awk '{print $7}' | head -1`
+        if [ $platform != "C3000" ]
+        then
+            echo "Unsupport Platform: `lspci | grep Co-processor` "
+            exit 1
+        fi
     fi
 fi
 echo "platform=$platform"
@@ -77,6 +81,10 @@ elif [ $platform = "4940" ]
 then
     process=48
     \cp $CURRENT_PATH/config_file/4xxx/4xxx*.conf /etc
+elif [ $platform = "C3000" ]
+then
+    process=4
+    \cp $CURRENT_PATH/config_file/c3xxx/c3xxx_dev0.conf /etc
 fi
 service qat_service restart
 echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
