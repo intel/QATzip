@@ -48,6 +48,7 @@ int main(int argc, char **argv)
     int is_dir = 0;
     int recursive_mode = 0;
     errno = 0;
+    int is_format_set = 0;
 
     if (qzGetDefaults(&g_params_th) != QZ_OK)
         return -1;
@@ -120,6 +121,7 @@ int main(int argc, char **argv)
                 QZ_ERROR("Error gzip header format arg: %s\n", optarg);
                 return -1;
             }
+            is_format_set = 1;
             break;
         case 'o':
             out_name = optarg;
@@ -183,9 +185,6 @@ int main(int argc, char **argv)
         g_params_th.direction = QZ_DIR_COMPRESS;
     }
 
-    if (qatzipSetup(&g_sess, &g_params_th)) {
-        exit(ERROR);
-    }
     if (0 == arg_count) {
         if (isatty(fileno((FILE *)stdout)) && 0 == option_f &&
             0 == g_decompress) {
@@ -193,6 +192,10 @@ int main(int argc, char **argv)
                    "Use -f to force compression.\n");
             printf("For help, type: qzip -h\n");
         } else {
+            if (qatzipSetup(&g_sess, &g_params_th)) {
+                fprintf(stderr, "qatzipSetup session failed\n");
+                exit(ERROR);
+            }
             stream_out = stdout;
             stdout = freopen(NULL, "w", stdout);
             processStream(&g_sess, stdin, stream_out, g_decompress == 0);
@@ -236,18 +239,28 @@ int main(int argc, char **argv)
             QzSuffix_T  suffix = getSuffix(argv[optind]);
 
             is_dir = checkDirectory(argv[optind]);
+            if (g_decompress && !is_dir) {
+                QzSuffixCheckStatus_T check_res = checkSuffix(suffix, is_format_set);
+                if (E_CHECK_SUFFIX_UNSUPPORT == check_res) {
+                    QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz/lz4.\n",
+                             argv[optind]);
+                    exit(ERROR);
+                }
+                if (E_CHECK_SUFFIX_FORMAT_UNMATCH == check_res) {
+                    QZ_ERROR("Error: %s: Suffix is not matched with format\n",
+                             argv[optind]);
+                    exit(ERROR);
+                }
+            }
 
-            if (g_decompress && !is_dir && !hasSuffix(argv[optind])) {
-                QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz/lz4.\n",
-                         argv[optind]);
+            if (qatzipSetup(&g_sess, &g_params_th)) {
+                fprintf(stderr, "qatzipSetup session failed\n");
                 exit(ERROR);
             }
 
             if (g_decompress) {
-
                 if (!recursive_mode)  {
                     if (suffix == E_SUFFIX_7Z) {
-
                         is_good_7z = check7zArchive(argv[optind]);
                         if (is_good_7z < 0) {
                             exit(ERROR);

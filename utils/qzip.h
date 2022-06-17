@@ -170,6 +170,12 @@ typedef enum QzSuffix_E {
     E_SUFFIX_UNKNOWN = 999
 } QzSuffix_T;
 
+typedef enum QzSuffixCheckStatus_E {
+    E_CHECK_SUFFIX_OK,
+    E_CHECK_SUFFIX_UNSUPPORT,
+    E_CHECK_SUFFIX_FORMAT_UNMATCH
+} QzSuffixCheckStatus_T;
+
 #define SRC_BUFF_LEN         (512 * 1024 * 1024)
 
 
@@ -703,6 +709,7 @@ void version();
 char *qzipBaseName(char *fname);
 QzSuffix_T getSuffix(const char *filename);
 bool hasSuffix(const char *fname);
+QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set);
 int makeOutName(const char *in_name, const char *out_name,
                 char *oname, int is_compress);
 

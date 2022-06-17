@@ -463,6 +463,46 @@ bool hasSuffix(const char *fname)
     return 0;
 }
 
+QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
+{
+    if (E_SUFFIX_GZ == suffix) {
+        if (!is_format_set) {
+            // format is not specified, reassign data format by suffix instead of default value
+            g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
+            return E_CHECK_SUFFIX_OK;
+        }
+        if (QZ_DEFLATE_GZIP_EXT != g_params_th.data_fmt &&
+            QZ_DEFLATE_GZIP != g_params_th.data_fmt &&
+            QZ_DEFLATE_4B != g_params_th.data_fmt) {
+            return E_CHECK_SUFFIX_FORMAT_UNMATCH;
+        } else {
+            return E_CHECK_SUFFIX_OK;
+        }
+    } else if (E_SUFFIX_7Z == suffix) {
+        if (!is_format_set) {
+            g_params_th.data_fmt = QZ_DEFLATE_RAW;
+            return E_CHECK_SUFFIX_OK;
+        }
+        if (QZ_DEFLATE_RAW != g_params_th.data_fmt) {
+            return E_CHECK_SUFFIX_FORMAT_UNMATCH;
+        } else {
+            return E_CHECK_SUFFIX_OK;
+        }
+    } else if (E_SUFFIX_LZ4 == suffix) {
+        if (!is_format_set) {
+            g_params_th.data_fmt = QZ_LZ4_FH;
+            return E_CHECK_SUFFIX_OK;
+        }
+        if (QZ_LZ4_FH != g_params_th.data_fmt) {
+            return E_CHECK_SUFFIX_FORMAT_UNMATCH;
+        } else {
+            return E_CHECK_SUFFIX_OK;
+        }
+    } else {    //unsupported suffix
+        return E_CHECK_SUFFIX_UNSUPPORT;
+    }
+}
+
 int makeOutName(const char *in_name, const char *out_name,
                 char *oname, int is_compress)
 {
