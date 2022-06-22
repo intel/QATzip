@@ -524,11 +524,18 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         }
     }
 
-    while (0 == strm->pending_out && NULL != strm->in) {
+    while (0 == strm->pending_out) {
 
         if (copy_more == 1 && stream_buf->flush_more != 1) {
             copied_input_last = copied_input;
-            copied_input += copyStreamInput(strm, strm->in + consumed);
+            if (NULL != strm->in) {
+                copied_input += copyStreamInput(strm, strm->in + consumed);
+            } else {
+                rc = QZ_PARAMS;
+                strm->in_sz = 0;
+                strm->out_sz = 0;
+                goto end;
+            }
 
             if (strm->pending_in < stream_buf->buf_len &&
                 last != 1) {
