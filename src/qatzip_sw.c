@@ -230,7 +230,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
          * When data_fmt is QZ_DEFLATE_GZIP_EXT,
          * we should fill src_sz & dest_sz in gzipext header field.
          */
-        if (QZ_DEFLATE_GZIP_EXT == data_fmt && qz4B_header) {
+        if (QZ_DEFLATE_GZIP_EXT == data_fmt && qz_hdr) {
             qz_hdr->extra.qz_e.src_sz  = stream->total_in;
             qz_hdr->extra.qz_e.dest_sz = stream->total_out -
                                          outputHeaderSz(data_fmt) - outputFooterSz(data_fmt);
