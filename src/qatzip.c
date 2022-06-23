@@ -3144,6 +3144,7 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
     case QZ_DEFLATE_RAW:
     case QZ_DEFLATE_GZIP:
     case QZ_DEFLATE_GZIP_EXT:
+    case QZ_DEFLATE_4B:
         dest_sz = qzDeflateBound(src_sz, sess);
         break;
     case QZ_LZ4_FH:
