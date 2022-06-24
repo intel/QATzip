@@ -1869,6 +1869,38 @@ unsigned char getSwBackup(QzSession_T *sess)
     }
 }
 
+/*
+ * Check the destination buffer size is valid for QAT device.
+ * For QAT Gen2, the min out buffer size is 64. For QAT Gen4,
+ * dynamic compression is 512, and static compression is 1024.
+ */
+static int qzCheckDestBufferSize(QzSession_T *sess, unsigned int dest_len)
+{
+    QzSess_T *qz_sess;
+    QzHuffmanHdr_T huffman_hdr;
+
+    assert(sess);
+    assert(sess->internal);
+
+    /*
+     * Ensure that the destination buffer size is greater or equal
+     * to devices min output buff size.
+     */
+    if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
+        qz_sess = (QzSess_T *)sess->internal;
+        huffman_hdr = qz_sess->sess_params.huffman_hdr;
+        if (huffman_hdr == QZ_DYNAMIC_HDR && dest_len < 512) {
+            return QZ_FAIL;
+        } else if (huffman_hdr == QZ_STATIC_HDR && dest_len < 1024) {
+            return QZ_FAIL;
+        }
+    } else if (dest_len < 64) {
+        return QZ_FAIL;
+    }
+
+    return QZ_OK;
+}
+
 /* The QATzip compression API */
 int qzCompress(QzSession_T *sess, const unsigned char *src,
                unsigned int *src_len, unsigned char *dest,
@@ -1983,6 +2015,12 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
         *src_len = 0;
         *dest_len = 0;
         return sess->hw_session_stat;
+    }
+
+
+    if (QZ_OK != qzCheckDestBufferSize(sess, *dest_len)) {
+        QZ_DEBUG("qzCheckDestBufferSize failed, switch to software.\n");
+        goto sw_compression;
     }
 
     i = qzGrabInstance(qz_sess->inst_hint, data_fmt);
