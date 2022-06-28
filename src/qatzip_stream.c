@@ -521,13 +521,10 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
         if (copy_more == 1 && stream_buf->flush_more != 1) {
             copied_input_last = copied_input;
+            // Note, strm->in == NULL and strm->in_sz == 0, will not cause
+            // copyStreamInput failed, but it's Dangerous behavior.
             if (NULL != strm->in) {
                 copied_input += copyStreamInput(strm, strm->in + consumed);
-            } else {
-                rc = QZ_PARAMS;
-                strm->in_sz = 0;
-                strm->out_sz = 0;
-                goto end;
             }
 
             if (strm->pending_in < stream_buf->buf_len &&
