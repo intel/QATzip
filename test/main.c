@@ -81,6 +81,12 @@
                                    QZ_DUPLICATE != rc && \
                                    g_process.qz_init_status != QZ_NO_HW)
 
+#if CPA_DC_API_VERSION_AT_LEAST(3,0)
+#define COMP_LVL_MAXIMUM QZ_LZS_COMP_LVL_MAXIMUM
+#else
+#define COMP_LVL_MAXIMUM QZ_DEFLATE_COMP_LVL_MAXIMUM
+#endif
+
 typedef void *(QzThdOps)(void *);
 
 typedef enum {
@@ -936,7 +942,7 @@ void *qzSetupParamFuncTest(void *arg)
         goto end;
     }
 
-    cus_params.comp_lvl = (QZ_DEFLATE_COMP_LVL_MAXIMUM + 1);
+    cus_params.comp_lvl = (COMP_LVL_MAXIMUM + 1);
     if (qzSetDefaultsGen3(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect comp_level: %d.\n",
                  cus_params.comp_lvl);
@@ -2496,10 +2502,10 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
         test_strm = &comp_strm;
     } else if (2 == test_no) {
         QZ_DEBUG("T#############T DecompressStream comp level is %d Test ***\n",
-                 (QZ_DEFLATE_COMP_LVL_MAXIMUM + 1));
+                 (COMP_LVL_MAXIMUM + 1));
         test_sess = &comp_sess;
         ((QzSess_T *)(test_sess->internal))->sess_params.comp_lvl =
-            (QZ_DEFLATE_COMP_LVL_MAXIMUM + 1);
+            (COMP_LVL_MAXIMUM + 1);
         test_strm = &comp_strm;
     } else if (3 == test_no) {
         QZ_DEBUG("T#############T DecompressStream Neg parameter for last is -1 Test ***\n");
@@ -3326,7 +3332,7 @@ int qzCompressSWL9DecompressHW(void)
 
     qzGetDefaultsGen3(&params);
     params.input_sz_thrshold = orig_sz + 1;
-    params.comp_lvl = QZ_DEFLATE_COMP_LVL_MAXIMUM;
+    params.comp_lvl = COMP_LVL_MAXIMUM;
     rc = qzSetupSessionGen3(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("qzSetupSessionGen3 for testing %s error, return: %d\n", __func__, rc);
@@ -3760,7 +3766,7 @@ done:
 
 void qzPrintUsageAndExit(char *progName)
 {
-    QZ_ERROR(USAGE_STRING(QZ_DEFLATE_COMP_LVL_MAXIMUM), progName);
+    QZ_ERROR(USAGE_STRING(COMP_LVL_MAXIMUM), progName);
     exit(-1);
 }
 
@@ -3897,7 +3903,7 @@ int main(int argc, char *argv[])
         case 'L':
             g_params_th.comp_lvl = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (*stop != '\0' || errno ||  \
-                g_params_th.comp_lvl > QZ_DEFLATE_COMP_LVL_MAXIMUM ||
+                g_params_th.comp_lvl > COMP_LVL_MAXIMUM ||
                 g_params_th.comp_lvl <= 0) {
                 QZ_ERROR("Error compLevel arg: %s\n", optarg);
                 return -1;
