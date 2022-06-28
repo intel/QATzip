@@ -431,7 +431,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     unsigned int strm_last = 0;
     QzStreamBuf_T *stream_buf = NULL;
     QzSess_T *qz_sess = NULL;
-    QzDataFormat_T data_fmt = QZ_DEFLATE_GZIP_EXT;
+    DataFormatInternal_T data_fmt = DEFLATE_GZIP_EXT;
 
     if (NULL == sess     || \
         NULL == strm     || \
@@ -465,13 +465,6 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
             goto done;
         }
     }
-    if (qz_sessParamsCheck(&(((QzSess_T *)(sess->internal))->sess_params)) !=
-        SUCCESS) {
-        rc = QZ_PARAMS;
-        strm->in_sz = 0;
-        strm->out_sz = 0;
-        goto end;
-    }
     switch (strm->crc_type) {
     case QZ_CRC32:
     case QZ_ADLER:
@@ -497,8 +490,8 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
     qz_sess = (QzSess_T *)(sess->internal);
     data_fmt = qz_sess->sess_params.data_fmt;
-    if (data_fmt != QZ_DEFLATE_RAW &&
-        data_fmt != QZ_DEFLATE_GZIP_EXT) {
+    if (data_fmt != DEFLATE_RAW &&
+        data_fmt != DEFLATE_GZIP_EXT) {
         QZ_ERROR("Invalid data format: %d\n", data_fmt);
         strm->in_sz = 0;
         strm->out_sz = 0;
@@ -659,14 +652,6 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         if (QZ_OK != rc) {
             goto done;
         }
-    }
-
-    if (qz_sessParamsCheck(&(((QzSess_T *)(sess->internal))->sess_params)) !=
-        SUCCESS) {
-        rc = QZ_PARAMS;
-        strm->in_sz = 0;
-        strm->out_sz = 0;
-        goto end;
     }
 
     stream_buf = (QzStreamBuf_T *) strm->opaque;

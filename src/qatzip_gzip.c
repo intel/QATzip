@@ -77,21 +77,21 @@ inline unsigned long qzLZ4SHeaderSz(void)
     return qzLZ4HeaderSz() + QZ_LZ4_BLK_HEADER_SIZE;
 }
 
-inline unsigned long outputFooterSz(QzDataFormat_T data_fmt)
+inline unsigned long outputFooterSz(DataFormatInternal_T data_fmt)
 {
     unsigned long size = 0;
     switch (data_fmt) {
-    case QZ_DEFLATE_4B:
+    case DEFLATE_4B:
     /* fall through */
-    case QZ_DEFLATE_RAW:
+    case DEFLATE_RAW:
         size = 0;
         break;
-    case QZ_LZ4_FH:
-    case QZ_LZ4S_FH:
-    case QZ_ZSTD_RAW:   //same as lz4 footer
+    case LZ4_FH:
+    case LZ4S_FH:
+    case ZSTD_RAW:   //same as lz4 footer
         size = qzLZ4FooterSz();
         break;
-    case QZ_DEFLATE_GZIP_EXT:
+    case DEFLATE_GZIP_EXT:
     default:
         size = stdGzipFooterSz();
         break;
@@ -100,27 +100,27 @@ inline unsigned long outputFooterSz(QzDataFormat_T data_fmt)
     return size;
 }
 
-unsigned long outputHeaderSz(QzDataFormat_T data_fmt)
+unsigned long outputHeaderSz(DataFormatInternal_T data_fmt)
 {
     unsigned long size = 0;
 
     switch (data_fmt) {
-    case QZ_DEFLATE_4B:
+    case DEFLATE_4B:
         size = qz4BHeaderSz();
         break;
-    case QZ_DEFLATE_RAW:
+    case DEFLATE_RAW:
         break;
-    case QZ_DEFLATE_GZIP:
+    case DEFLATE_GZIP:
         size = stdGzipHeaderSz();
         break;
-    case QZ_LZ4_FH:
+    case LZ4_FH:
         size = qzLZ4HeaderSz();
         break;
-    case QZ_LZ4S_FH:
-    case QZ_ZSTD_RAW:
+    case LZ4S_FH:
+    case ZSTD_RAW:
         size = qzLZ4SHeaderSz();
         break;
-    case QZ_DEFLATE_GZIP_EXT:
+    case DEFLATE_GZIP_EXT:
     default:
         size = qzGzipHeaderSz();
         break;
@@ -208,27 +208,27 @@ void qzLZ4SHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
 
 void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
-                     QzDataFormat_T data_fmt)
+                     DataFormatInternal_T data_fmt)
 {
     QZ_DEBUG("Generate header\n");
 
     switch (data_fmt) {
-    case QZ_DEFLATE_4B:
+    case DEFLATE_4B:
         qz4BHeaderGen(ptr, res);
         break;
-    case QZ_DEFLATE_RAW:
+    case DEFLATE_RAW:
         break;
-    case QZ_DEFLATE_GZIP:
+    case DEFLATE_GZIP:
         stdGzipHeaderGen(ptr, res);
         break;
-    case QZ_LZ4_FH:
+    case LZ4_FH:
         qzLZ4HeaderGen(ptr, res);
         break;
-    case QZ_LZ4S_FH:
-    case QZ_ZSTD_RAW:
+    case LZ4S_FH:
+    case ZSTD_RAW:
         qzLZ4SHeaderGen(ptr, res);
         break;
-    case QZ_DEFLATE_GZIP_EXT:
+    case DEFLATE_GZIP_EXT:
     default:
         qzGzipHeaderGen(ptr, res);
         break;
@@ -245,7 +245,7 @@ static int isQATDeflateProcessable(const unsigned char *ptr,
     long buff_sz = (DEST_SZ(qz_sess->sess_params.hw_buff_sz) < *src_len ? DEST_SZ(
                         qz_sess->sess_params.hw_buff_sz) : *src_len);
 
-    if (qz_sess->sess_params.data_fmt == QZ_DEFLATE_4B) {
+    if (qz_sess->sess_params.data_fmt == DEFLATE_4B) {
         h_4B = (Qz4BH_T *)ptr;
         if (h_4B->blk_size > DEST_SZ(qz_sess->sess_params.hw_buff_sz)) {
             return 0;
@@ -264,7 +264,7 @@ static int isQATDeflateProcessable(const unsigned char *ptr,
             qzFooter->i_size > qz_sess->sess_params.hw_buff_sz) {
             return 0;
         }
-        qz_sess->sess_params.data_fmt = QZ_DEFLATE_GZIP;
+        qz_sess->sess_params.data_fmt  = DEFLATE_GZIP;
         return 1;
     }
 
@@ -287,7 +287,7 @@ int isQATProcessable(const unsigned char *ptr,
                      QzSess_T *const qz_sess)
 {
     uint32_t rc = 0;
-    QzDataFormat_T data_fmt;
+    DataFormatInternal_T data_fmt;
     assert(ptr != NULL);
     assert(src_len != NULL);
     assert(qz_sess != NULL);
@@ -295,12 +295,12 @@ int isQATProcessable(const unsigned char *ptr,
 
     data_fmt = qz_sess->sess_params.data_fmt;
     switch (data_fmt) {
-    case QZ_DEFLATE_4B:
-    case QZ_DEFLATE_GZIP:
-    case QZ_DEFLATE_GZIP_EXT:
+    case DEFLATE_4B:
+    case DEFLATE_GZIP:
+    case DEFLATE_GZIP_EXT:
         rc = isQATDeflateProcessable(ptr, src_len, qz_sess);
         break;
-    case QZ_LZ4_FH:
+    case LZ4_FH:
         rc = isQATLZ4Processable(ptr, src_len, qz_sess);
         break;
     default:
@@ -351,20 +351,20 @@ void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res)
 
 inline void outputFooterGen(QzSess_T *qz_sess,
                             CpaDcRqResults *res,
-                            QzDataFormat_T data_fmt)
+                            DataFormatInternal_T data_fmt)
 {
     QZ_DEBUG("Generate footer\n");
 
     unsigned char *ptr = qz_sess->next_dest;
     switch (data_fmt) {
-    case QZ_DEFLATE_RAW:
+    case DEFLATE_RAW:
         break;
-    case QZ_LZ4_FH:
-    case QZ_LZ4S_FH:
-    case QZ_ZSTD_RAW:
+    case LZ4_FH:
+    case LZ4S_FH:
+    case ZSTD_RAW:
         qzLZ4FooterGen(ptr, res);
         break;
-    case QZ_DEFLATE_GZIP_EXT:
+    case DEFLATE_GZIP_EXT:
     default:
         qzGzipFooterGen(ptr, res);
         break;

@@ -36,8 +36,8 @@
 #include "qzstd.h"
 
 QzSession_T qzstd_g_sess;
-QzSessionParams_T g_sess_params = {(QzHuffmanHdr_T)0,};
-QzSessionParams_T sess_params_zstd_default = {
+QzSessionParamsGen3_T g_sess_params = {(QzHuffmanHdr_T)0,};
+QzSessionParamsGen3_T sess_params_zstd_default = {
     .huffman_hdr       = QZ_HUFF_HDR_DEFAULT,
     .direction         = QZ_DIRECTION_DEFAULT,
     .data_fmt          = QZ_LZ4S_FH,
@@ -50,7 +50,7 @@ QzSessionParams_T sess_params_zstd_default = {
     .input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
     .req_cnt_thrshold  = 32,
     .wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT,
-    .is_busy_polling   = QZ_PERIODICAL_POLLING,
+    .polling_mode   = QZ_PERIODICAL_POLLING,
     .lz4s_mini_match   = 3,
     .qzCallback        = zstdCallBack,
     .qzCallback_external = NULL
@@ -272,7 +272,7 @@ done:
     return ret;
 }
 
-int qzZstdGetDefaults(QzSessionParams_T *defaults)
+int qzZstdGetDefaults(QzSessionParamsGen3_T *defaults)
 {
     if (defaults == NULL) {
         QZ_ERROR("%s : QzSessionParams ptr is empty\n", QZSTD_ERROR_TYPE);
@@ -281,8 +281,8 @@ int qzZstdGetDefaults(QzSessionParams_T *defaults)
 
     QZ_MEMCPY(defaults,
               &sess_params_zstd_default,
-              sizeof(QzSessionParams_T),
-              sizeof(QzSessionParams_T));
+              sizeof(QzSessionParamsGen3_T),
+              sizeof(QzSessionParamsGen3_T));
     return QZSTD_OK;
 }
 
@@ -328,7 +328,7 @@ int compressFile(char *input_file_name, char *output_file_name)
         return QZSTD_ERROR;
     }
 
-    ret = qzSetupSession(&qzstd_g_sess, &g_sess_params);
+    ret = qzSetupSessionGen3(&qzstd_g_sess, &g_sess_params);
     if (ret != QZ_OK) {
         QZ_ERROR("%s : qzSetupSession failed with error code %d\n", QZ_ERROR_TYPE, ret);
         return QZSTD_ERROR;

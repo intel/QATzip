@@ -88,7 +88,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
     QzSess_T *qz_sess = NULL;
     int windows_bits = 0;
     int comp_level = Z_DEFAULT_COMPRESSION;
-    QzDataFormat_T data_fmt = QZ_DATA_FORMAT_DEFAULT;
+    DataFormatInternal_T data_fmt = DATA_FORMAT_DEFAULT;
     unsigned int chunk_sz = QZ_HW_BUFF_SZ;
     QzGzH_T *qz_hdr = NULL;
     Qz4BH_T *qz4B_header = NULL;
@@ -98,7 +98,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
 
     /*check if setupSession called*/
     if (NULL == sess->internal) {
-        ret = qzSetupSession(sess, NULL);
+        ret = qzSetupSessionGen3(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(ret)) {
             return ret;
         }
@@ -129,12 +129,12 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
         stream->total_out = 0;
 
         switch (data_fmt) {
-        case QZ_DEFLATE_4B:
-        case QZ_DEFLATE_RAW:
+        case DEFLATE_4B:
+        case DEFLATE_RAW:
             windows_bits = -MAX_WBITS;
             break;
-        case QZ_DEFLATE_GZIP:
-        case QZ_DEFLATE_GZIP_EXT:
+        case DEFLATE_GZIP:
+        case DEFLATE_GZIP_EXT:
         default:
             windows_bits = MAX_WBITS + GZIP_WRAPPER;
             break;
@@ -152,7 +152,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
         }
         qz_sess->deflate_stat = DeflateInited;
 
-        if (QZ_DEFLATE_GZIP_EXT == data_fmt) {
+        if (DEFLATE_GZIP_EXT == data_fmt) {
             gen_qatzip_hdr(&hdr);
             if (Z_OK != deflateSetHeader(stream, &hdr)) {
                 qz_sess->deflate_stat = DeflateNull;
@@ -161,7 +161,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
                 return QZ_FAIL;
             }
             qz_hdr = (QzGzH_T *)dest;
-        } else if (QZ_DEFLATE_4B == data_fmt) {
+        } else if (DEFLATE_4B == data_fmt) {
             /* Need to reserve 4 bytes to fill the compressed length. */
             qz4B_header = (Qz4BH_T *)dest;
             dest = dest + sizeof(Qz4BH_T);
@@ -212,7 +212,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
         *dest_len = total_out;
 
         if (NULL != qz_sess->crc32) {
-            if (QZ_DEFLATE_RAW == data_fmt) {
+            if (DEFLATE_RAW == data_fmt) {
                 *qz_sess->crc32 = crc32(*qz_sess->crc32, src, *src_len);
             } else {
                 if (0 == *qz_sess->crc32) {
@@ -227,14 +227,14 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
 
     if (NULL != qz_sess->deflate_strm && 1 == last) {
         /*
-         * When data_fmt is QZ_DEFLATE_GZIP_EXT,
+         * When data_fmt is DEFLATE_GZIP_EXT,
          * we should fill src_sz & dest_sz in gzipext header field.
          */
-        if (QZ_DEFLATE_GZIP_EXT == data_fmt && qz_hdr) {
+        if (DEFLATE_GZIP_EXT == data_fmt && qz_hdr) {
             qz_hdr->extra.qz_e.src_sz  = stream->total_in;
             qz_hdr->extra.qz_e.dest_sz = stream->total_out -
                                          outputHeaderSz(data_fmt) - outputFooterSz(data_fmt);
-        } else if (QZ_DEFLATE_4B == data_fmt && qz4B_header) {
+        } else if (DEFLATE_4B == data_fmt && qz4B_header) {
             qz4B_header->blk_size = stream->total_out;
             *dest_len = *dest_len + sizeof(Qz4BH_T);
         }
@@ -258,7 +258,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
     z_stream *stream = NULL;
     int ret = QZ_OK;
     int zlib_ret = Z_OK;
-    QzDataFormat_T data_fmt;
+    DataFormatInternal_T data_fmt;
     int windows_bits = 0;
     unsigned int total_in;
     unsigned int total_out;
@@ -294,20 +294,20 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
 
     QZ_DEBUG("decomp_sw data_fmt: %d\n", data_fmt);
     switch (data_fmt) {
-    case QZ_DEFLATE_4B:
-    case QZ_DEFLATE_RAW:
+    case DEFLATE_4B:
+    case DEFLATE_RAW:
         windows_bits = -MAX_WBITS;
         break;
-    case QZ_DEFLATE_GZIP:
-    case QZ_DEFLATE_GZIP_EXT:
+    case DEFLATE_GZIP:
+    case DEFLATE_GZIP_EXT:
     default:
         windows_bits = MAX_WBITS + GZIP_WRAPPER;
         break;
     }
 
     if (InflateNull == qz_sess->inflate_stat) {
-        if (QZ_DEFLATE_4B == data_fmt) {
-            /* For QZ_DEFLATE_4B, we need to skip the header. */
+        if (DEFLATE_4B == data_fmt) {
+            /* For DEFLATE_4B, we need to skip the header. */
             stream->next_in = (z_const Bytef *)stream->next_in + sizeof(Qz4BH_T);
             stream->avail_in = stream->avail_in - sizeof(Qz4BH_T);
             qz4B_header_len = sizeof(Qz4BH_T);
@@ -441,7 +441,7 @@ int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
 
     /*check if setupSession called*/
     if (NULL == sess->internal) {
-        ret = qzSetupSession(sess, NULL);
+        ret = qzSetupSessionGen3(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(ret)) {
             return ret;
         }
@@ -637,12 +637,12 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                  unsigned int *dest_len, unsigned int last)
 {
     int ret = QZ_FAIL;
-    QzDataFormat_T data_fmt;
+    DataFormatInternal_T data_fmt;
     QzSess_T *qz_sess = NULL;
 
     /*check if setupSession called*/
     if (NULL == sess->internal) {
-        ret = qzSetupSession(sess, NULL);
+        ret = qzSetupSessionGen3(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(ret)) {
             return ret;
         }
@@ -652,13 +652,13 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     data_fmt = qz_sess->sess_params.data_fmt;
 
     switch (data_fmt) {
-    case QZ_DEFLATE_RAW:
-    case QZ_DEFLATE_GZIP:
-    case QZ_DEFLATE_GZIP_EXT:
-    case QZ_DEFLATE_4B:
+    case DEFLATE_RAW:
+    case DEFLATE_GZIP:
+    case DEFLATE_GZIP_EXT:
+    case DEFLATE_4B:
         ret = qzDeflateSWCompress(sess, src, src_len, dest, dest_len, last);
         break;
-    case QZ_LZ4_FH:
+    case LZ4_FH:
         ret = qzLZ4SWCompress(sess, src, src_len, dest, dest_len, last);
         break;
     default:
@@ -677,12 +677,12 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
                    unsigned int *dest_len)
 {
     int ret = QZ_FAIL;
-    QzDataFormat_T data_fmt;
+    DataFormatInternal_T data_fmt;
     QzSess_T *qz_sess = NULL;
 
     /*check if setupSession called*/
     if (NULL == sess->internal) {
-        ret = qzSetupSession(sess, NULL);
+        ret = qzSetupSessionGen3(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(ret)) {
             return ret;
         }
@@ -692,13 +692,13 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     data_fmt = qz_sess->sess_params.data_fmt;
 
     switch (data_fmt) {
-    case QZ_DEFLATE_RAW:
-    case QZ_DEFLATE_GZIP:
-    case QZ_DEFLATE_GZIP_EXT:
-    case QZ_DEFLATE_4B:
+    case DEFLATE_RAW:
+    case DEFLATE_GZIP:
+    case DEFLATE_GZIP_EXT:
+    case DEFLATE_4B:
         ret = qzDeflateSWDecompress(sess, src, src_len, dest, dest_len);
         break;
-    case QZ_LZ4_FH:
+    case LZ4_FH:
         ret = qzLZ4SWDecompress(sess, src, src_len, dest, dest_len);
         break;
     default:
@@ -717,12 +717,12 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
                         unsigned int *dest_len)
 {
     int ret = QZ_FAIL;
-    QzDataFormat_T data_fmt;
+    DataFormatInternal_T data_fmt;
     QzSess_T *qz_sess = NULL;
 
     /*check if setupSession called*/
     if (NULL == sess->internal) {
-        ret = qzSetupSession(sess, NULL);
+        ret = qzSetupSessionGen3(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(ret)) {
             return ret;
         }
@@ -732,13 +732,13 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
     data_fmt = qz_sess->sess_params.data_fmt;
 
     switch (data_fmt) {
-    case QZ_DEFLATE_RAW:
-    case QZ_DEFLATE_GZIP:
-    case QZ_DEFLATE_GZIP_EXT:
-    case QZ_DEFLATE_4B:
+    case DEFLATE_RAW:
+    case DEFLATE_GZIP:
+    case DEFLATE_GZIP_EXT:
+    case DEFLATE_4B:
         ret = qzSWDecompressMultiGzip(sess, src, src_len, dest, dest_len);
         break;
-    case QZ_LZ4_FH:
+    case LZ4_FH:
         ret = qzSWDecompressMultiLZ4(sess, src, src_len, dest, dest_len);
         break;
     default:

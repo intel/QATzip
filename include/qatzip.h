@@ -55,7 +55,6 @@ extern"C" {
 #endif
 
 #include <string.h>
-#include <stdbool.h>
 #include <stdint.h>
 
 /**
@@ -64,9 +63,9 @@ extern"C" {
  *      QATzip Major Version Number
  * @description
  *      The QATzip API major version number. This number will be incremented
- *      when significant changes to the API have occurred.
- *      The combination of the major and minor number definitions represent
- *      the complete version number for this interface.
+ *    when significant changes to the API have occurred.
+ *    The combination of the major and minor number definitions represent
+ *    the complete version number for this interface.
  *
  *****************************************************************************/
 #define QATZIP_API_VERSION_NUM_MAJOR (2)
@@ -77,9 +76,9 @@ extern"C" {
  *      QATzip Minor Version Number
  * @description
  *      The QATzip API minor version number. This number will be incremented
- *      when minor changes to the API have occurred.
- *      The combination of the major and minor number definitions represent
- *      the complete version number for this interface.
+ *    when minor changes to the API have occurred. The combination of the major
+ *    and minor number definitions represent the complete version number for
+ *    this interface.
  *****************************************************************************/
 #define QATZIP_API_VERSION_NUM_MINOR (3)
 
@@ -110,7 +109,7 @@ extern"C" {
  *
  *  This API provides access to underlying compression functions in QAT
  *  hardware. The API supports an implementation that provides compression
- *  service in software if not all of the required resources are available
+ *  service in software if all of the required resources are not available
  *  to execute the compression service in hardware.
  *
  *  The API supports threaded applications.
@@ -124,8 +123,7 @@ extern"C" {
  *  decompression functions. This results in several legal calling scenarios,
  *  described below.
  *
- *  Scenario 1 - All functions explicitly invoked by caller, with all
- *               arguments provided.
+ *  Scenario 1 - All functions explicitly invoked by caller, with all arguments provided.
  *
  *  qzInit(&sess, sw_backup);
  *  qzSetupSession(&sess, &params);
@@ -135,8 +133,7 @@ extern"C" {
  *  qzClose(&sess);
  *
  *
- * Scenario 2 - Initialization function called, setup function
- *              not invoked by caller.
+ * Scenario 2 - Initialization function called, setup function not invoked by caller.
  *              This scenario can be used to specify the sw_backup argument to
  *              qzInit.
  *
@@ -147,8 +144,7 @@ extern"C" {
  *  qzClose(&sess);
  *
  *
- * Scenario 3 - Calling application simply invokes the actual qzCompress
- *              functions.
+ * Scenario 3 - Calling application simply invokes the actual qzCompress functions.
  *
  *  qzCompress(&sess, src, &src_len, dest, &dest_len, 0);
  *      calls qzInit(sess, 1);
@@ -165,15 +161,13 @@ extern"C" {
  *  If a thread terminates without invoking tear down and close functions,
  *  memory and hardware are not cleaned up until the application exits.
  *
- *  Additions for QAT 2.0 and beyond platforms.
+ *  Additions for QAT 2.0 and beyond platforms though Extending
+ *  QzSessionParamsGen3_T, QzDataFormatGen3_T and Using qzSetupSessionGen3
+ *  to setup session.
  *  1. Addition of LZ4 and LZ4s
  *  2. Addition of post processing functions for out of LZ4s
- *     - support for zstd compress via a pre-canned post processing function
- *     - support for zstd decompress via software only
  *  3. Compression level up to 12 for LZ4 and LZ4s
  *  4. Support for Shared Virtual Memory
- *     - default off for QAT 1.x sessions
- *     - default on for QAT 2.0 sessions and beyond
  *  5. Support for gzip header with additional compression algorithms
  *
  *****************************************************************************/
@@ -205,14 +199,10 @@ typedef enum QzHuffmanHdr_E {
  *
  *****************************************************************************/
 typedef enum PinMem_E {
-    UNSPECIFIED = 0,
-    /**< Type of memory is not specified */
     COMMON_MEM = 0,
     /**< Allocate non-contiguous memory */
-    PINNED_MEM,
+    PINNED_MEM
     /**< Allocate contiguous memory */
-    SV_MEM
-    /**< Shared Virtual Memory will be used */
 } PinMem_T;
 
 /**
@@ -241,7 +231,7 @@ typedef enum QzDirection_E {
  *      Streaming API input and output format
  *
  * @description
- *    This enumerated list identifies the data format supported by
+ *      This enumerated list identifies the data format supported by
  *    QATzip streaming API. A format can be raw deflate data block, deflate
  *    block wrapped by GZip header and footer, or deflate data block wrapped
  *    by GZip extension header and footer.
@@ -253,8 +243,20 @@ typedef enum QzDataFormat_E {
     QZ_DEFLATE_GZIP,
     /**< Data is in deflate wrapped by GZip header and footer */
     QZ_DEFLATE_GZIP_EXT,
-    /**< Data is in deflate wrapped by GZip extented header and footer */
+    /**< Data is in deflate wrapped by GZip extended header and footer */
     QZ_DEFLATE_RAW,
+    /**< Data is in raw deflate format */
+    QZ_FMT_NUM
+} QzDataFormat_T;
+
+typedef enum QzDataFormatGen3_E {
+    QZ_DEFLATE_4B_Gen3 = 0,
+    /**< Data is in raw deflate format with 4 byte header */
+    QZ_DEFLATE_GZIP_Gen3,
+    /**< Data is in deflate wrapped by GZip header and footer */
+    QZ_DEFLATE_GZIP_EXT_Gen3,
+    /**< Data is in deflate wrapped by GZip extended header and footer */
+    QZ_DEFLATE_RAW_Gen3,
     /**< Data is in raw deflate format */
     QZ_LZ4_FH,
     /**< Data is in LZ4 format with frame headers */
@@ -262,9 +264,26 @@ typedef enum QzDataFormat_E {
     /**< Data is in LZ4s format with frame headers */
     QZ_LZ4S_PP,
     /**< Data is in LZ4s format and has been post processed */
-    QZ_ZSTD_RAW,
+    QZ_ZSTD_RAW
     /**< Data is in raw zStandard format */
-} QzDataFormat_T;
+} QzDataFormatGen3_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Supported polling mode
+ *
+ * @description
+ *      Specifies whether the instance must be busy polling,
+ *    or be periodical polling.
+ *
+ *****************************************************************************/
+typedef enum QzPollingMode_E {
+    QZ_PERIODICAL_POLLING = 0,
+    /**< No busy polling */
+    QZ_BUSY_POLLING,
+    /**< busy polling */
+} QzPollingMode_T;
 
 /**
  *****************************************************************************
@@ -272,18 +291,56 @@ typedef enum QzDataFormat_E {
  *      Supported checksum type
  *
  * @description
- *    This enumerated list identifies the checksum type for input/output
+ *      This enumerated list identifies the checksum type for input/output
  *    data. The format can be CRC32, Adler or none.
  *
  *****************************************************************************/
 typedef enum QzCrcType_E {
-    NONE = 0,
-    /**< No checksum */
-    QZ_CRC32,
+    QZ_CRC32 = 0,
     /**< CRC32 checksum */
-    QZ_ADLER
+    QZ_ADLER,
     /**< Adler checksum */
+    NONE
+    /**< No checksum */
 } QzCrcType_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Supported polynomial for CRC64 compression
+ *
+ * @description
+ *      This enumerated list identifies the polynomials available for use when
+ *    a CRC or CRC64 is generated for a buffer.
+ *
+ * @Defalut Polynomial:
+ *    CRC-32 checksum is described in RFC 1952
+ *    Implementing RFC 1952 CRC:
+ *    http://www.ietf.org/rfc/rfc1952.txt
+ *
+ *****************************************************************************/
+typedef enum QzCrcPolynomial_E {
+    QZ_CRC_POLYNOMIAL_DEFAULT = 0,
+    /**< Default Polynomial is used for CRC and CRC64 calculations */
+} QzCrcPolynomial_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Software Component type
+ *
+ * @description
+ *      This enumerated list specifies the type of software that is being
+ *    described.
+ *
+ *****************************************************************************/
+typedef enum QzSoftwareComponentType_E {
+    QZ_COMPONENT_FIRMWARE = 0,
+    QZ_COMPONENT_KERNEL_DRIVER,
+    QZ_COMPONENT_USER_DRIVER,
+    QZ_COMPONENT_QATZIP_API,
+    QZ_COMPONENT_SOFTWARE_PROVIDER
+} QzSoftwareComponentType_T;
 
 /**
  *****************************************************************************
@@ -291,7 +348,7 @@ typedef enum QzCrcType_E {
  *      QATzip Session Status definitions and function return codes
  *
  * @description
- *    This list identifies valid values for session status and function
+ *      This list identifies valid values for session status and function
  *    return codes.
  *
  *****************************************************************************/
@@ -322,7 +379,7 @@ typedef enum QzCrcType_E {
 #define QZ_LOW_MEM              (14)
 /**< Using SW: Not enough pinned memory */
 #define QZ_LOW_DEST_MEM         (15)
-/**< Using SW: Not enough pinned memory */
+/**< Using SW: Not enough pinned memory for dest buffer */
 #define QZ_UNSUPPORTED_FMT      (16)
 /**< Using SW: QAT device does not support data format */
 #define QZ_NONE                 (100)
@@ -384,7 +441,7 @@ typedef enum QzCrcType_E {
  *      variable in the QzSessionParams_T structure.
  *
  *      ExtStatus will be embedded into extended return codes when
- *      qzCallbackFn return `QZ_POST_PROCESS_ERROR`. See extended return
+ *      qzLZ4SCallbackFn return `QZ_POST_PROCESS_ERROR`. See extended return
  *      code section and *Ext API for details.
  *
  * @context
@@ -426,9 +483,9 @@ typedef enum QzCrcType_E {
  *      None
  *
  *****************************************************************************/
-typedef int (*qzCallbackFn)(void *external, const unsigned char *src,
-                            unsigned int *src_len, unsigned char *dest,
-                            unsigned int *dest_len, int *ExtStatus);
+typedef int (*qzLZ4SCallbackFn)(void *external, const unsigned char *src,
+                                unsigned int *src_len, unsigned char *dest,
+                                unsigned int *dest_len, int *ExtStatus);
 
 /**
  *****************************************************************************
@@ -441,25 +498,23 @@ typedef int (*qzCallbackFn)(void *external, const unsigned char *src,
  *****************************************************************************/
 typedef struct QzSessionParams_S {
     QzHuffmanHdr_T huffman_hdr;
-    /**< If algorithm is deflate, dynamic or Static Huffman headers */
+    /**< Dynamic or Static Huffman headers */
     QzDirection_T direction;
     /**< Compress or decompress */
     QzDataFormat_T data_fmt;
     /**< Deflate, deflate with GZip or deflate with GZip ext */
     unsigned int comp_lvl;
-    /**< Compression level 1 to 12. */
-    /**< If the comp_algorithm is deflate, values > 12 will be set to 12 */
+    /**< Compression level 1 to 9 */
     unsigned char comp_algorithm;
     /**< Compress/decompression algorithms */
     unsigned int max_forks;
     /**< Maximum forks permitted in the current thread */
     /**< 0 means no forking permitted */
     unsigned char sw_backup;
-    /**< 0 means no sw backup, 1 means sw backup */
+    /**< bit field defining SW configuration (see QZ_SW_* definitions) */
     unsigned int hw_buff_sz;
-    /**< Default buffer size */
-    /**< For optimal page performance, this value should be a */
-    /**< multiple of the page size. */
+    /**< Default buffer size, must be a power of 2k */
+    /**< 4K,8K,16K,32K,64K,128K */
     unsigned int strm_buff_sz;
     /**< Stream buffer size between [1K .. 2M - 5K] */
     /**< Default strm_buf_sz equals to hw_buff_sz */
@@ -472,28 +527,73 @@ typedef struct QzSessionParams_S {
     /**< Set between 1 and NUM_BUFF, default NUM_BUFF */
     /**< NUM_BUFF is defined in qatzip_internal.h */
     unsigned int wait_cnt_thrshold;
-    /**< When previous try failed, wait for specific number of call */
+    /**< When previous try failed, wait for specific number of calls */
     /**< before retrying to open device. Default threshold is 8 */
-    PinMem_T mem_type;
-    /**< If not specified, default will be Pinned for qat 1.x */
-    /**< and common for QAT 2.0 */
-    qzCallbackFn qzCallback;
-    /**< post processing callback for zstd compression*/
-    void *qzCallback_external;
-    /**< An opaque pointer provided by the user to be passed */
-    /**< into qzCallback during post processing*/
-    unsigned int is_busy_polling;
-    /**< 0 means no busy polling, 1 means busy polling */
-    unsigned int is_sensitive_mode;
-    /**< 0 means disable sensitive mode, 1 means enable sensitive mode*/
-    unsigned int lz4s_mini_match;
-    /**< Set lz4s dictionary mini match, which would be 3 or 4 */
 #ifdef ERR_INJECTION
     FallbackError *fbError;
     FallbackError *fbErrorCurr;
     /* Linked list for simulated errors from HW */
 #endif
 } QzSessionParams_T;
+
+typedef struct QzSessionParamsGen3_S {
+    QzHuffmanHdr_T huffman_hdr;
+    /**< Dynamic or Static Huffman headers */
+    QzDirection_T direction;
+    /**< Compress or decompress */
+    QzDataFormatGen3_T data_fmt;
+    /**< Deflate, deflate with GZip or deflate with GZip ext */
+    /**< LZ4 or LZ4S and zstd */
+    unsigned int comp_lvl;
+    /**< Compression level 1 to 12 for QAT CPM2.0. */
+    /**< If the comp_algorithm is deflate, values > max will be set to max */
+    unsigned char comp_algorithm;
+    /**< Compress/decompression algorithms */
+    unsigned int max_forks;
+    /**< Maximum forks permitted in the current thread */
+    /**< 0 means no forking permitted */
+    unsigned char sw_backup;
+    /**< bit field defining SW configuration (see QZ_SW_* definitions) */
+    unsigned int hw_buff_sz;
+    /**< Default buffer size, must be a power of 2k */
+    /**< 4K,8K,16K,32K,64K,128K */
+    unsigned int strm_buff_sz;
+    /**< Stream buffer size between [1K .. 2M - 5K] */
+    /**< Default strm_buf_sz equals to hw_buff_sz */
+    unsigned int input_sz_thrshold;
+    /**< Default threshold of compression service's input size */
+    /**< for sw failover, if the size of input request is less */
+    /**< than the threshold, QATzip will route the request */
+    /**< to software */
+    unsigned int req_cnt_thrshold;
+    /**< Set between 1 and NUM_BUFF, default NUM_BUFF */
+    /**< NUM_BUFF is defined in qatzip_internal.h */
+    unsigned int wait_cnt_thrshold;
+    /**< When previous try failed, wait for specific number of calls */
+    /**< before retrying to open device. Default threshold is 8 */
+    PinMem_T mem_type;
+    /**< If not specified, default will be Pinned for qat 1.x */
+    /**< and common for QAT 2.0 */
+    qzLZ4SCallbackFn qzCallback;
+    /**< post processing callback for zstd compression*/
+    void *qzCallback_external;
+    /**< An opaque pointer provided by the user to be passed */
+    /**< into qzCallback during post processing*/
+    QzPollingMode_T polling_mode;
+    /**< 0 means no busy polling, 1 means busy polling */
+    unsigned int is_sensitive_mode;
+    /**< 0 means disable sensitive mode, 1 means enable sensitive mode*/
+    unsigned int lz4s_mini_match;
+    /**< Set lz4s dictionary mini match, which would be 3 or 4 */
+    QzCrcPolynomial_T crc_polynomial;
+    /**< When generating a CRC or CRC64 determines the polynomial used*/
+    /**< Default set to QZ_CRC_POLYNOMIAL_DEFAULT*/
+#ifdef ERR_INJECTION
+    FallbackError *fbError;
+    FallbackError *fbErrorCurr;
+    /* Linked list for simulated errors from HW */
+#endif
+} QzSessionParamsGen3_T;
 
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
 #define QZ_DIRECTION_DEFAULT         QZ_DIR_BOTH
@@ -504,10 +604,10 @@ typedef struct QzSessionParams_S {
 #define QZ_MAX_FORK_DEFAULT          3
 #define QZ_SW_BACKUP_DEFAULT         1
 #define QZ_HW_BUFF_SZ                (64*1024)
-#define QZ_HW_BUFF_SZ_SPR            (1*1024*1024)
+#define QZ_HW_BUFF_SZ_Gen3           (1*1024*1024)
 #define QZ_HW_BUFF_MIN_SZ            (1*1024)
 #define QZ_HW_BUFF_MAX_SZ            (512*1024)
-#define QZ_HW_BUFF_MAX_SZ_SPR        (2*1024*1024*1024)
+#define QZ_HW_BUFF_MAX_SZ_Gen3       (2*1024*1024*1024U)
 #define QZ_STRM_BUFF_SZ_DEFAULT      QZ_HW_BUFF_SZ
 #define QZ_STRM_BUFF_MIN_SZ          (1*1024)
 #define QZ_STRM_BUFF_MAX_SZ          (2*1024*1024 - 5*1024)
@@ -517,12 +617,43 @@ typedef struct QzSessionParams_S {
 #define QZ_REQ_THRESHOLD_MAXIMUM     NUM_BUFF
 #define QZ_REQ_THRESHOLD_DEFAULT     QZ_REQ_THRESHOLD_MAXIMUM
 #define QZ_WAIT_CNT_THRESHOLD_DEFAULT 8
-#define QZ_DEFLATE_COMP_LVL_MINIMUM   (1)
-#define QZ_DEFLATE_COMP_LVL_MAXIMUM   (12)
-#define QZ_LZS_COMP_LVL_MINIMUM       (1)
-#define QZ_LZS_COMP_LVL_MAXIMUM       (12)
-#define QZ_PERIODICAL_POLLING         (false)
-#define QZ_BUSY_POLLING               (true)
+#define QZ_DEFLATE_COMP_LVL_MINIMUM      (1)
+#define QZ_DEFLATE_COMP_LVL_MAXIMUM      (9)
+#define QZ_LZS_COMP_LVL_MINIMUM          (1)
+#define QZ_LZS_COMP_LVL_MAXIMUM          (12)
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      QATzip Session software configuration settings
+ *
+ * @description
+ *      The following definitions can be used with the sw_backup variable in
+ *      structs and functions to configure the session
+ *
+ *      QZ_ENABLE_SOFTWARE_BACKUP          Congifure session with software
+ *                                         fallback
+ *
+ *      QZ_ENABLE_SOFTWARE_ONLY_EXECUTION  Configure session to only use
+ *                                         software
+ *****************************************************************************/
+#define QZ_SW_BACKUP_BIT_POSITION   (0)
+#define QZ_SW_FORCESW_BIT_POSITION  (1)
+
+#define QZ_ENABLE_SOFTWARE_BACKUP(_BackupVariable) \
+        (_BackupVariable |= (1 << QZ_SW_BACKUP_BIT_POSITION))
+/**< SW backup/fallback enabled */
+#define QZ_ENABLE_SOFTWARE_ONLY_EXECUTION(_BackupVariable) \
+        (_BackupVariable |= (1 << QZ_SW_FORCESW_BIT_POSITION))
+/**< Force SW to perform all compression/decompression operations */
+
+#define QZ_DISABLE_SOFTWARE_BACKUP(_BackupVariable) \
+        (_BackupVariable &= ~(1 << QZ_SW_BACKUP_BIT_POSITION))
+/**< SW backup/fallback disabled */
+#define QZ_DISABLE_SOFTWARE_ONLY_EXECUTION(_BackupVariable) \
+        (_BackupVariable &= ~(1 << QZ_SW_FORCESW_BIT_POSITION))
+/**< Disable SW only compression/decompression operations*/
+
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -536,11 +667,24 @@ typedef struct QzSessionParams_S {
  *      software.
  *
  *      QZ_HW_TIMEOUT indicates if a request to hardware was timed out.
+ *
+ *      If set in the extended return value, QZ_POST_PROCESS_FAIL indicates
+ *      post processing of the LZ4s compressed data has failed.
  *****************************************************************************/
+#define QZ_SW_EXECUTION_BIT           (4)
+#define QZ_SW_EXECUTION_MASK         (1 << QZ_SW_EXECUTION_BIT)
+#define QZ_SW_EXECUTION(ret, ext_rc) \
+     (!ret && (ext_rc & QZ_SW_EXECUTION_MASK))
+
 #define QZ_TIMEOUT_BIT                (8)
 #define QZ_TIMEOUT_MASK              (1 << QZ_TIMEOUT_BIT)
 #define QZ_HW_TIMEOUT(ret, ext_rc)   \
      (!ret && (ext_rc & QZ_TIMEOUT_MASK))
+
+#define QZ_POST_PROCESS_FAIL_BIT      (10)
+#define QZ_POST_PROCESS_FAIL_MASK    (1 << QZ_POST_PROCESS_FAIL_BIT)
+#define QZ_POST_PROCESS_FAIL(ret, ext_rc)   \
+     (ret && (ext_rc & QZ_POST_PROCESS_FAIL_MASK))
 
 /**
  *****************************************************************************
@@ -571,7 +715,7 @@ typedef struct QzSession_S {
  *      QATzip status structure
  *
  * @description
- *    This structure contains data relating to the status of QAT on the
+ *      This structure contains data relating to the status of QAT on the
  *    platform.
  *
  *****************************************************************************/
@@ -581,9 +725,8 @@ typedef struct QzStatus_S {
     unsigned char qat_service_init;
     /**< Check if the available services have been initialized */
     unsigned char qat_mem_drvr;
-    /**< 1 if memory driver for QAT exists */
-    /**< 2 if memory driver for QAT has been opened */
-    /**< 3 memory driver not required.  Using SVM. */
+    /**< 1 if /dev/qat_mem exists */
+    /**< 2 if /dev/qat_mem has been opened */
     /**< 0 otherwise */
     unsigned char qat_instance_attach;
     /**< Is this thread/g_process properly attached to an Instance? */
@@ -593,16 +736,32 @@ typedef struct QzStatus_S {
     /**< Are memory slabs coming from huge pages? */
     signed long int hw_session_status;
     /**< One of QATzip Session Status */
-    unsigned char algo_sw_comp[QZ_MAX_ALGORITHMS];
-    /**< Support software algorithms for compression*/
-    unsigned char algo_hw_comp[QZ_MAX_ALGORITHMS];
-    /**< Count of hardware devices supporting algorithms for compression */
-    unsigned char algo_sw_decomp[QZ_MAX_ALGORITHMS];
-    /**< Support software algorithms for decompresson */
-    unsigned char algo_hw_decomp[QZ_MAX_ALGORITHMS];
-    /**< Count of hardware devices supporting algorithms for decompression */
+    unsigned char algo_sw[QZ_MAX_ALGORITHMS];
+    /**< Support software algorithms */
+    unsigned char algo_hw[QZ_MAX_ALGORITHMS];
+    /**< Count of hardware devices supporting algorithms */
 } QzStatus_T;
 
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      QATzip software version structure
+ *
+ * @description
+ *      This structure contains data relating to the versions of a QATZip or a
+ *    subcomponent of this library platform.
+ *
+ *****************************************************************************/
+#define QZ_MAX_STRING_LENGTH 64
+typedef struct QzSoftwareVersionInfo_S {
+    QzSoftwareComponentType_T component_type;
+    unsigned char component_name[QZ_MAX_STRING_LENGTH];
+    unsigned int major_version;
+    unsigned int minor_version;
+    unsigned int patch_version;
+    unsigned int build_number;
+    unsigned char reserved[52];
+} QzSoftwareVersionInfo_T;
 
 /**
  *****************************************************************************
@@ -639,16 +798,17 @@ typedef struct QzStatus_S {
  * @threadSafe
  *      Yes
  *
- * @param[in]       sess         Session handle
- *                               (pointer to opaque instance and session data.)
- * @param[in]       sw_backup     0 for no sw backup, 1 for sw backup
+ * @param[in]       sess           Session handle
+ *                                 (pointer to opaque instance and
+ *                                 session data.)
+ * @param[in]       sw_backup      see QZ_SW_* definitions for expected behavior
  *
- * @retval QZ_OK                 Function executed successfully. A hardware
- *                               or software instance has been allocated to
- *                               the calling process/thread
- * @retval QZ_DUPLICATE          This process/thread already has a hardware
- *                               instance
- * @retval QZ_PARAMS             *sess is NULL
+ * @retval QZ_OK                   Function executed successfully. A hardware
+ *                                 or software instance has been allocated to
+ *                                 the calling process/thread
+ * @retval QZ_DUPLICATE            This process/thread already has a hardware
+ *                                 instance
+ * @retval QZ_PARAMS               *sess is NULL
  * @retval QZ_NOSW_NO_HW           No hardware and no software session being
  *                                 established
  * @retval QZ_NOSW_NO_MDRV         No memory driver. No software session
@@ -662,9 +822,9 @@ typedef struct QzStatus_S {
  * @retval QZ_NOSW_UNSUPPORTED_FMT      No support for requested algorithm;
  *                                      No software session established
  * @retval QZ_NO_SW_AVAIL          No software is available. This will be
- *                                 returned when sw_backup is set to 1 but
- *                                 the session does not support software
- *                                 backup or software backup is unavailable
+ *                                 returned when sw_backup is set but the
+ *                                 session does not support software operations
+ *                                 or software fallback is unavailable
  *                                 to the application.
  *
  *
@@ -752,6 +912,9 @@ QATZIP_API int qzInit(QzSession_T *sess,  unsigned char sw_backup);
  *****************************************************************************/
 QATZIP_API int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
 
+QATZIP_API int qzSetupSessionGen3(QzSession_T *sess,
+                                  QzSessionParamsGen3_T *params);
+
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -764,7 +927,7 @@ QATZIP_API int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
  *    function will attempt to set up a session using qzInit and qzSetupSession.
  *
  *    The resulting compressed block of data will be composed of one or more
- *    gzip blocks as defined in RFC 1952.
+ *    gzip blocks, as per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
  *    buffer.
@@ -847,11 +1010,11 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
  *    will attempt to set up a session using qzInit and qzSetupSession.
  *
  *    The resulting compressed block of data will be composed of one or more
- *    gzip blocks as defined in RFC 1952.
+ *    gzip blocks, as per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
- *    buffer and put CRC32 checksum for compressed input data in user provided
- *    buffer *crc.
+ *    buffer and put either a CRC32 or CRC64 checksum for the compressed
+ *    input data in the user provided buffer *crc.
  *
  *    The caller must check the updated src_len. This value will be the
  *    number of consumed bytes on exit. The calling API may have to
@@ -887,7 +1050,7 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
  *                           function returns
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
- * @param[in,out]   crc      Pointer to CRC32 checksum buffer
+ * @param[in,out]   crc      Pointer to CRC32 or CRC64 checksum buffer
  * @param[in,out]   ext_rc   qzCompressCrcExt only.
  *                           If not NULL, ext_rc point to a location where
  *                           extended return codes may be returned. See
@@ -919,6 +1082,16 @@ QATZIP_API int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
                                 unsigned int *dest_len, unsigned int last,
                                 unsigned long *crc, uint64_t *ext_rc);
 
+QATZIP_API int qzCompressCrc64(QzSession_T *sess, const unsigned char *src,
+                               unsigned int *src_len, unsigned char *dest,
+                               unsigned int *dest_len, unsigned int last,
+                               uint64_t *crc);
+
+QATZIP_API int qzCompressCrc64Ext(QzSession_T *sess, const unsigned char *src,
+                                  unsigned int *src_len, unsigned char *dest,
+                                  unsigned int *dest_len, unsigned int last,
+                                  uint64_t *crc, uint64_t *ext_rc);
+
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -931,7 +1104,7 @@ QATZIP_API int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
  *    will attempt to set up a session using qzInit and qzSetupSession.
  *
  *    The input compressed block of data will be composed of one or more
- *    gzip blocks as defiend in RFC 1952.
+ *    gzip blocks, as per RFC 1952.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -988,7 +1161,7 @@ QATZIP_API int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      Deinitialize a QATzip session
+ *      Uninitialize a QATzip session
  *
  * @description
  *      This function disconnects a session from a hardware instance and
@@ -1075,7 +1248,7 @@ QATZIP_API int qzClose(QzSession_T *sess);
  *      Get current QAT status
  *
  * @description
- *      This function retrieves the status of QAT in the platform.
+ *    This function retrieves the status of QAT in the platform.
  *    The status structure will be filled in as follows:
  *    qat_hw_count         Number of discovered QAT devices on PCU bus
  *    qat_service_init     1 if qzInit has been successfully run, 0 otherwise
@@ -1196,8 +1369,7 @@ QATZIP_API int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
  *                    (pointer to opaque instance and session data)
  *
  * @retval dest_sz    Max compressed data output length in bytes.
- *                    When src_sz is equal to 0, the return value is
- *                    QZ_COMPRESSED_SZ_OF_EMPTY_FILE(34).
+ *                    When src_sz is equal to 0, the return value is QZ_COMPRESSED_SZ_OF_EMPTY_FILE(34).
  *                    When integer overflow happens, the return value is 0
  *
  * @pre
@@ -1256,6 +1428,8 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess);
  *****************************************************************************/
 QATZIP_API int qzSetDefaults(QzSessionParams_T *defaults);
 
+QATZIP_API int qzSetDefaultsGen3(QzSessionParamsGen3_T *defaults);
+
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -1294,6 +1468,8 @@ QATZIP_API int qzSetDefaults(QzSessionParams_T *defaults);
  *
  *****************************************************************************/
 QATZIP_API int qzGetDefaults(QzSessionParams_T *defaults);
+
+QATZIP_API int qzGetDefaultsGen3(QzSessionParamsGen3_T *defaults);
 
 /**
  *****************************************************************************
@@ -1460,8 +1636,7 @@ typedef struct QzStream_S {
  *    reaching the end of input data - as indicated by last parameter.
  *
  *    The resulting compressed block of data will be composed of one or more
- *    gzip blocks as defined in RFC 1952 or deflate blocks as defined in
- *    RFC 1951.
+ *    gzip blocks, per RFC 1952, or deflate blocks, per RFC 1951.
  *
  *    This function will place completed compression blocks in the *out
  *    of QzStream_T structure and put checksum for compressed input data
@@ -1539,8 +1714,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *    reaching the end of input data - as indicated by last parameter.
  *
  *    The input compressed block of data will be composed of one or more
- *    gzip blocks as defiend in  RFC 1952 or deflate blocks as defined in
- *    RFC 1951.
+ *    gzip blocks, per RFC 1952, or deflate blocks, per RFC 1951.
  *
  *    This function will place completed decompression blocks in the *out
  *    of QzStream_T structure and put checksum for decompressed data in
@@ -1644,6 +1818,107 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last);
  *****************************************************************************/
 QATZIP_API int qzEndStream(QzSession_T *sess, QzStream_T *strm);
 
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Requests the release versions of the QATZip Library sub components.
+ *
+ * @description
+ *      Populate an array of pre-allocated QzSoftwareVersionInfo_T structs
+ *    with the names and versions of QATzip sub components.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      Yes
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in, out]   api_info  pointer to a QzSoftwareVersionInfo_T
+ *                             structure to populate.
+ * @param[in, out]   num_elem  pointer to an unsigned int expressing
+ *                             how many elements are in the array
+ *                             provided in api_info
+ *
+ * @retval QZ_OK               Function executed successfully
+ * @retval QZ_FAIL             Function did not succeed
+ * @retval QZ_NO_SW_AVAIL      Function did not find a software provider for
+ *                             fallback
+ * @retval QZ_NO_HW            Function did not find an installed kernel driver
+ * @retval QZ_NOSW_NO_HW       Functions did not find an installed kernel driver
+                               or software provider
+ * @retval QZ_PARAMS           *api_info or num_elem is NULL or not large
+ *                             enough to store all QzSoftwareVersionInfo_T
+ *                             structures
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API
+int qzGetSoftwareComponentVersionList(QzSoftwareVersionInfo_T *api_info,
+                                      unsigned int *num_elem);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Requests the number of Software components used by the QATZip library
+ *
+ * @description
+ *      This function populates num_elem variable with the number of
+ *      software components available to the library.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      Yes
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in, out]   num_elem  pointer to an unsigned int to populate
+ *                             how many software componets are associated
+ *                             with QATZip
+ *
+ * @retval QZ_OK               Function executed successfully
+ * @retval QZ_FAIL             Function did not succeed
+ * @retval QZ_NO_SW_AVAIL      Function did not find a software provider for
+ *                             fallback
+ * @retval QZ_NO_HW            Function did not find an installed kernel driver
+ * @retval QZ_NOSW_NO_HW       Functions did not find an installed kernel driver
+                               or software provider
+ * @retval QZ_PARAMS           *num_elem is NULL
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzGetSoftwareComponentCount(unsigned int *num_elem);
 
 #ifdef __cplusplus
 }

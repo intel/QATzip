@@ -1,14 +1,13 @@
 /***************************************************************************
- *  xxHash - Fast Hash algorithm
  *
- *  BSD LICENSE
+ *   BSD LICENSE
  *
- *  Copyright(c) 2007-2022 Intel Corporation. All rights reserved.
- *  All rights reserved.
+ *   Copyright(c) 2007-2022 Intel Corporation. All rights reserved.
+ *   All rights reserved.
  *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
+ *   Redistribution and use in source and binary forms, with or without
+ *   modification, are permitted provided that the following conditions
+ *   are met:
  *
  *     * Redistributions of source code must retain the above copyright
  *       notice, this list of conditions and the following disclaimer.
@@ -32,6 +31,9 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ ***************************************************************************/
+/***************************************************************************
+ *  xxHash - Fast Hash algorithm
  *  Copyright (C) 2012-2016, Yann Collet
  *
  *  BSD 2-Clause License (http://www.opensource.org/licenses/bsd-license.php)

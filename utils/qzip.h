@@ -722,7 +722,7 @@ void mkPath(char *path, const char *dirpath, char *file);
 /*
  * internal api functions
  */
-int qatzipSetup(QzSession_T *sess, QzSessionParams_T *params);
+int qatzipSetup(QzSession_T *sess, QzSessionParamsGen3_T *params);
 int qatzipClose(QzSession_T *sess);
 
 void processFile(QzSession_T *sess, const char *in_name,
@@ -756,7 +756,7 @@ extern char *g_program_name;
 extern int g_decompress;        /* g_decompress (-d) */
 extern int g_keep;                     /* keep (don't delete) input files */
 extern QzSession_T g_sess;
-extern QzSessionParams_T g_params_th;
+extern QzSessionParamsGen3_T g_params_th;
 /* Estimate maximum data expansion after decompression */
 extern const unsigned int g_bufsz_expansion_ratio[4];
 /* Command line options*/

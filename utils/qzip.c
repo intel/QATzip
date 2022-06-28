@@ -43,7 +43,7 @@ char *g_program_name = NULL; /* program name */
 int g_decompress = 0;        /* g_decompress (-d) */
 int g_keep = 0;                     /* keep (don't delete) input files */
 QzSession_T g_sess;
-QzSessionParams_T g_params_th = {(QzHuffmanHdr_T)0,};
+QzSessionParamsGen3_T g_params_th = {(QzHuffmanHdr_T)0,};
 
 /* Estimate maximum data expansion after decompression */
 const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
@@ -380,7 +380,7 @@ exit:
     }
 }
 
-int qatzipSetup(QzSession_T *sess, QzSessionParams_T *params)
+int qatzipSetup(QzSession_T *sess, QzSessionParamsGen3_T *params)
 {
     int status;
 
@@ -392,7 +392,7 @@ int qatzipSetup(QzSession_T *sess, QzSessionParams_T *params)
     }
     QZ_DEBUG("QAT init OK with error: %d\n", status);
 
-    status = qzSetupSession(sess, params);
+    status = qzSetupSessionGen3(sess, params);
     if (QZ_SETUP_SESSION_FAIL(status)) {
         QZ_ERROR("Session setup failed with error: %d\n", status);
         return ERROR;
@@ -446,10 +446,10 @@ bool hasSuffix(const char *fname)
             return 1;
         }
         break;
-    case QZ_DEFLATE_RAW:
-    case QZ_DEFLATE_GZIP_EXT:
-    case QZ_DEFLATE_GZIP:
-    case QZ_DEFLATE_4B:
+    case QZ_DEFLATE_RAW_Gen3:
+    case QZ_DEFLATE_GZIP_EXT_Gen3:
+    case QZ_DEFLATE_GZIP_Gen3:
+    case QZ_DEFLATE_4B_Gen3:
     default:
         if (len >= strlen(SUFFIX_GZ) &&
             !strcmp(fname + (len - strlen(SUFFIX_GZ)), SUFFIX_GZ)) {
@@ -468,22 +468,22 @@ QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
     if (E_SUFFIX_GZ == suffix) {
         if (!is_format_set) {
             // format is not specified, reassign data format by suffix instead of default value
-            g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
+            g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT_Gen3;
             return E_CHECK_SUFFIX_OK;
         }
-        if (QZ_DEFLATE_GZIP_EXT != g_params_th.data_fmt &&
-            QZ_DEFLATE_GZIP != g_params_th.data_fmt &&
-            QZ_DEFLATE_4B != g_params_th.data_fmt) {
+        if (QZ_DEFLATE_GZIP_EXT_Gen3 != g_params_th.data_fmt &&
+            QZ_DEFLATE_GZIP_Gen3 != g_params_th.data_fmt &&
+            QZ_DEFLATE_4B_Gen3 != g_params_th.data_fmt) {
             return E_CHECK_SUFFIX_FORMAT_UNMATCH;
         } else {
             return E_CHECK_SUFFIX_OK;
         }
     } else if (E_SUFFIX_7Z == suffix) {
         if (!is_format_set) {
-            g_params_th.data_fmt = QZ_DEFLATE_RAW;
+            g_params_th.data_fmt = QZ_DEFLATE_RAW_Gen3;
             return E_CHECK_SUFFIX_OK;
         }
-        if (QZ_DEFLATE_RAW != g_params_th.data_fmt) {
+        if (QZ_DEFLATE_RAW_Gen3 != g_params_th.data_fmt) {
             return E_CHECK_SUFFIX_FORMAT_UNMATCH;
         } else {
             return E_CHECK_SUFFIX_OK;
@@ -519,7 +519,7 @@ int makeOutName(const char *in_name, const char *out_name,
         } else if (g_params_th.data_fmt == QZ_LZ4S_FH) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4S);
-        } else if (g_params_th.data_fmt == QZ_DEFLATE_RAW) {
+        } else if (g_params_th.data_fmt == QZ_DEFLATE_RAW_Gen3) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_7Z);
         } else {

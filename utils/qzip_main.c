@@ -50,7 +50,7 @@ int main(int argc, char **argv)
     errno = 0;
     int is_format_set = 0;
 
-    if (qzGetDefaults(&g_params_th) != QZ_OK)
+    if (qzGetDefaultsGen3(&g_params_th) != QZ_OK)
         return -1;
 
     while (true) {
@@ -106,13 +106,13 @@ int main(int argc, char **argv)
             break;
         case 'O':
             if (strcmp(optarg, "gzip") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_GZIP;
+                g_params_th.data_fmt = QZ_DEFLATE_GZIP_Gen3;
             } else if (strcmp(optarg, "gzipext") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT;
+                g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT_Gen3;
             } else if (strcmp(optarg, "7z") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_RAW;
+                g_params_th.data_fmt = QZ_DEFLATE_RAW_Gen3;
             } else if (strcmp(optarg, "deflate_4B") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_4B;
+                g_params_th.data_fmt = QZ_DEFLATE_4B_Gen3;
             } else if (strcmp(optarg, "lz4") == 0) {
                 g_params_th.data_fmt = QZ_LZ4_FH;
             } else if (strcmp(optarg, "lz4s") == 0) {
@@ -158,7 +158,7 @@ int main(int argc, char **argv)
             break;
         case 'P':
             if (strcmp(optarg, "busy") == 0) {
-                g_params_th.is_busy_polling = QZ_BUSY_POLLING;
+                g_params_th.polling_mode = QZ_BUSY_POLLING;
             } else {
                 printf("Error set polling mode: %s\n", optarg);
                 return -1;
@@ -200,7 +200,7 @@ int main(int argc, char **argv)
             stdout = freopen(NULL, "w", stdout);
             processStream(&g_sess, stdin, stream_out, g_decompress == 0);
         }
-    } else if (g_params_th.data_fmt == QZ_DEFLATE_RAW &&
+    } else if (g_params_th.data_fmt == QZ_DEFLATE_RAW_Gen3 &&
                !g_decompress) { //compress into 7z
         QZ_DEBUG("going to compress files into 7z archive ...\n");
 
@@ -274,7 +274,7 @@ int main(int argc, char **argv)
 
                         QZ_DEBUG(" this is a 7z archive, "
                                  "going to decompress ... \n");
-                        g_params_th.data_fmt = QZ_DEFLATE_RAW;
+                        g_params_th.data_fmt = QZ_DEFLATE_RAW_Gen3;
                         if (qatzipSetup(&g_sess, &g_params_th)) {
                             fprintf(stderr, "qatzipSetup session  failed\n");
                             exit(ERROR);

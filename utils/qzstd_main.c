@@ -38,7 +38,7 @@ sample zstd-qat application
 */
 #include "qzstd.h"
 
-extern QzSessionParams_T g_sess_params;
+extern QzSessionParamsGen3_T g_sess_params;
 
 int main(int argc, char **argv)
 {
@@ -79,7 +79,7 @@ int main(int argc, char **argv)
             break;
         case 'P':
             if (strcmp(optarg, "busy") == 0) {
-                g_sess_params.is_busy_polling = QZ_BUSY_POLLING;
+                g_sess_params.polling_mode = QZ_BUSY_POLLING;
             } else {
                 QZ_ERROR("%s : set wrong polling mode: %s\n", QZSTD_ERROR_TYPE, optarg);
                 return QZSTD_ERROR;

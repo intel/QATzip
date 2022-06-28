@@ -41,7 +41,7 @@ extern"C" {
 #endif
 
 #include <cpa_dev.h>
-
+#include <stdbool.h>
 #include <zlib.h>
 #include <lz4frame.h>
 
@@ -135,6 +135,8 @@ extern"C" {
 #define QZ_LZ4_STORED_HEADER_SIZE 4
 #define QZ_MAX_ZSTD_BLK_SZ          (128 * 1024)
 
+#define DATA_FORMAT_DEFAULT     DEFLATE_GZIP_EXT
+
 typedef struct QzCpaStream_S {
     signed long seq;
     signed long src1;
@@ -210,9 +212,89 @@ typedef enum {
     DeflateInited
 } DeflateState_T;
 
+/******************************************************
+ * Internal layer for params and data format.
+ *
+ * If API extend the new data format or params,
+ * have to add them here. And add new affine function
+ *****************************************************/
+// In API, Using different suffix to indicate new feature
+// This enum is set by different setupsession API.
+typedef enum API_SUFFIX_E {
+    Gen2 = 0,
+    Gen3
+} API_SUFFIX_T;
+
+// Include all support Dataforamt
+typedef enum DataFormatInternal_E {
+    DEFLATE_4B = 0,
+    /**< Data is in raw deflate format with 4 byte header */
+    DEFLATE_GZIP,
+    /**< Data is in deflate wrapped by GZip header and footer */
+    DEFLATE_GZIP_EXT,
+    /**< Data is in deflate wrapped by GZip extended header and footer */
+    DEFLATE_RAW,
+    /**< Data is in raw deflate format */
+    LZ4_FH,
+    /**< Data is in LZ4 format with frame headers */
+    LZ4S_FH,
+    /**< Data is in LZ4s format with frame headers */
+    LZ4S_PP,
+    /**< Data is in LZ4s format and has been post processed */
+    ZSTD_RAW
+    /**< Data is in raw zStandard format */
+} DataFormatInternal_T;
+// Include all support session parameters
+typedef struct SessionParamsInternal_S {
+    QzHuffmanHdr_T huffman_hdr;
+    /**< Dynamic or Static Huffman headers */
+    QzDirection_T direction;
+    /**< Compress or decompress */
+    DataFormatInternal_T data_fmt;
+    /**< Deflate, deflate with GZip or deflate with GZip ext */
+    unsigned int comp_lvl;
+    /**< Compression level 1 to 12 for QAT CPM2.0. */
+    /**< If the comp_algorithm is deflate, values > max will be set to max */
+    unsigned char comp_algorithm;
+    /**< Compress/decompression algorithms */
+    unsigned int max_forks;
+    /**< Maximum forks permitted in the current thread */
+    /**< 0 means no forking permitted */
+    unsigned char sw_backup;
+    /**< bit field defining SW configuration (see QZ_SW_* definitions) */
+    unsigned int hw_buff_sz;
+    /**< Default buffer size, must be a power of 2k */
+    /**< 4K,8K,16K,32K,64K,128K */
+    unsigned int strm_buff_sz;
+    /**< Stream buffer size between [1K .. 2M - 5K] */
+    /**< Default strm_buf_sz equals to hw_buff_sz */
+    unsigned int input_sz_thrshold;
+    /**< Default threshold of compression service's input size */
+    /**< for sw failover, if the size of input request is less */
+    /**< than the threshold, QATzip will route the request */
+    /**< to software */
+    unsigned int req_cnt_thrshold;
+    /**< Set between 1 and NUM_BUFF, default NUM_BUFF */
+    /**< NUM_BUFF is defined in qatzip_internal.h */
+    unsigned int wait_cnt_thrshold;
+    /**< When previous try failed, wait for specific number of calls */
+    /**< before retrying to open device. Default threshold is 8 */
+    qzLZ4SCallbackFn qzCallback;
+    /**< post processing callback for zstd compression*/
+    void *qzCallback_external;
+    /**< An opaque pointer provided by the user to be passed */
+    /**< into qzCallback during post processing*/
+    QzPollingMode_T polling_mode;
+    /**< 0 means no busy polling, 1 means busy polling */
+    unsigned int is_sensitive_mode;
+    /**< 0 means disable sensitive mode, 1 means enable sensitive mode*/
+    unsigned int lz4s_mini_match;
+    /**< Set lz4s dictionary mini match, which would be 3 or 4 */
+} SessionParamsInternal_T;
+
 typedef struct QzSess_S {
     int inst_hint;   /*which instance we last used*/
-    QzSessionParams_T sess_params;
+    SessionParamsInternal_T sess_params;
     CpaDcSessionSetupData session_setup_data;
     Cpa32U session_size;
     Cpa32U ctx_size;
@@ -248,7 +330,6 @@ typedef struct QzSess_S {
     DeflateState_T deflate_stat;
     LZ4F_cctx *cctx;
     LZ4F_dctx *dctx;
-    void *callback_external;
 } QzSess_T;
 
 typedef struct QzStreamBuf_S {
@@ -334,19 +415,19 @@ unsigned long qzGzipHeaderSz(void);
 unsigned long qz4BHeaderSz(void);
 unsigned long stdGzipHeaderSz(void);
 unsigned long stdGzipFooterSz(void);
-unsigned long outputHeaderSz(QzDataFormat_T data_fmt);
-unsigned long outputFooterSz(QzDataFormat_T data_fmt);
+unsigned long outputHeaderSz(DataFormatInternal_T data_fmt);
+unsigned long outputFooterSz(DataFormatInternal_T data_fmt);
 void qzGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 void qz4BHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 void stdGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr);
 void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
-                     QzDataFormat_T data_fmt);
+                     DataFormatInternal_T data_fmt);
 void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res);
 void outputFooterGen(QzSess_T *qz_sess,
                      CpaDcRqResults *res,
-                     QzDataFormat_T data_fmt);
+                     DataFormatInternal_T data_fmt);
 void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr);
 
 int isQATProcessable(const unsigned char *ptr,
@@ -365,7 +446,24 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
                         unsigned int *uncompressed_buf_len, unsigned char *dest,
                         unsigned int *compressed_buffer_len);
 
-int qz_sessParamsCheck(QzSessionParams_T *params);
+int qzSetupSessionInternal(QzSession_T *sess, void *params,
+                           API_SUFFIX_T apiVersion);
+
+void qz_sessParamsAffine(void *params, SessionParamsInternal_T *internal,
+                         API_SUFFIX_T apiVersion);
+
+// Extend setupSession Affine function here
+void qz_sessParamsGen2Affine(QzSessionParams_T *params,
+                             SessionParamsInternal_T *internal);
+void qz_sessParamsAffineToGen2(QzSessionParams_T *params,
+                               SessionParamsInternal_T *internal);
+int qz_sessParamsGen2Check(QzSessionParams_T *params);
+
+void qz_sessParamsGen3Affine(QzSessionParamsGen3_T *params,
+                             SessionParamsInternal_T *internal);
+void qz_sessParamsAffineToGen3(QzSessionParamsGen3_T *params,
+                               SessionParamsInternal_T *internal);
+int qz_sessParamsGen3Check(QzSessionParamsGen3_T *params);
 
 unsigned char getSwBackup(QzSession_T *sess);
 
