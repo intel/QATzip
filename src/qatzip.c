@@ -1108,6 +1108,10 @@ int qzSetupSessionInternal(QzSession_T *sess, void *params,
     qz_sess->session_setup_data.sessState = CPA_DC_STATELESS;
 #if (CPA_DC_API_VERSION_NUM_MAJOR >= 3) && (CPA_DC_API_VERSION_NUM_MINOR >= 0)
     qz_sess->session_setup_data.windowSize = (Cpa32U)7;
+    if (qz_sess->session_setup_data.compType == CPA_DC_LZ4) {
+        qz_sess->cctx = NULL;
+        qz_sess->dctx = NULL;
+    }
 #else
     qz_sess->session_setup_data.deflateWindowSize = (Cpa32U)7;
     qz_sess->session_setup_data.fileType = CPA_DC_FT_ASCII;
@@ -1118,11 +1122,6 @@ int qzSetupSessionInternal(QzSession_T *sess, void *params,
         qz_sess->inflate_stat = InflateNull;
         qz_sess->deflate_strm = NULL;
         qz_sess->deflate_stat = DeflateNull;
-    }
-
-    if (qz_sess->session_setup_data.compType == CPA_DC_LZ4) {
-        qz_sess->cctx = NULL;
-        qz_sess->dctx = NULL;
     }
 
     if (g_process.qz_init_status != QZ_OK) {
