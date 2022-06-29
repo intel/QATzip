@@ -10,12 +10,12 @@
 - [Additional Information](#additional-information)
 - [Limitations](#limitations)
 - [Installation Instructions](#installation-instructions)
-    - [Build Intel&reg; QuickAssist Technology Driver](#build-intel-quickassist-technology-driver)
-    - [Install QATzip As Root User](#install-qatzip-as-root-user)
-    - [Install QATzip As Non-root User](#install-qatzip-as-non-root-user)
-    - [Enable qzstd](#enable-qzstd)
-    - [Test QATzip](#test-qatzip)
-    - [Performance Test With QATzip](#performance-test-with-qatzip)
+  - [Build Intel&reg; QuickAssist Technology Driver](#build-intel-quickassist-technology-driver)
+  - [Install QATzip As Root User](#install-qatzip-as-root-user)
+  - [Install QATzip As Non-root User](#install-qatzip-as-non-root-user)
+  - [Enable qzstd](#enable-qzstd)
+  - [Test QATzip](#test-qatzip)
+  - [Performance Test With QATzip](#performance-test-with-qatzip)
 - [QATzip API manual](#qatzip-api-manual)
 - [Intended Audience](#intended-audience)
 - [Open Issues](#open-issues)
@@ -51,32 +51,32 @@ contained in the file `LICENSE.GPL` within the `config_file` folder.
 ## Features
 
 * Acceleration of compression and decompression utilizing Intel&reg; QuickAssist Technology,
-including a utility to compress and decompress files.
+  including a utility to compress and decompress files.
 * Dynamic memory allocation for zero copy, by exposing qzMalloc() and qzFree() allowing
-working buffers to be pinned, contiguous buffers that can be used for DMA operations to
-and from the hardware.
+  working buffers to be pinned, contiguous buffers that can be used for DMA operations to
+  and from the hardware.
 * Instance over-subscription, allowing a number of threads in the same process to
-seamlessly share a smaller number of hardware instances.
+  seamlessly share a smaller number of hardware instances.
 * Memory allocation backed by huge page and kernel memory to provide access to pinned,
-contiguous memory. Allocating from huge-page when kernel memory contention.
+  contiguous memory. Allocating from huge-page when kernel memory contention.
 * Configurable accelerator device sharing among processes.
 * Optional software failover for both compression and decompression services. QATzip may
-switch to software if there is insufficient system resources including acceleration
-instances or memory. This feature allows for a common software stack between server
-platforms that have acceleration devices and non-accelerated platforms.
+  switch to software if there is insufficient system resources including acceleration
+  instances or memory. This feature allows for a common software stack between server
+  platforms that have acceleration devices and non-accelerated platforms.
 * Automatic recovery from hardware compression failure.
 * Provide streaming interface of compression and decompression to achieve better compression
-ratio and throughput for data sets that are submitted piecemeal.
+  ratio and throughput for data sets that are submitted piecemeal.
 * 'qzip' utility supports compression from regular file, pipeline and block device.
 * For standard GZIP format, try hardware decompression 1st before switch to software decompression.
 * Enable adaptive polling mechanism to save CPU usage in stress mode.
 * 'qzip' utility supports compression files and directories into 7z format.
 * For 4xxx(QAT gen 4 devices), QATzip supports lz4 (de)compression algorithm.
 * For 4xxx(QAT gen 4 devices), QATzip supports lz4s compression algorithm, the QATzip can generate
-lz4s block with lz4 frame format, which can be used for software post-processing to generate
-other compressed data format.
+  lz4s block with lz4 frame format, which can be used for software post-processing to generate
+  other compressed data format.
 * For 4xxx(QAT gen 4 devices), QATzip supports ZSTD format compression, through import post-process
-mechanism. this feature request to enable qzstd.
+  mechanism. this feature request to enable qzstd.
 
 ## Hardware Requirements
 
@@ -98,7 +98,7 @@ acceleration devices:
 This release was validated on the following:
 
 * QATzip has been tested with the latest Intel&reg; QuickAssist Acceleration Driver.
-Please download the QAT driver from the link https://01.org/intel-quickassist-technology
+  Please download the QAT driver from the link https://developer.intel.com/quickassist
 * QATzip has been tested by Intel&reg; on CentOS 7.8.2003 with kernel 3.10.0-1127.19.1.el7.x86\_64
 * Zlib\* library of version 1.2.7 or higher
 * Suggest GCC\* of version 4.8.5 or higher
@@ -384,15 +384,6 @@ Known issues relating to the QATzip are described in this section.
 | Description | If the users call qzFree after qzMemDestory, they may encounter free memory error "free(): invalid pointe" |
 | Implication | User use qzMalloc API to allocte continuous memory |
 | Resolution | Ensure qzMemDestory is invoked after qzFree, now we use attribute destructor to invoke qzMemDestory|
-| Affected OS | Linux |
-
-### QATAPP-26149
-| Title      |     dcCheckDestinationData return Invalid API Param   |
-|----------|:-------------
-| Reference   | QATAPP-26149 |
-| Description | The cpaDcCompressData return error -4 when destination buffer size is less than 512 bytes |
-| Implication | Use software to compression small block data |
-| Resolution | Set the input_sz_thrshold of QzSessionParams_T greater or equal to 512 bytes |
 | Affected OS | Linux |
 
 ## Intended Audience
