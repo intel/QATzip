@@ -51,7 +51,7 @@ EXTRA_DIST = \
              LICENSE \
              README.md \
              include/qz_utils.h \
-	     	 src/xxhash.h	     \
+             src/xxhash.h	     \
              src/qatzip_internal.h \
              src/qatzip_page_table.h \
              utils/qzip.h \
