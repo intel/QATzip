@@ -1396,15 +1396,15 @@ void *qzCompressOnPinnedMem(void *thd_arg)
     timeCheck(2, tid);
     QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
 
-    src_sz = (rand() % 256 * 1024) + 20000;
-    src_sz = 256 * 1024;
-    avail_dest_sz = dest_sz = 256 * 1024 * 2;
-
     if (gen_data) {
+        src_sz = 256 * 1024;
+        avail_dest_sz = dest_sz = 256 * 1024 * 2;
         src = qzMalloc(src_sz, 0, PINNED_MEM);
         dest = qzMalloc(dest_sz, 0, PINNED_MEM);
     } else {
         src = test_arg->src;
+        src_sz = test_arg->src_sz;
+        avail_dest_sz = dest_sz = test_arg->comp_out_sz;
         dest = qzMalloc(dest_sz, 0, PINNED_MEM);
     }
 
@@ -1450,9 +1450,9 @@ void *qzCompressOnPinnedMem(void *thd_arg)
 
 done:
     timeCheck(5, tid);
+    qzFree(dest);
     if (gen_data) {
         qzFree(src);
-        qzFree(dest);
     }
 
     (void)qzTeardownSession(&g_session_th[tid]);
@@ -1530,13 +1530,15 @@ void *qzCompressOnCommonMem(void *thd_arg)
     timeCheck(2, tid);
     QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
 
-    src_sz = 256 * 1024;
-    avail_dest_sz = dest_sz = 256 * 1024 * 2;
     if (gen_data) {
+        src_sz = 256 * 1024;
+        avail_dest_sz = dest_sz = 256 * 1024 * 2;
         src = qzMalloc(src_sz, 0, COMMON_MEM);
         dest = qzMalloc(dest_sz, 0, COMMON_MEM);
     } else {
         src = test_arg->src;
+        src_sz = test_arg->src_sz;
+        avail_dest_sz = dest_sz = test_arg->comp_out_sz;
         dest = qzMalloc(dest_sz, 0, COMMON_MEM);
     }
 
@@ -1580,9 +1582,9 @@ void *qzCompressOnCommonMem(void *thd_arg)
              tid, el_m, src_sz, rate);
 
 done:
-    if (! gen_data) {
+    qzFree(dest);
+    if (gen_data) {
         qzFree(src);
-        qzFree(dest);
     }
 
     (void)qzTeardownSession(&g_session_th[tid]);
