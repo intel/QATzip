@@ -556,7 +556,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
         strm->pending_in -= input_len;
         strm->pending_out = output_len;
         copied_output = copyStreamOutput(strm, strm->out + produced);
-        consumed += input_len;
+        consumed = copied_input;
         produced += copied_output;
         inbuf_offset += input_len;
         stream_buf->in_offset = inbuf_offset;
@@ -714,7 +714,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
         inbuf_offset += input_len;
         stream_buf->in_offset = inbuf_offset;
-        consumed += input_len;
+        consumed = copied_input;
         strm->pending_in -= input_len;
         strm->pending_out = output_len;
         copied_output = copyStreamOutput(strm, strm->out + produced);
