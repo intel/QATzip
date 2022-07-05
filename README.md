@@ -87,6 +87,7 @@ acceleration devices:
 * [Intel&reg; Communications Chipset 8925 to 8955 Series][2]
 * [Intel&reg; Communications Chipset 8960 to 8970 Series][3]
 * [Intel&reg; C3XXX Series Chipset][4]
+* Intel&reg; 4XXX (QAT gen 4 devices)
 
 [1]:https://www.intel.com/content/www/us/en/design/products-and-solutions/processors-and-chipsets/purley/intel-xeon-scalable-processors.html
 [2]:https://www.intel.com/content/www/us/en/ethernet-products/gigabit-server-adapters/quickassist-adapter-8950-brief.html
@@ -215,18 +216,16 @@ is installed.
 
 ```bash
     sudo usermod -g qat username # need to relogin
-```
-
     or
-```bash
-    sudo newgrp username  # effective immediately
+    sudo newgrp qat  # effective immediately
 ```
 
 Change the amount of max locked memory for the username that is included in the group
 name. This can be done by specifying the limit in /etc/security/limits.conf.
+To set 500MB add a line like this in /etc/security/limits.conf:
 ```bash
    cat /etc/security/limits.conf |grep qat
-   @qat - memlock 4096
+   @qat - memlock 500000
 ```
 
 **Enable huge page as root user**
