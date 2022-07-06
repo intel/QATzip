@@ -167,8 +167,7 @@ extern"C" {
  *  1. Addition of LZ4 and LZ4s
  *  2. Addition of post processing functions for out of LZ4s
  *  3. Compression level up to 12 for LZ4 and LZ4s
- *  4. Support for Shared Virtual Memory
- *  5. Support for gzip header with additional compression algorithms
+ *  4. Support for gzip header with additional compression algorithms
  *
  *****************************************************************************/
 /**
@@ -249,25 +248,6 @@ typedef enum QzDataFormat_E {
     QZ_FMT_NUM
 } QzDataFormat_T;
 
-typedef enum QzDataFormatGen3_E {
-    QZ_DEFLATE_4B_Gen3 = 0,
-    /**< Data is in raw deflate format with 4 byte header */
-    QZ_DEFLATE_GZIP_Gen3,
-    /**< Data is in deflate wrapped by GZip header and footer */
-    QZ_DEFLATE_GZIP_EXT_Gen3,
-    /**< Data is in deflate wrapped by GZip extended header and footer */
-    QZ_DEFLATE_RAW_Gen3,
-    /**< Data is in raw deflate format */
-    QZ_LZ4_FH,
-    /**< Data is in LZ4 format with frame headers */
-    QZ_LZ4S_FH,
-    /**< Data is in LZ4s format with frame headers */
-    QZ_LZ4S_PP,
-    /**< Data is in LZ4s format and has been post processed */
-    QZ_ZSTD_RAW
-    /**< Data is in raw zStandard format */
-} QzDataFormatGen3_T;
-
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -303,26 +283,6 @@ typedef enum QzCrcType_E {
     NONE
     /**< No checksum */
 } QzCrcType_T;
-
-/**
- *****************************************************************************
- * @ingroup qatZip
- *      Supported polynomial for CRC64 compression
- *
- * @description
- *      This enumerated list identifies the polynomials available for use when
- *    a CRC or CRC64 is generated for a buffer.
- *
- * @Defalut Polynomial:
- *    CRC-32 checksum is described in RFC 1952
- *    Implementing RFC 1952 CRC:
- *    http://www.ietf.org/rfc/rfc1952.txt
- *
- *****************************************************************************/
-typedef enum QzCrcPolynomial_E {
-    QZ_CRC_POLYNOMIAL_DEFAULT = 0,
-    /**< Default Polynomial is used for CRC and CRC64 calculations */
-} QzCrcPolynomial_T;
 
 /**
  *****************************************************************************
@@ -412,8 +372,7 @@ typedef enum QzSoftwareComponentType_E {
 #endif
 #ifdef __linux__
 #define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
-        memcpy((void *)(dest), (void *) (src), MIN((size_t)dest_sz, \
-               (size_t)src_sz))
+        memcpy((void *)(dest), (void *) (src), (size_t)MIN(dest_sz, src_sz))
 #endif
 #ifdef _WIN64
 #define QZ_MEMCPY(dest, src, dest_sz, src_sz) \
@@ -536,17 +495,11 @@ typedef struct QzSessionParams_S {
 #endif
 } QzSessionParams_T;
 
-typedef struct QzSessionParamsGen3_S {
-    QzHuffmanHdr_T huffman_hdr;
-    /**< Dynamic or Static Huffman headers */
+typedef struct QzSessionParamsCommon_S {
     QzDirection_T direction;
     /**< Compress or decompress */
-    QzDataFormatGen3_T data_fmt;
-    /**< Deflate, deflate with GZip or deflate with GZip ext */
-    /**< LZ4 or LZ4S and zstd */
     unsigned int comp_lvl;
-    /**< Compression level 1 to 12 for QAT CPM2.0. */
-    /**< If the comp_algorithm is deflate, values > max will be set to max */
+    /**< Compression level 1 to 9 */
     unsigned char comp_algorithm;
     /**< Compress/decompression algorithms */
     unsigned int max_forks;
@@ -571,29 +524,39 @@ typedef struct QzSessionParamsGen3_S {
     unsigned int wait_cnt_thrshold;
     /**< When previous try failed, wait for specific number of calls */
     /**< before retrying to open device. Default threshold is 8 */
-    PinMem_T mem_type;
-    /**< If not specified, default will be Pinned for qat 1.x */
-    /**< and common for QAT 2.0 */
-    qzLZ4SCallbackFn qzCallback;
-    /**< post processing callback for zstd compression*/
-    void *qzCallback_external;
-    /**< An opaque pointer provided by the user to be passed */
-    /**< into qzCallback during post processing*/
     QzPollingMode_T polling_mode;
     /**< 0 means no busy polling, 1 means busy polling */
     unsigned int is_sensitive_mode;
     /**< 0 means disable sensitive mode, 1 means enable sensitive mode*/
-    unsigned int lz4s_mini_match;
-    /**< Set lz4s dictionary mini match, which would be 3 or 4 */
-    QzCrcPolynomial_T crc_polynomial;
-    /**< When generating a CRC or CRC64 determines the polynomial used*/
-    /**< Default set to QZ_CRC_POLYNOMIAL_DEFAULT*/
 #ifdef ERR_INJECTION
     FallbackError *fbError;
     FallbackError *fbErrorCurr;
     /* Linked list for simulated errors from HW */
 #endif
-} QzSessionParamsGen3_T;
+} QzSessionParamsCommon_T;
+
+typedef struct QzSessionParamsDeflate_S {
+    QzSessionParamsCommon_T common_params;
+    QzHuffmanHdr_T huffman_hdr;
+    /**< Dynamic or Static Huffman headers */
+    QzDataFormat_T data_fmt;
+    /**< Deflate, deflate with GZip or deflate with GZip ext */
+} QzSessionParamsDeflate_T;
+
+typedef struct QzSessionParamsLZ4_S {
+    QzSessionParamsCommon_T common_params;
+} QzSessionParamsLZ4_T;
+
+typedef struct QzSessionParamsLZ4S_S {
+    QzSessionParamsCommon_T common_params;
+    qzLZ4SCallbackFn qzCallback;
+    /**< post processing callback for zstd compression*/
+    void *qzCallback_external;
+    /**< An opaque pointer provided by the user to be passed */
+    /**< into qzCallback during post processing*/
+    unsigned int lz4s_mini_match;
+    /**< Set lz4s dictionary mini match, which would be 3 or 4 */
+} QzSessionParamsLZ4S_T;
 
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
 #define QZ_DIRECTION_DEFAULT         QZ_DIR_BOTH
@@ -619,6 +582,7 @@ typedef struct QzSessionParamsGen3_S {
 #define QZ_WAIT_CNT_THRESHOLD_DEFAULT 8
 #define QZ_DEFLATE_COMP_LVL_MINIMUM      (1)
 #define QZ_DEFLATE_COMP_LVL_MAXIMUM      (9)
+#define QZ_DEFLATE_COMP_LVL_MAXIMUM_Gen3 (12)
 #define QZ_LZS_COMP_LVL_MINIMUM          (1)
 #define QZ_LZS_COMP_LVL_MAXIMUM          (12)
 
@@ -912,8 +876,14 @@ QATZIP_API int qzInit(QzSession_T *sess,  unsigned char sw_backup);
  *****************************************************************************/
 QATZIP_API int qzSetupSession(QzSession_T *sess,  QzSessionParams_T *params);
 
-QATZIP_API int qzSetupSessionGen3(QzSession_T *sess,
-                                  QzSessionParamsGen3_T *params);
+QATZIP_API int qzSetupSessionDeflate(QzSession_T *sess,
+                                     QzSessionParamsDeflate_T *params);
+
+QATZIP_API int qzSetupSessionLZ4(QzSession_T *sess,
+                                 QzSessionParamsLZ4_T *params);
+
+QATZIP_API int qzSetupSessionLZ4S(QzSession_T *sess,
+                                  QzSessionParamsLZ4S_T *params);
 
 /**
  *****************************************************************************
@@ -1013,8 +983,8 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
  *    gzip blocks, as per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
- *    buffer and put either a CRC32 or CRC64 checksum for the compressed
- *    input data in the user provided buffer *crc.
+ *    buffer and put CRC32 checksum for compressed input data in user provided
+ *    buffer *crc.
  *
  *    The caller must check the updated src_len. This value will be the
  *    number of consumed bytes on exit. The calling API may have to
@@ -1050,7 +1020,7 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
  *                           function returns
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
- * @param[in,out]   crc      Pointer to CRC32 or CRC64 checksum buffer
+ * @param[in,out]   crc      Pointer to CRC32 checksum buffer
  * @param[in,out]   ext_rc   qzCompressCrcExt only.
  *                           If not NULL, ext_rc point to a location where
  *                           extended return codes may be returned. See
@@ -1081,16 +1051,6 @@ QATZIP_API int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
                                 unsigned int *src_len, unsigned char *dest,
                                 unsigned int *dest_len, unsigned int last,
                                 unsigned long *crc, uint64_t *ext_rc);
-
-QATZIP_API int qzCompressCrc64(QzSession_T *sess, const unsigned char *src,
-                               unsigned int *src_len, unsigned char *dest,
-                               unsigned int *dest_len, unsigned int last,
-                               uint64_t *crc);
-
-QATZIP_API int qzCompressCrc64Ext(QzSession_T *sess, const unsigned char *src,
-                                  unsigned int *src_len, unsigned char *dest,
-                                  unsigned int *dest_len, unsigned int last,
-                                  uint64_t *crc, uint64_t *ext_rc);
 
 /**
  *****************************************************************************
@@ -1428,7 +1388,11 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess);
  *****************************************************************************/
 QATZIP_API int qzSetDefaults(QzSessionParams_T *defaults);
 
-QATZIP_API int qzSetDefaultsGen3(QzSessionParamsGen3_T *defaults);
+QATZIP_API int qzSetDefaultsDeflate(QzSessionParamsDeflate_T *defaults);
+
+QATZIP_API int qzSetDefaultsLZ4(QzSessionParamsLZ4_T *defaults);
+
+QATZIP_API int qzSetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
 
 /**
  *****************************************************************************
@@ -1469,7 +1433,11 @@ QATZIP_API int qzSetDefaultsGen3(QzSessionParamsGen3_T *defaults);
  *****************************************************************************/
 QATZIP_API int qzGetDefaults(QzSessionParams_T *defaults);
 
-QATZIP_API int qzGetDefaultsGen3(QzSessionParamsGen3_T *defaults);
+QATZIP_API int qzGetDefaultsDeflate(QzSessionParamsDeflate_T *defaults);
+
+QATZIP_API int qzGetDefaultsLZ4(QzSessionParamsLZ4_T *defaults);
+
+QATZIP_API int qzGetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
 
 /**
  *****************************************************************************
