@@ -96,13 +96,8 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
     *src_len = 0;
     *dest_len = 0;
 
-    /*check if setupSession called*/
-    if (NULL == sess->internal) {
-        ret = qzSetupSessionGen3(sess, NULL);
-        if (QZ_SETUP_SESSION_FAIL(ret)) {
-            return ret;
-        }
-    }
+    assert(sess);
+    assert(sess->internal);
 
     qz_sess = (QzSess_T *) sess->internal;
     qz_sess->force_sw = 1;
@@ -439,13 +434,8 @@ int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
     LZ4F_cctx *cctx;
     size_t ret = 0;
 
-    /*check if setupSession called*/
-    if (NULL == sess->internal) {
-        ret = qzSetupSessionGen3(sess, NULL);
-        if (QZ_SETUP_SESSION_FAIL(ret)) {
-            return ret;
-        }
-    }
+    assert(sess);
+    assert(sess->internal);
 
     qz_sess = (QzSess_T *) sess->internal;
     if (qz_sess->cctx == NULL) {
@@ -640,13 +630,8 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     DataFormatInternal_T data_fmt;
     QzSess_T *qz_sess = NULL;
 
-    /*check if setupSession called*/
-    if (NULL == sess->internal) {
-        ret = qzSetupSessionGen3(sess, NULL);
-        if (QZ_SETUP_SESSION_FAIL(ret)) {
-            return ret;
-        }
-    }
+    assert(sess);
+    assert(sess->internal);
 
     qz_sess = (QzSess_T *) sess->internal;
     data_fmt = qz_sess->sess_params.data_fmt;
@@ -680,13 +665,8 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     DataFormatInternal_T data_fmt;
     QzSess_T *qz_sess = NULL;
 
-    /*check if setupSession called*/
-    if (NULL == sess->internal) {
-        ret = qzSetupSessionGen3(sess, NULL);
-        if (QZ_SETUP_SESSION_FAIL(ret)) {
-            return ret;
-        }
-    }
+    assert(sess);
+    assert(sess->internal);
 
     qz_sess = (QzSess_T *) sess->internal;
     data_fmt = qz_sess->sess_params.data_fmt;
@@ -720,13 +700,8 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
     DataFormatInternal_T data_fmt;
     QzSess_T *qz_sess = NULL;
 
-    /*check if setupSession called*/
-    if (NULL == sess->internal) {
-        ret = qzSetupSessionGen3(sess, NULL);
-        if (QZ_SETUP_SESSION_FAIL(ret)) {
-            return ret;
-        }
-    }
+    assert(sess);
+    assert(sess->internal);
 
     qz_sess = (QzSess_T *) sess->internal;
     data_fmt = qz_sess->sess_params.data_fmt;

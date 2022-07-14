@@ -311,7 +311,7 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
 
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
-        rc = qzSetupSession(sess, NULL);
+        rc = qzSetupSessionDeflate(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
             return QZ_FAIL;
         }
@@ -481,7 +481,7 @@ int qzCompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
 
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
-        rc = qzSetupSession(sess, NULL);
+        rc = qzSetupSessionDeflate(sess, NULL);
         if (QZ_SETUP_SESSION_FAIL(rc)) {
             strm->in_sz = 0;
             strm->out_sz = 0;

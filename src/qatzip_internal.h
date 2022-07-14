@@ -133,7 +133,6 @@ extern"C" {
 #define QZ_LZ4_BLK_HEADER_SIZE 4                     //lz4 block header length
 #define QZ_LZ4_STOREDBLOCK_FLAG 0x80000000U
 #define QZ_LZ4_STORED_HEADER_SIZE 4
-#define QZ_MAX_ZSTD_BLK_SZ          (128 * 1024)
 
 #define DATA_FORMAT_DEFAULT     DEFLATE_GZIP_EXT
 
@@ -212,19 +211,6 @@ typedef enum {
     DeflateInited
 } DeflateState_T;
 
-/******************************************************
- * Internal layer for params and data format.
- *
- * If API extend the new data format or params,
- * have to add them here. And add new affine function
- *****************************************************/
-// In API, Using different suffix to indicate new feature
-// This enum is set by different setupsession API.
-typedef enum API_SUFFIX_E {
-    Gen2 = 0,
-    Gen3
-} API_SUFFIX_T;
-
 // Include all support Dataforamt
 typedef enum DataFormatInternal_E {
     DEFLATE_4B = 0,
@@ -244,8 +230,9 @@ typedef enum DataFormatInternal_E {
     ZSTD_RAW
     /**< Data is in raw zStandard format */
 } DataFormatInternal_T;
+
 // Include all support session parameters
-typedef struct SessionParamsInternal_S {
+typedef struct QzSessionParamsInternal_S {
     QzHuffmanHdr_T huffman_hdr;
     /**< Dynamic or Static Huffman headers */
     QzDirection_T direction;
@@ -290,11 +277,11 @@ typedef struct SessionParamsInternal_S {
     /**< 0 means disable sensitive mode, 1 means enable sensitive mode*/
     unsigned int lz4s_mini_match;
     /**< Set lz4s dictionary mini match, which would be 3 or 4 */
-} SessionParamsInternal_T;
+} QzSessionParamsInternal_T;
 
 typedef struct QzSess_S {
     int inst_hint;   /*which instance we last used*/
-    SessionParamsInternal_T sess_params;
+    QzSessionParamsInternal_T sess_params;
     CpaDcSessionSetupData session_setup_data;
     Cpa32U session_size;
     Cpa32U ctx_size;
@@ -446,25 +433,6 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
                         unsigned int *uncompressed_buf_len, unsigned char *dest,
                         unsigned int *compressed_buffer_len);
 
-int qzSetupSessionInternal(QzSession_T *sess, void *params,
-                           API_SUFFIX_T apiVersion);
-
-void qz_sessParamsAffine(void *params, SessionParamsInternal_T *internal,
-                         API_SUFFIX_T apiVersion);
-
-// Extend setupSession Affine function here
-void qz_sessParamsGen2Affine(QzSessionParams_T *params,
-                             SessionParamsInternal_T *internal);
-void qz_sessParamsAffineToGen2(QzSessionParams_T *params,
-                               SessionParamsInternal_T *internal);
-int qz_sessParamsGen2Check(QzSessionParams_T *params);
-
-void qz_sessParamsGen3Affine(QzSessionParamsGen3_T *params,
-                             SessionParamsInternal_T *internal);
-void qz_sessParamsAffineToGen3(QzSessionParamsGen3_T *params,
-                               SessionParamsInternal_T *internal);
-int qz_sessParamsGen3Check(QzSessionParamsGen3_T *params);
-
 unsigned char getSwBackup(QzSession_T *sess);
 
 #ifdef ADF_PCI_API
@@ -502,4 +470,28 @@ unsigned long qzLZ4SHeaderSz(void);
 void qzLZ4SHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 
 
+int qzSetupSessionInternal(QzSession_T *sess);
+
+int qzCheckParams(QzSessionParams_T *params);
+int qzCheckParamsDeflate(QzSessionParamsDeflate_T *params);
+int qzCheckParamsLZ4(QzSessionParamsLZ4_T *params);
+int qzCheckParamsLZ4S(QzSessionParamsLZ4S_T *params);
+
+void qzGetParams(QzSessionParamsInternal_T *internal_params,
+                 QzSessionParams_T *params);
+void qzGetParamsDeflate(QzSessionParamsInternal_T *internal_params,
+                        QzSessionParamsDeflate_T *params);
+void qzGetParamsLZ4(QzSessionParamsInternal_T *internal_params,
+                    QzSessionParamsLZ4_T *params);
+void qzGetParamsLZ4S(QzSessionParamsInternal_T *internal_params,
+                     QzSessionParamsLZ4S_T *params);
+
+void qzSetParamsLZ4S(QzSessionParamsLZ4S_T *params,
+                     QzSessionParamsInternal_T *internal_params);
+void qzSetParamsLZ4(QzSessionParamsLZ4_T *params,
+                    QzSessionParamsInternal_T *internal_params);
+void qzSetParamsDeflate(QzSessionParamsDeflate_T *params,
+                        QzSessionParamsInternal_T *internal_params);
+void qzSetParams(QzSessionParams_T *params,
+                 QzSessionParamsInternal_T *internal_params);
 #endif //_QATZIPP_H

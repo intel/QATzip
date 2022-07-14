@@ -123,7 +123,7 @@ do {                                                                        \
 * If enable new compression algorithm, extend new params
 * structure in API. please add default here.
 ******************************************************/
-SessionParamsInternal_T g_sess_params_internal_default = {
+QzSessionParamsInternal_T g_sess_params_internal_default = {
     .huffman_hdr       = QZ_HUFF_HDR_DEFAULT,
     .direction         = QZ_DIRECTION_DEFAULT,
     .data_fmt          = DATA_FORMAT_DEFAULT,
@@ -136,7 +136,8 @@ SessionParamsInternal_T g_sess_params_internal_default = {
     .input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
     .req_cnt_thrshold  = QZ_REQ_THRESHOLD_DEFAULT,
     .wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT,
-    .polling_mode   = QZ_PERIODICAL_POLLING,
+    .polling_mode      = QZ_PERIODICAL_POLLING,
+    .lz4s_mini_match   = 3,
     .qzCallback        = NULL,
     .qzCallback_external = NULL
 };
@@ -852,7 +853,7 @@ void cleanUpInstMem(int i)
  * internally, those buffers are source buffer,
  * intermeidate buffer and destination buffer
  */
-static int getInstMem(int i, SessionParamsInternal_T *params)
+static int getInstMem(int i, QzSessionParamsInternal_T *params)
 {
     int j;
     CpaStatus status;
@@ -1010,11 +1011,26 @@ done_inst:
     return rc;
 }
 
-int qzSetupSessionInternal(QzSession_T *sess, void *params,
-                           API_SUFFIX_T apiVersion)
+/* Initialize the QAT session parameters associate with current
+ * process's QAT instance, the session parameters include various
+ * configurations for compression/decompression request
+ */
+int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
 {
-    int rc = QZ_NOSW_NO_HW;
+    int rc = QZ_OK;
+    QzSess_T *qz_sess;
+    QzSessionParams_T temp = {0};
+
     if (unlikely(NULL == sess)) {
+        return QZ_PARAMS;
+    }
+
+    if (NULL == params) {
+        rc = qzGetDefaults(&temp);
+        params = &temp;
+    }
+
+    if (qzCheckParams(params) != QZ_OK) {
         return QZ_PARAMS;
     }
 
@@ -1027,158 +1043,140 @@ int qzSetupSessionInternal(QzSession_T *sess, void *params,
         }
     }
 
-    QzSess_T *qz_sess;
     qz_sess = (QzSess_T *)sess->internal;
-    // affine API params to internal params
-    qz_sessParamsAffine(params, &(qz_sess->sess_params), apiVersion);
+    qzSetParams(params, &qz_sess->sess_params);
 
-    qz_sess->inst_hint = -1;
-    qz_sess->seq = 0;
-    qz_sess->seq_in = 0;
-    qz_sess->polling_idx = 0;
-    qz_sess->force_sw = 0;
-    /*set up cpaDc Session params*/
-    qz_sess->session_setup_data.compLevel = qz_sess->sess_params.comp_lvl;
-    switch (qz_sess->sess_params.data_fmt) {
-    case DEFLATE_4B:
-    case DEFLATE_GZIP:
-    case DEFLATE_GZIP_EXT:
-    case DEFLATE_RAW:
-        qz_sess->session_setup_data.compType = CPA_DC_DEFLATE;
-        qz_sess->session_setup_data.checksum = CPA_DC_CRC32;
-        qz_sess->session_setup_data.autoSelectBestHuffmanTree =
-            CPA_DC_ASB_UNCOMP_STATIC_DYNAMIC_WITH_STORED_HDRS;
-        if (qz_sess->sess_params.huffman_hdr == QZ_DYNAMIC_HDR) {
-            qz_sess->session_setup_data.huffType = CPA_DC_HT_FULL_DYNAMIC;
-        } else {
-            qz_sess->session_setup_data.huffType = CPA_DC_HT_STATIC;
-        }
-        break;
-    case LZ4_FH:
-#if CPA_DC_API_VERSION_AT_LEAST(3,1)
-        if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
-            qz_sess->session_setup_data.compType = CPA_DC_LZ4;
-            qz_sess->session_setup_data.checksum = CPA_DC_XXHASH32;
-            qz_sess->session_setup_data.lz4BlockChecksum = 0;
-            qz_sess->session_setup_data.lz4BlockMaxSize = CPA_DC_LZ4_MAX_BLOCK_SIZE_64K;
-        } else {
-            QZ_ERROR("QAT Device does not support lz4 algorithm\n");
-            return QZ_UNSUPPORTED_FMT;
-        }
-        break;
-#else
-        QZ_ERROR("QAT driver does not support lz4 algorithm\n");
-        return QZ_UNSUPPORTED_FMT;
-#endif
-    case LZ4S_FH:
-    case ZSTD_RAW:
-#if CPA_DC_API_VERSION_AT_LEAST(3,1)
-        if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
-            qz_sess->session_setup_data.compType = CPA_DC_LZ4S;
-            qz_sess->session_setup_data.checksum = CPA_DC_XXHASH32;
-            if (qz_sess->sess_params.lz4s_mini_match == 4) {
-                qz_sess->session_setup_data.minMatch = CPA_DC_MIN_4_BYTE_MATCH;
-            } else {
-                qz_sess->session_setup_data.minMatch = CPA_DC_MIN_3_BYTE_MATCH;
-            }
-        } else {
-            QZ_ERROR("QAT Device does not support lz4s algorithm\n");
-            return QZ_UNSUPPORTED_FMT;
-        }
-        break;
-#else
-        QZ_ERROR("QAT driver does not support lz4s algorithm\n");
-        return QZ_UNSUPPORTED_FMT;
-#endif
-    default:
-        return QZ_UNSUPPORTED_FMT;
-    }
-
-    switch (qz_sess->sess_params.direction) {
-    case QZ_DIR_COMPRESS:
-        qz_sess->session_setup_data.sessDirection = CPA_DC_DIR_COMPRESS;
-        break;
-    case QZ_DIR_DECOMPRESS:
-        qz_sess->session_setup_data.sessDirection = CPA_DC_DIR_DECOMPRESS;
-        break;
-    default:
-        qz_sess->session_setup_data.sessDirection = CPA_DC_DIR_COMBINED;
-    }
-
-    qz_sess->session_setup_data.sessState = CPA_DC_STATELESS;
-#if (CPA_DC_API_VERSION_NUM_MAJOR >= 3) && (CPA_DC_API_VERSION_NUM_MINOR >= 0)
-    qz_sess->session_setup_data.windowSize = (Cpa32U)7;
-    if (qz_sess->session_setup_data.compType == CPA_DC_LZ4) {
-        qz_sess->cctx = NULL;
-        qz_sess->dctx = NULL;
-    }
-#else
-    qz_sess->session_setup_data.deflateWindowSize = (Cpa32U)7;
-    qz_sess->session_setup_data.fileType = CPA_DC_FT_ASCII;
-#endif
-
-    if (qz_sess->session_setup_data.compType == CPA_DC_DEFLATE) {
-        qz_sess->inflate_strm = NULL;
-        qz_sess->inflate_stat = InflateNull;
-        qz_sess->deflate_strm = NULL;
-        qz_sess->deflate_stat = DeflateNull;
-    }
-
-    if (g_process.qz_init_status != QZ_OK) {
-        /*hw not present*/
-        if (qz_sess->sess_params.sw_backup == 1) {
-            sess->hw_session_stat = QZ_NO_HW;
-            rc = QZ_OK;
-        } else {
-            sess->hw_session_stat = QZ_NOSW_NO_HW;
-            rc = QZ_NOSW_NO_HW;
-        }
-    } else {
-        sess->hw_session_stat = QZ_OK;
-        rc = QZ_OK;
+    rc = qzSetupSessionInternal(sess);
+    if (rc < 0) {
+        free(sess->internal);
+        sess->internal = NULL;
+        return rc;
     }
 
     return rc;
 }
 
-/* Initialize the QAT session parameters associate with current
- * process's QAT instance, the session parameters include various
- * configurations for compression/decompression request
- */
-int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
+int qzSetupSessionDeflate(QzSession_T *sess,  QzSessionParamsDeflate_T *params)
 {
     int rc = QZ_OK;
-    // If params is NULL, Using temp params to check if default
-    // internal params is valid. Call qzSetDefaultsGen3 before,
-    // may cause setup session failed.
-    QzSessionParams_T temp = {0};
-    if (NULL == params) {
-        rc = qzGetDefaults(&temp);
-        params = &temp;
-    } else {
-        rc = qz_sessParamsGen2Check(params);
+    QzSess_T *qz_sess;
+    QzSessionParamsDeflate_T temp = {0};
+
+    if (unlikely(NULL == sess)) {
+        return QZ_PARAMS;
     }
 
-    if (QZ_OK == rc) {
-        rc = qzSetupSessionInternal(sess, (void *)params, Gen2);
+    if (NULL == params) {
+        rc = qzGetDefaultsDeflate(&temp);
+        params = &temp;
     }
+
+    if (qzCheckParamsDeflate(params) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    sess->hw_session_stat = QZ_FAIL;
+    if (sess->internal == NULL) {
+        sess->internal = calloc(1, sizeof(QzSess_T));
+        if (unlikely(NULL == sess->internal)) {
+            sess->hw_session_stat = QZ_NOSW_LOW_MEM;
+            return QZ_NOSW_LOW_MEM;
+        }
+    }
+
+    qz_sess = (QzSess_T *)sess->internal;
+    qzSetParamsDeflate(params, &qz_sess->sess_params);
+
+    rc = qzSetupSessionInternal(sess);
+    if (rc < 0) {
+        free(sess->internal);
+        sess->internal = NULL;
+        return rc;
+    }
+
+    return rc;
+
+}
+
+int qzSetupSessionLZ4(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
+{
+    int rc = QZ_OK;
+    QzSess_T *qz_sess;
+    QzSessionParamsLZ4_T temp = {0};
+
+    if (unlikely(NULL == sess)) {
+        return QZ_PARAMS;
+    }
+
+    if (NULL == params) {
+        rc = qzGetDefaultsLZ4(&temp);
+        params = &temp;
+    }
+
+    if (qzCheckParamsLZ4(params) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    sess->hw_session_stat = QZ_FAIL;
+    if (sess->internal == NULL) {
+        sess->internal = calloc(1, sizeof(QzSess_T));
+        if (unlikely(NULL == sess->internal)) {
+            sess->hw_session_stat = QZ_NOSW_LOW_MEM;
+            return QZ_NOSW_LOW_MEM;
+        }
+    }
+
+    qz_sess = (QzSess_T *)sess->internal;
+    qzSetParamsLZ4(params, &qz_sess->sess_params);
+
+    rc = qzSetupSessionInternal(sess);
+    if (rc < 0) {
+        free(sess->internal);
+        sess->internal = NULL;
+        return rc;
+    }
+
     return rc;
 }
 
-int qzSetupSessionGen3(QzSession_T *sess, QzSessionParamsGen3_T *params)
+int qzSetupSessionLZ4S(QzSession_T *sess,  QzSessionParamsLZ4S_T *params)
 {
     int rc = QZ_OK;
-    QzSessionParamsGen3_T temp = {0};
-    if (NULL == params) {
-        rc = qzGetDefaultsGen3(&temp);
-        params = &temp;
-    } else {
-        rc = qz_sessParamsGen3Check(params);
+    QzSess_T *qz_sess;
+    QzSessionParamsLZ4S_T temp = {0};
+
+    if (unlikely(NULL == sess)) {
+        return QZ_PARAMS;
     }
 
-    if (QZ_OK == rc) {
-        rc = qzSetupSessionInternal(sess, (void *)params, Gen3);
+    if (NULL == params) {
+        rc = qzGetDefaultsLZ4S(&temp);
+        params = &temp;
     }
+
+    if (qzCheckParamsLZ4S(params) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    sess->hw_session_stat = QZ_FAIL;
+    if (sess->internal == NULL) {
+        sess->internal = calloc(1, sizeof(QzSess_T));
+        if (unlikely(NULL == sess->internal)) {
+            sess->hw_session_stat = QZ_NOSW_LOW_MEM;
+            return QZ_NOSW_LOW_MEM;
+        }
+    }
+
+    qz_sess = (QzSess_T *)sess->internal;
+    qzSetParamsLZ4S(params, &qz_sess->sess_params);
+
+    rc = qzSetupSessionInternal(sess);
+    if (rc < 0) {
+        free(sess->internal);
+        sess->internal = NULL;
+        return rc;
+    }
+
     return rc;
 }
 
@@ -1979,7 +1977,13 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
 
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
-        rc = qzSetupSessionGen3(sess, NULL);
+        if (g_sess_params_internal_default.data_fmt == LZ4_FH) {
+            rc = qzSetupSessionLZ4(sess, NULL);
+        } else if (g_sess_params_internal_default.data_fmt == LZ4S_FH) {
+            rc = qzSetupSessionLZ4S(sess, NULL);
+        } else {
+            rc = qzSetupSessionDeflate(sess, NULL);
+        }
         if (unlikely(QZ_SETUP_SESSION_FAIL(rc))) {
             *src_len = 0;
             *dest_len = 0;
@@ -2753,7 +2757,13 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
 
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
-        rc = qzSetupSessionGen3(sess, NULL);
+        if (g_sess_params_internal_default.data_fmt == LZ4_FH) {
+            rc = qzSetupSessionLZ4(sess, NULL);
+        } else if (g_sess_params_internal_default.data_fmt == LZ4S_FH) {
+            rc = qzSetupSessionLZ4S(sess, NULL);
+        } else {
+            rc = qzSetupSessionDeflate(sess, NULL);
+        }
         if (unlikely(QZ_SETUP_SESSION_FAIL(rc))) {
             *src_len = 0;
             *dest_len = 0;
@@ -2950,229 +2960,108 @@ int qzGetStatus(QzSession_T *sess, QzStatus_T *status)
     return QZ_OK;
 }
 
-void qz_sessParamsAffine(void *params, SessionParamsInternal_T *internal,
-                         API_SUFFIX_T apiVersion)
-{
-    switch (apiVersion) {
-    case Gen2:
-        qz_sessParamsGen2Affine(params, internal);
-        break;
-    case Gen3:
-        qz_sessParamsGen3Affine(params, internal);
-        break;
-    default:
-        QZ_ERROR("Calling wrong setup Sesion API\n");
-        assert(0);
-    }
-}
-
-/*********************************************************
-* If enable new compression algorithm, extend new params
-* structure in API. please add new Affine function here
-*********************************************************/
 int qzSetDefaults(QzSessionParams_T *defaults)
 {
-    if (!defaults) {
+    if (defaults == NULL) {
         return QZ_PARAMS;
     }
-    int rc = qz_sessParamsGen2Check(defaults);
-    if (QZ_OK == rc) {
-        qz_sessParamsGen2Affine(defaults, &g_sess_params_internal_default);
+
+    if (qzCheckParams(defaults) != QZ_OK) {
+        return QZ_PARAMS;
     }
-    return rc;
+
+    qzSetParams(defaults, &g_sess_params_internal_default);
+
+    return QZ_OK;
+}
+
+int qzSetDefaultsDeflate(QzSessionParamsDeflate_T *defaults)
+{
+    if (defaults == NULL) {
+        return QZ_PARAMS;
+    }
+
+    if (qzCheckParamsDeflate(defaults) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    qzSetParamsDeflate(defaults, &g_sess_params_internal_default);
+
+    return QZ_OK;
+}
+
+int qzSetDefaultsLZ4(QzSessionParamsLZ4_T *defaults)
+{
+    if (defaults == NULL) {
+        return QZ_PARAMS;
+    }
+
+    if (qzCheckParamsLZ4(defaults) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    qzSetParamsLZ4(defaults, &g_sess_params_internal_default);
+
+    return QZ_OK;
+}
+
+int qzSetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults)
+{
+    if (defaults == NULL) {
+        return QZ_PARAMS;
+    }
+
+    if (qzCheckParamsLZ4S(defaults) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    qzSetParamsLZ4S(defaults, &g_sess_params_internal_default);
+
+    return QZ_OK;
 }
 
 int qzGetDefaults(QzSessionParams_T *defaults)
 {
-    if (!defaults) {
+    if (defaults == NULL) {
         return QZ_PARAMS;
     }
-    qz_sessParamsAffineToGen2(defaults, &g_sess_params_internal_default);
-    // check params is valid
-    return qz_sessParamsGen2Check(defaults);
-}
 
-int qz_sessParamsGen2Check(QzSessionParams_T *params)
-{
-    assert(params != NULL);
-    unsigned int compress_lvl_max = QZ_DEFLATE_COMP_LVL_MAXIMUM;
-    unsigned int hw_buff_max_sz = QZ_HW_BUFF_MAX_SZ;
-
-    if (params->huffman_hdr > QZ_STATIC_HDR                   ||
-        params->direction > QZ_DIR_BOTH                       ||
-        params->data_fmt >= QZ_FMT_NUM                        ||
-        params->comp_lvl < 1                                  ||
-        params->comp_lvl > compress_lvl_max                   ||
-        params->comp_algorithm != QZ_DEFLATE                  ||
-        params->sw_backup > 1                                 ||
-        params->hw_buff_sz < QZ_HW_BUFF_MIN_SZ                ||
-        params->hw_buff_sz > hw_buff_max_sz                   ||
-        params->strm_buff_sz < QZ_STRM_BUFF_MIN_SZ            ||
-        params->strm_buff_sz > QZ_STRM_BUFF_MAX_SZ            ||
-        (params->hw_buff_sz & (params->hw_buff_sz - 1))       ||
-        params->input_sz_thrshold < QZ_COMP_THRESHOLD_MINIMUM ||
-        params->req_cnt_thrshold < QZ_REQ_THRESHOLD_MINIMUM   ||
-        params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXIMUM) {
-        QZ_ERROR("Sess params is invalid!\n");
-        return QZ_PARAMS;
-    }
+    qzGetParams(&g_sess_params_internal_default, defaults);
 
     return QZ_OK;
 }
 
-void qz_sessParamsGen2Affine(QzSessionParams_T *params,
-                             SessionParamsInternal_T *internal)
+int qzGetDefaultsDeflate(QzSessionParamsDeflate_T *defaults)
 {
-    assert(params != NULL && internal != NULL);
-    internal->comp_algorithm = params->comp_algorithm;
-    internal->comp_lvl = params->comp_lvl;
-    internal->direction = params->direction;
-    internal->huffman_hdr = params->huffman_hdr;
-    internal->hw_buff_sz = params->hw_buff_sz;
-    internal->strm_buff_sz = params->strm_buff_sz;
-    internal->input_sz_thrshold = params->input_sz_thrshold;
-    internal->req_cnt_thrshold = params->req_cnt_thrshold;
-    internal->wait_cnt_thrshold = params->req_cnt_thrshold;
-    internal->max_forks = params->max_forks;
-    internal->sw_backup = params->sw_backup;
-    // Note: params data_fmt's order may not align with internal data_fmt
-    internal->data_fmt = params->data_fmt;
-}
-
-void qz_sessParamsAffineToGen2(QzSessionParams_T *params,
-                               SessionParamsInternal_T *internal)
-{
-    assert(params != NULL && internal != NULL);
-    params->comp_algorithm = internal->comp_algorithm;
-    params->comp_lvl = internal->comp_lvl;
-    params->direction = internal->direction;
-    params->huffman_hdr = internal->huffman_hdr;
-    params->hw_buff_sz = internal->hw_buff_sz;
-    params->strm_buff_sz = internal->strm_buff_sz;
-    params->input_sz_thrshold = internal->input_sz_thrshold;
-    params->req_cnt_thrshold = internal->req_cnt_thrshold;
-    params->wait_cnt_thrshold = internal->req_cnt_thrshold;
-    params->max_forks = internal->max_forks;
-    params->sw_backup = internal->sw_backup;
-    params->data_fmt = internal->data_fmt;
-}
-
-int qzSetDefaultsGen3(QzSessionParamsGen3_T *defaults)
-{
-    if (!defaults) {
-        return QZ_PARAMS;
-    }
-    int rc;
-    rc = qz_sessParamsGen3Check(defaults);
-    if (QZ_OK == rc) {
-        qz_sessParamsGen3Affine(defaults, &g_sess_params_internal_default);
-    }
-    return rc;
-}
-
-int qzGetDefaultsGen3(QzSessionParamsGen3_T *defaults)
-{
-    if (!defaults) {
-        return QZ_PARAMS;
-    }
-    qz_sessParamsAffineToGen3(defaults, &g_sess_params_internal_default);
-    // check params is valid
-    return qz_sessParamsGen3Check(defaults);
-}
-
-int qz_sessParamsGen3Check(QzSessionParamsGen3_T *params)
-{
-    assert(params != NULL);
-    unsigned int compress_lvl_max = 0;
-    unsigned int hw_buff_max_sz = 0;
-    if (g_process.qz_init_status == QZ_NONE ||
-        IS_QAT_GEN4(g_process.device_info.deviceId)) {
-        compress_lvl_max = QZ_LZS_COMP_LVL_MAXIMUM;
-        hw_buff_max_sz = QZ_HW_BUFF_MAX_SZ_Gen3;
-    } else {
-        compress_lvl_max = QZ_DEFLATE_COMP_LVL_MAXIMUM;
-        hw_buff_max_sz = QZ_HW_BUFF_MAX_SZ;
-    }
-
-    if (params->huffman_hdr > QZ_STATIC_HDR                   ||
-        params->direction > QZ_DIR_BOTH                       ||
-        params->data_fmt >= 8                                 ||
-        params->comp_lvl < 1                                  ||
-        params->comp_lvl > compress_lvl_max                   ||
-        (params->comp_algorithm != QZ_DEFLATE                 &&
-         params->comp_algorithm != QZ_LZ4                     &&
-         params->comp_algorithm != QZ_LZ4s                    &&
-         params->comp_algorithm != QZ_ZSTD)                   ||
-        params->sw_backup > 1                                 ||
-        params->hw_buff_sz < QZ_HW_BUFF_MIN_SZ                ||
-        params->hw_buff_sz > hw_buff_max_sz                   ||
-        params->strm_buff_sz < QZ_STRM_BUFF_MIN_SZ            ||
-        params->strm_buff_sz > QZ_STRM_BUFF_MAX_SZ            ||
-        (params->hw_buff_sz & (params->hw_buff_sz - 1))       ||
-        params->input_sz_thrshold < QZ_COMP_THRESHOLD_MINIMUM ||
-        params->req_cnt_thrshold < QZ_REQ_THRESHOLD_MINIMUM   ||
-        params->req_cnt_thrshold > QZ_REQ_THRESHOLD_MAXIMUM) {
-        QZ_ERROR("Sess params is invalid!\n");
+    if (defaults == NULL) {
         return QZ_PARAMS;
     }
 
-    //limit hw buffer size for zstd
-    if (likely(params->qzCallback != NULL)) {
-        if (params->hw_buff_sz > QZ_MAX_ZSTD_BLK_SZ) {
-            QZ_ERROR("max chunksize can't exceed 128 KB when data format is zstd\n");
-            return QZ_PARAMS;
-        }
-    }
+    qzGetParamsDeflate(&g_sess_params_internal_default, defaults);
 
     return QZ_OK;
 }
 
-void qz_sessParamsGen3Affine(QzSessionParamsGen3_T *params,
-                             SessionParamsInternal_T *internal)
+int qzGetDefaultsLZ4(QzSessionParamsLZ4_T *defaults)
 {
-    assert(params != NULL && internal != NULL);
-    internal->comp_algorithm = params->comp_algorithm;
-    internal->comp_lvl = params->comp_lvl;
-    internal->direction = params->direction;
-    internal->huffman_hdr = params->huffman_hdr;
-    internal->hw_buff_sz = params->hw_buff_sz;
-    internal->strm_buff_sz = params->strm_buff_sz;
-    internal->input_sz_thrshold = params->input_sz_thrshold;
-    internal->req_cnt_thrshold = params->req_cnt_thrshold;
-    internal->wait_cnt_thrshold = params->req_cnt_thrshold;
-    internal->max_forks = params->max_forks;
-    internal->sw_backup = params->sw_backup;
-    // Note: params data_fmt's order may not align with internal data_fmt
-    internal->data_fmt = params->data_fmt;
-    internal->polling_mode = params->polling_mode;
-    internal->is_sensitive_mode = params->is_sensitive_mode;
-    internal->qzCallback = params->qzCallback;
-    internal->qzCallback_external = params->qzCallback_external;
-    internal->lz4s_mini_match = params->lz4s_mini_match;
+    if (defaults == NULL) {
+        return QZ_PARAMS;
+    }
+
+    qzGetParamsLZ4(&g_sess_params_internal_default, defaults);
+
+    return QZ_OK;
 }
 
-void qz_sessParamsAffineToGen3(QzSessionParamsGen3_T *params,
-                               SessionParamsInternal_T *internal)
+int qzGetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults)
 {
-    assert(params != NULL && internal != NULL);
-    params->comp_algorithm = internal->comp_algorithm;
-    params->comp_lvl = internal->comp_lvl;
-    params->direction = internal->direction;
-    params->huffman_hdr = internal->huffman_hdr;
-    params->hw_buff_sz = internal->hw_buff_sz;
-    params->strm_buff_sz = internal->strm_buff_sz;
-    params->input_sz_thrshold = internal->input_sz_thrshold;
-    params->req_cnt_thrshold = internal->req_cnt_thrshold;
-    params->wait_cnt_thrshold = internal->req_cnt_thrshold;
-    params->max_forks = internal->max_forks;
-    params->sw_backup = internal->sw_backup;
-    // Note: params data_fmt's order may not align with internal data_fmt
-    params->data_fmt = internal->data_fmt;
-    params->polling_mode = internal->polling_mode;
-    params->is_sensitive_mode = internal->is_sensitive_mode;
-    params->qzCallback = internal->qzCallback;
-    params->qzCallback_external = internal->qzCallback_external;
-    params->lz4s_mini_match = internal->lz4s_mini_match;
+    if (defaults == NULL) {
+        return QZ_PARAMS;
+    }
+
+    qzGetParamsLZ4S(&g_sess_params_internal_default, defaults);
+
+    return QZ_OK;
 }
 
 static unsigned int qzDeflateBoundGen2(unsigned int src_sz, QzSession_T *sess)
@@ -3220,7 +3109,7 @@ static unsigned int qzDeflateBoundGen4(unsigned int src_sz, QzSession_T *sess)
     unsigned int chunk_cnt = 0;
     unsigned long chunk_sz = 0;
     unsigned int last_chunk_sz = 0;
-    QzDataFormat_T data_fmt;
+    DataFormatInternal_T data_fmt;
     QzHuffmanHdr_T huffman_type;
     QzSess_T *qz_sess = NULL;
 
