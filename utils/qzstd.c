@@ -36,21 +36,19 @@
 #include "qzstd.h"
 
 QzSession_T qzstd_g_sess;
-QzSessionParamsGen3_T g_sess_params = {(QzHuffmanHdr_T)0,};
-QzSessionParamsGen3_T sess_params_zstd_default = {
-    .huffman_hdr       = QZ_HUFF_HDR_DEFAULT,
-    .direction         = QZ_DIRECTION_DEFAULT,
-    .data_fmt          = QZ_LZ4S_FH,
-    .comp_lvl          = QZ_COMP_LEVEL_DEFAULT,
-    .comp_algorithm    = QZ_LZ4s,
-    .max_forks         = QZ_MAX_FORK_DEFAULT,
-    .sw_backup         = QZ_SW_BACKUP_DEFAULT,
-    .hw_buff_sz        = QZ_HW_BUFF_SZ,
-    .strm_buff_sz      = QZ_STRM_BUFF_SZ_DEFAULT,
-    .input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
-    .req_cnt_thrshold  = 32,
-    .wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT,
-    .polling_mode   = QZ_PERIODICAL_POLLING,
+QzSessionParamsLZ4S_T g_sess_params = {0};
+QzSessionParamsLZ4S_T sess_params_zstd_default = {
+    .common_params.direction         = QZ_DIRECTION_DEFAULT,
+    .common_params.comp_lvl          = QZ_COMP_LEVEL_DEFAULT,
+    .common_params.comp_algorithm    = QZ_LZ4s,
+    .common_params.max_forks         = QZ_MAX_FORK_DEFAULT,
+    .common_params.sw_backup         = QZ_SW_BACKUP_DEFAULT,
+    .common_params.hw_buff_sz        = QZ_HW_BUFF_SZ,
+    .common_params.strm_buff_sz      = QZ_STRM_BUFF_SZ_DEFAULT,
+    .common_params.input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT,
+    .common_params.req_cnt_thrshold  = 32,
+    .common_params.wait_cnt_thrshold = QZ_WAIT_CNT_THRESHOLD_DEFAULT,
+    .common_params.polling_mode   = QZ_PERIODICAL_POLLING,
     .lz4s_mini_match   = 3,
     .qzCallback        = zstdCallBack,
     .qzCallback_external = NULL
@@ -272,7 +270,7 @@ done:
     return ret;
 }
 
-int qzZstdGetDefaults(QzSessionParamsGen3_T *defaults)
+int qzZstdGetDefaults(QzSessionParamsLZ4S_T *defaults)
 {
     if (defaults == NULL) {
         QZ_ERROR("%s : QzSessionParams ptr is empty\n", QZSTD_ERROR_TYPE);
@@ -281,8 +279,8 @@ int qzZstdGetDefaults(QzSessionParamsGen3_T *defaults)
 
     QZ_MEMCPY(defaults,
               &sess_params_zstd_default,
-              sizeof(QzSessionParamsGen3_T),
-              sizeof(QzSessionParamsGen3_T));
+              sizeof(QzSessionParamsLZ4S_T),
+              sizeof(QzSessionParamsLZ4S_T));
     return QZSTD_OK;
 }
 
@@ -322,13 +320,13 @@ int compressFile(char *input_file_name, char *output_file_name)
     LZ4MINMATCH = g_sess_params.lz4s_mini_match == 4 ? 3 : 2;
 
     //setup session
-    int ret = qzInit(&qzstd_g_sess, g_sess_params.sw_backup);
+    int ret = qzInit(&qzstd_g_sess, g_sess_params.common_params.sw_backup);
     if (ret != QZ_OK && ret != QZ_DUPLICATE) {
         QZ_ERROR("%s : qzInit failed with error code %d\n", QZ_ERROR_TYPE, ret);
         return QZSTD_ERROR;
     }
 
-    ret = qzSetupSessionGen3(&qzstd_g_sess, &g_sess_params);
+    ret = qzSetupSessionLZ4S(&qzstd_g_sess, &g_sess_params);
     if (ret != QZ_OK) {
         QZ_ERROR("%s : qzSetupSession failed with error code %d\n", QZ_ERROR_TYPE, ret);
         return QZSTD_ERROR;
@@ -388,7 +386,8 @@ int compressFile(char *input_file_name, char *output_file_name)
 
         dst_buffer_size = max_dst_buffer_size;
         gettimeofday(&time_s, NULL);
-        if (bytes_read < g_sess_params.input_sz_thrshold) { //goto sw compress
+        if (bytes_read <
+            g_sess_params.common_params.input_sz_thrshold) { //goto sw compress
             dst_buffer_size = ZSTD_compressCCtx(zc, dst_buffer, dst_buffer_size, src_buffer,
                                                 bytes_read, 1);
             if ((int)dst_buffer_size <= 0) {

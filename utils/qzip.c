@@ -43,7 +43,16 @@ char *g_program_name = NULL; /* program name */
 int g_decompress = 0;        /* g_decompress (-d) */
 int g_keep = 0;                     /* keep (don't delete) input files */
 QzSession_T g_sess;
-QzSessionParamsGen3_T g_params_th = {(QzHuffmanHdr_T)0,};
+QzipParams_T g_params_th = {
+    .huffman_hdr = QZ_HUFF_HDR_DEFAULT,
+    .direction = QZ_DIRECTION_DEFAULT,
+    .data_fmt = QZIP_DEFLATE_GZIP_EXT,
+    .comp_lvl = QZ_COMP_LEVEL_DEFAULT,
+    .comp_algorithm = QZ_COMP_ALGOL_DEFAULT,
+    .hw_buff_sz = QZ_HW_BUFF_SZ,
+    .polling_mode = QZ_PERIODICAL_POLLING,
+    .req_cnt_thrshold = 32
+};
 
 /* Estimate maximum data expansion after decompression */
 const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
@@ -379,22 +388,143 @@ exit:
         exit(ret);
     }
 }
+int qzipSetupSessionDeflate(QzSession_T *sess, QzipParams_T *params)
+{
+    int status;
+    QzSessionParamsDeflate_T deflate_params;
 
-int qatzipSetup(QzSession_T *sess, QzSessionParamsGen3_T *params)
+    status = qzGetDefaultsDeflate(&deflate_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    switch (params->data_fmt) {
+    case QZIP_DEFLATE_4B:
+        deflate_params.data_fmt = QZ_DEFLATE_4B;
+        break;
+    case QZIP_DEFLATE_GZIP:
+        deflate_params.data_fmt = QZ_DEFLATE_GZIP;
+        break;
+    case QZIP_DEFLATE_GZIP_EXT:
+        deflate_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        break;
+    case QZIP_DEFLATE_RAW:
+        deflate_params.data_fmt = QZ_DEFLATE_RAW;
+        break;
+    default:
+        QZ_ERROR("Unsupport data format\n");
+        return ERROR;
+    }
+
+    deflate_params.huffman_hdr = params->huffman_hdr;
+    deflate_params.common_params.direction = params->direction;
+    deflate_params.common_params.comp_lvl = params->comp_lvl;
+    deflate_params.common_params.comp_algorithm = params->comp_algorithm;
+    deflate_params.common_params.hw_buff_sz = params->hw_buff_sz;
+    deflate_params.common_params.polling_mode = params->polling_mode;
+    deflate_params.common_params.req_cnt_thrshold = params->req_cnt_thrshold;
+
+    status = qzSetupSessionDeflate(sess, &deflate_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    return OK;
+}
+
+int qzipSetupSessionLZ4(QzSession_T *sess, QzipParams_T *params)
+{
+    int status;
+    QzSessionParamsLZ4_T lz4_params;
+
+    status = qzGetDefaultsLZ4(&lz4_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    lz4_params.common_params.direction = params->direction;
+    lz4_params.common_params.comp_lvl = params->comp_lvl;
+    lz4_params.common_params.comp_algorithm = params->comp_algorithm;
+    lz4_params.common_params.hw_buff_sz = params->hw_buff_sz;
+    lz4_params.common_params.polling_mode = params->polling_mode;
+    lz4_params.common_params.req_cnt_thrshold = params->req_cnt_thrshold;
+
+    status = qzSetupSessionLZ4(sess, &lz4_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    return OK;
+}
+
+int qzipSetupSessionLZ4S(QzSession_T *sess, QzipParams_T *params)
+{
+    int status;
+    QzSessionParamsLZ4S_T lz4s_params;
+
+    status = qzGetDefaultsLZ4S(&lz4s_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    lz4s_params.common_params.direction = params->direction;
+    lz4s_params.common_params.comp_lvl = params->comp_lvl;
+    lz4s_params.common_params.comp_algorithm = params->comp_algorithm;
+    lz4s_params.common_params.hw_buff_sz = params->hw_buff_sz;
+    lz4s_params.common_params.polling_mode = params->polling_mode;
+    lz4s_params.common_params.req_cnt_thrshold = params->req_cnt_thrshold;
+
+    status = qzSetupSessionLZ4S(sess, &lz4s_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    return OK;
+}
+
+int qatzipSetup(QzSession_T *sess, QzipParams_T *params)
 {
     int status;
 
     QZ_DEBUG("mw>>> sess=%p\n", sess);
-    status = qzInit(sess, getSwBackup(sess));
-    if (QZ_INIT_FAIL(status)) {
+    status = qzInit(sess, 1);
+    if (status != QZ_OK &&
+        status != QZ_DUPLICATE) {
         QZ_ERROR("QAT init failed with error: %d\n", status);
         return ERROR;
     }
     QZ_DEBUG("QAT init OK with error: %d\n", status);
 
-    status = qzSetupSessionGen3(sess, params);
-    if (QZ_SETUP_SESSION_FAIL(status)) {
-        QZ_ERROR("Session setup failed with error: %d\n", status);
+    switch (params->data_fmt) {
+    case QZIP_DEFLATE_4B:
+    case QZIP_DEFLATE_GZIP:
+    case QZIP_DEFLATE_GZIP_EXT:
+    case QZIP_DEFLATE_RAW:
+        status = qzipSetupSessionDeflate(sess, params);
+        if (status != OK) {
+            QZ_ERROR("qzipSetupSessionDeflate fail with error: %d\n", status);
+        }
+        break;
+    case QZIP_LZ4_FH:
+        status = qzipSetupSessionLZ4(sess, params);
+        if (status != OK) {
+            QZ_ERROR("qzipSetupSessionLZ4 fail with error: %d\n", status);
+        }
+        break;
+    case QZIP_LZ4S_FH:
+        status = qzipSetupSessionLZ4S(sess, params);
+        if (status != OK) {
+            QZ_ERROR("qzipSetupSessionLZ4S fail with error: %d\n", status);
+        }
+        break;
+    default:
+        QZ_ERROR("Unsupport data format\n");
         return ERROR;
     }
 
@@ -434,22 +564,22 @@ bool hasSuffix(const char *fname)
 {
     size_t len = strlen(fname);
     switch (g_params_th.data_fmt) {
-    case QZ_LZ4_FH:
+    case QZIP_LZ4_FH:
         if (len >= strlen(SUFFIX_LZ4) &&
             !strcmp(fname + (len - strlen(SUFFIX_LZ4)), SUFFIX_LZ4)) {
             return 1;
         }
         break;
-    case QZ_LZ4S_FH:
+    case QZIP_LZ4S_FH:
         if (len >= strlen(SUFFIX_LZ4S) &&
             !strcmp(fname + (len - strlen(SUFFIX_LZ4S)), SUFFIX_LZ4S)) {
             return 1;
         }
         break;
-    case QZ_DEFLATE_RAW_Gen3:
-    case QZ_DEFLATE_GZIP_EXT_Gen3:
-    case QZ_DEFLATE_GZIP_Gen3:
-    case QZ_DEFLATE_4B_Gen3:
+    case QZIP_DEFLATE_RAW:
+    case QZIP_DEFLATE_GZIP_EXT:
+    case QZIP_DEFLATE_GZIP:
+    case QZIP_DEFLATE_4B:
     default:
         if (len >= strlen(SUFFIX_GZ) &&
             !strcmp(fname + (len - strlen(SUFFIX_GZ)), SUFFIX_GZ)) {
@@ -468,32 +598,32 @@ QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
     if (E_SUFFIX_GZ == suffix) {
         if (!is_format_set) {
             // format is not specified, reassign data format by suffix instead of default value
-            g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT_Gen3;
+            g_params_th.data_fmt = QZIP_DEFLATE_GZIP_EXT;
             return E_CHECK_SUFFIX_OK;
         }
-        if (QZ_DEFLATE_GZIP_EXT_Gen3 != g_params_th.data_fmt &&
-            QZ_DEFLATE_GZIP_Gen3 != g_params_th.data_fmt &&
-            QZ_DEFLATE_4B_Gen3 != g_params_th.data_fmt) {
+        if (QZIP_DEFLATE_GZIP_EXT != g_params_th.data_fmt &&
+            QZIP_DEFLATE_GZIP != g_params_th.data_fmt &&
+            QZIP_DEFLATE_4B != g_params_th.data_fmt) {
             return E_CHECK_SUFFIX_FORMAT_UNMATCH;
         } else {
             return E_CHECK_SUFFIX_OK;
         }
     } else if (E_SUFFIX_7Z == suffix) {
         if (!is_format_set) {
-            g_params_th.data_fmt = QZ_DEFLATE_RAW_Gen3;
+            g_params_th.data_fmt = QZIP_DEFLATE_RAW;
             return E_CHECK_SUFFIX_OK;
         }
-        if (QZ_DEFLATE_RAW_Gen3 != g_params_th.data_fmt) {
+        if (QZIP_DEFLATE_RAW != g_params_th.data_fmt) {
             return E_CHECK_SUFFIX_FORMAT_UNMATCH;
         } else {
             return E_CHECK_SUFFIX_OK;
         }
     } else if (E_SUFFIX_LZ4 == suffix) {
         if (!is_format_set) {
-            g_params_th.data_fmt = QZ_LZ4_FH;
+            g_params_th.data_fmt = QZIP_LZ4_FH;
             return E_CHECK_SUFFIX_OK;
         }
-        if (QZ_LZ4_FH != g_params_th.data_fmt) {
+        if (QZIP_LZ4_FH != g_params_th.data_fmt) {
             return E_CHECK_SUFFIX_FORMAT_UNMATCH;
         } else {
             return E_CHECK_SUFFIX_OK;
@@ -513,13 +643,13 @@ int makeOutName(const char *in_name, const char *out_name,
             return -1;
         }
         /* add suffix */
-        if (g_params_th.data_fmt == QZ_LZ4_FH) {
+        if (g_params_th.data_fmt == QZIP_LZ4_FH) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4);
-        } else if (g_params_th.data_fmt == QZ_LZ4S_FH) {
+        } else if (g_params_th.data_fmt == QZIP_LZ4S_FH) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4S);
-        } else if (g_params_th.data_fmt == QZ_DEFLATE_RAW_Gen3) {
+        } else if (g_params_th.data_fmt == QZIP_DEFLATE_RAW) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_7Z);
         } else {
@@ -535,7 +665,7 @@ int makeOutName(const char *in_name, const char *out_name,
         /* remove suffix */
         snprintf(oname, MAX_PATH_LEN, "%s", out_name ? out_name : in_name);
         if (NULL == out_name) {
-            if (g_params_th.data_fmt == QZ_LZ4_FH) {
+            if (g_params_th.data_fmt == QZIP_LZ4_FH) {
                 oname[strlen(in_name) - strlen(SUFFIX_LZ4)] = '\0';
             } else {
                 oname[strlen(in_name) - strlen(SUFFIX_GZ)] = '\0';
@@ -600,7 +730,7 @@ void processFile(QzSession_T *sess, const char *in_name,
         processDir(sess, in_name, out_name, is_compress);
     } else {
         char oname[MAX_PATH_LEN];
-        qzMemSet(oname, 0, MAX_PATH_LEN);
+        memset(oname, 0, MAX_PATH_LEN);
 
         if (makeOutName(in_name, out_name, oname, is_compress)) {
             return;
@@ -621,7 +751,7 @@ void version()
 {
     char const *const *p = g_license_msg;
 
-    QZ_PRINT("%s v%s\n", g_program_name, QATZIP_VERSION);
+    QZ_PRINT("%s v%s\n", g_program_name, QZIP_VERSION);
     while (*p) {
         QZ_PRINT("%s\n", *p++);
     }

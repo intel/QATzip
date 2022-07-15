@@ -111,7 +111,7 @@ void qzstd_help();
 void decLz4Block(unsigned char *lz4s, int lz4sSize, ZSTD_Sequence *zstdSeqs,
                  unsigned int *seq_offset);
 
-int qzZstdGetDefaults(QzSessionParamsGen3_T *defaults);
+int qzZstdGetDefaults(QzSessionParamsLZ4S_T *defaults);
 
 int compressFile(char *input_file_name, char *output_file_name);
 

@@ -729,7 +729,7 @@ int qz7zCompress(QzSession_T *sess, Qz7zItemList_T *list,
                  const char *out_name)
 {
     char oname[MAX_PATH_LEN];
-    qzMemSet(oname, 0, MAX_PATH_LEN);
+    memset(oname, 0, MAX_PATH_LEN);
     //add 7z suffix
     if (makeOutName(out_name, out_name, oname, 1) == 0) {
         out_name = oname;
@@ -1236,7 +1236,7 @@ Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp)
         QZ_ERROR("malloc error\n");
         return NULL;
     }
-    qzMemSet(files, 0, sizeof(Qz7zFilesInfo_Dec_T));
+    memset(files, 0, sizeof(Qz7zFilesInfo_Dec_T));
 
     total_num = getU64FromBytes(fp);
     Qz7zFileItem_T *p = qzMalloc(total_num * sizeof(
@@ -1246,7 +1246,7 @@ Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp)
         goto error;
     }
 
-    qzMemSet(p, 0, total_num * sizeof(*p));
+    memset(p, 0, total_num * sizeof(*p));
 
     end = 0;
     while (!end) {
@@ -2533,12 +2533,12 @@ Qz7zSubstreamsInfo_T *generateSubstreamsInfo(Qz7zItemList_T *the_list)
     Qz7zFileItem_T *fi;
     Qz7zSubstreamsInfo_T *substreamsInfo =
         qzMalloc(sizeof(Qz7zSubstreamsInfo_T), 0, PINNED_MEM);
-    qzMemSet(substreamsInfo, 0, sizeof(Qz7zSubstreamsInfo_T));
-
     if (!substreamsInfo) {
         QZ_ERROR("malloc error\n");
         return NULL;
     }
+
+    memset(substreamsInfo, 0, sizeof(Qz7zSubstreamsInfo_T));
 
     QzListHead_T *h = the_list->items[1];
     uint64_t total_files = h->total;
@@ -2572,7 +2572,7 @@ Qz7zSubstreamsInfo_T *generateSubstreamsInfo(Qz7zItemList_T *the_list)
         h = the_list->table->catas[i].cat_files;
         substreamsInfo->numUnPackStreams[i] = h->total;
 
-        if (h->total == 1)
+        if (h->total == 1 || total_files == 1)
             continue; // folder has one file, don't need the unpacksize
 
         for (int j = 0; j < h->total - 1; ++j) {
@@ -2580,7 +2580,6 @@ Qz7zSubstreamsInfo_T *generateSubstreamsInfo(Qz7zItemList_T *the_list)
             substreamsInfo->unPackSize[index_of_file++] = fi->size;
         }
     }
-
 
     substreamsInfo->digests = generateDigestInfo(h);
     if (!substreamsInfo->digests) {
@@ -2604,7 +2603,7 @@ Qz7zFilesInfo_T *generateFilesInfo(Qz7zItemList_T *the_list)
         QZ_ERROR("malloc error\n");
         return NULL;
     }
-    qzMemSet(filesInfo, 0, sizeof(Qz7zFilesInfo_T));
+    memset(filesInfo, 0, sizeof(Qz7zFilesInfo_T));
 
     filesInfo->num = the_list->items[0]->total + the_list->items[1]->total;
     filesInfo->head[0] = the_list->items[0];

@@ -56,9 +56,12 @@
 #include <qatzip.h> /* new QATzip interface */
 #include <cpa_dc.h>
 #include <pthread.h>
-#include <qatzip_internal.h>
 #include <zlib.h>
 #include <libgen.h>
+
+
+/* qzip version */
+#define QZIP_VERSION "1.0.9"
 
 /* field offset in signature header */
 #define SIGNATUREHEADER_OFFSET_BASE                  8
@@ -162,6 +165,8 @@
 #define SUFFIX_LZ4     ".lz4"
 #define SUFFIX_LZ4S    ".lz4s"
 
+#define QZIP_GET_LOWER_32BITS(v)  ((v) & 0xFFFFFFFF)
+
 typedef enum QzSuffix_E {
     E_SUFFIX_GZ,
     E_SUFFIX_7Z,
@@ -178,6 +183,35 @@ typedef enum QzSuffixCheckStatus_E {
 
 #define SRC_BUFF_LEN         (512 * 1024 * 1024)
 
+typedef enum QzipDataFormat_E {
+    QZIP_DEFLATE_4B = 0,
+    /**< Data is in raw deflate format with 4 byte header */
+    QZIP_DEFLATE_GZIP,
+    /**< Data is in deflate wrapped by GZip header and footer */
+    QZIP_DEFLATE_GZIP_EXT,
+    /**< Data is in deflate wrapped by GZip extended header and footer */
+    QZIP_DEFLATE_RAW,
+    /**< Data is in raw deflate format */
+    QZIP_LZ4_FH,
+    /**< Data is in LZ4 format with frame headers */
+    QZIP_LZ4S_FH,
+    /**< Data is in LZ4s format with frame headers */
+} QzipDataFormat_T;
+
+typedef struct QzipParams_S {
+    QzHuffmanHdr_T huffman_hdr;
+    QzDirection_T direction;
+    QzipDataFormat_T data_fmt;
+    unsigned int comp_lvl;
+    unsigned char comp_algorithm;
+    unsigned char force;
+    unsigned char keep;
+    unsigned int hw_buff_sz;
+    unsigned int polling_mode;
+    unsigned int recursive_mode;
+    unsigned int req_cnt_thrshold;
+    char *output_filename;
+} QzipParams_T;
 
 #define QZ7Z_PROPERTY_ID_INTEL7Z_1001   ((QZ7Z_DEVELOP_PREFIX << 56) | \
                                         (QZ7Z_DEVELOP_ID << 16) | \
@@ -722,7 +756,7 @@ void mkPath(char *path, const char *dirpath, char *file);
 /*
  * internal api functions
  */
-int qatzipSetup(QzSession_T *sess, QzSessionParamsGen3_T *params);
+int qatzipSetup(QzSession_T *sess, QzipParams_T *params);
 int qatzipClose(QzSession_T *sess);
 
 void processFile(QzSession_T *sess, const char *in_name,
@@ -756,7 +790,7 @@ extern char *g_program_name;
 extern int g_decompress;        /* g_decompress (-d) */
 extern int g_keep;                     /* keep (don't delete) input files */
 extern QzSession_T g_sess;
-extern QzSessionParamsGen3_T g_params_th;
+extern QzipParams_T g_params_th;
 /* Estimate maximum data expansion after decompression */
 extern const unsigned int g_bufsz_expansion_ratio[4];
 /* Command line options*/

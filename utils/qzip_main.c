@@ -50,9 +50,6 @@ int main(int argc, char **argv)
     errno = 0;
     int is_format_set = 0;
 
-    if (qzGetDefaultsGen3(&g_params_th) != QZ_OK)
-        return -1;
-
     while (true) {
         int optc;
         int long_idx = -1;
@@ -106,17 +103,17 @@ int main(int argc, char **argv)
             break;
         case 'O':
             if (strcmp(optarg, "gzip") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_GZIP_Gen3;
+                g_params_th.data_fmt = QZIP_DEFLATE_GZIP;
             } else if (strcmp(optarg, "gzipext") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT_Gen3;
+                g_params_th.data_fmt = QZIP_DEFLATE_GZIP_EXT;
             } else if (strcmp(optarg, "7z") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_RAW_Gen3;
+                g_params_th.data_fmt = QZIP_DEFLATE_RAW;
             } else if (strcmp(optarg, "deflate_4B") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_4B_Gen3;
+                g_params_th.data_fmt = QZIP_DEFLATE_4B;
             } else if (strcmp(optarg, "lz4") == 0) {
-                g_params_th.data_fmt = QZ_LZ4_FH;
+                g_params_th.data_fmt = QZIP_LZ4_FH;
             } else if (strcmp(optarg, "lz4s") == 0) {
-                g_params_th.data_fmt = QZ_LZ4S_FH;
+                g_params_th.data_fmt = QZIP_LZ4S_FH;
             } else {
                 QZ_ERROR("Error gzip header format arg: %s\n", optarg);
                 return -1;
@@ -127,7 +124,7 @@ int main(int argc, char **argv)
             out_name = optarg;
             break;
         case 'L':
-            g_params_th.comp_lvl = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            g_params_th.comp_lvl = QZIP_GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (*stop != '\0' || ERANGE == errno ||
                 g_params_th.comp_lvl > QZ_DEFLATE_COMP_LVL_MAXIMUM ||
                 g_params_th.comp_lvl <= 0) {
@@ -137,7 +134,7 @@ int main(int argc, char **argv)
             break;
         case 'C':
             g_params_th.hw_buff_sz =
-                GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+                QZIP_GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (*stop != '\0' || ERANGE == errno ||
                 g_params_th.hw_buff_sz > USDM_ALLOC_MAX_SZ / 2) {
                 printf("Error chunk size arg: %s\n", optarg);
@@ -146,9 +143,8 @@ int main(int argc, char **argv)
             break;
         case 'r':
             g_params_th.req_cnt_thrshold =
-                GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
-            if (*stop != '\0' || errno ||
-                g_params_th.req_cnt_thrshold > NUM_BUFF) {
+                QZIP_GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            if (*stop != '\0' || errno) {
                 printf("Error request count threshold: %s\n", optarg);
                 return -1;
             }
@@ -176,7 +172,7 @@ int main(int argc, char **argv)
     }
 
     if (g_decompress) {
-        if (g_params_th.data_fmt == QZ_LZ4S_FH) {
+        if (g_params_th.data_fmt == QZIP_LZ4S_FH) {
             QZ_ERROR("Don't support lz4s decompression.\n");
             exit(ERROR);
         }
@@ -200,7 +196,7 @@ int main(int argc, char **argv)
             stdout = freopen(NULL, "w", stdout);
             processStream(&g_sess, stdin, stream_out, g_decompress == 0);
         }
-    } else if (g_params_th.data_fmt == QZ_DEFLATE_RAW_Gen3 &&
+    } else if (g_params_th.data_fmt == QZIP_DEFLATE_RAW &&
                !g_decompress) { //compress into 7z
         QZ_DEBUG("going to compress files into 7z archive ...\n");
 
@@ -274,7 +270,7 @@ int main(int argc, char **argv)
 
                         QZ_DEBUG(" this is a 7z archive, "
                                  "going to decompress ... \n");
-                        g_params_th.data_fmt = QZ_DEFLATE_RAW_Gen3;
+                        g_params_th.data_fmt = QZIP_DEFLATE_RAW;
                         if (qatzipSetup(&g_sess, &g_params_th)) {
                             fprintf(stderr, "qatzipSetup session  failed\n");
                             exit(ERROR);
@@ -284,7 +280,7 @@ int main(int argc, char **argv)
                         processFile(&g_sess, argv[optind++], out_name,
                                     g_decompress == 0);
                     } else if (suffix == E_SUFFIX_LZ4) {
-                        if (g_params_th.data_fmt != QZ_LZ4_FH) {
+                        if (g_params_th.data_fmt != QZIP_LZ4_FH) {
                             QZ_ERROR("Error: Suffix(.lz4) doesn't match the data format,"
                                      "please confirm the data format\n");
                             exit(ERROR);

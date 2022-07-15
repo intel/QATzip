@@ -38,7 +38,7 @@ sample zstd-qat application
 */
 #include "qzstd.h"
 
-extern QzSessionParamsGen3_T g_sess_params;
+extern QzSessionParamsLZ4S_T g_sess_params;
 
 int main(int argc, char **argv)
 {
@@ -58,9 +58,10 @@ int main(int argc, char **argv)
             decompress = 1;
             break;
         case 'C':
-            g_sess_params.hw_buff_sz = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            g_sess_params.common_params.hw_buff_sz = GET_LOWER_32BITS(strtoul(optarg, &stop,
+                    0));
             // make sure chunk size smaller than 128kB to fit zstd block size limitation.
-            if (g_sess_params.hw_buff_sz > 128 * KB) {
+            if (g_sess_params.common_params.hw_buff_sz > 128 * KB) {
                 QZ_ERROR("%s : block size can't bigger than 128 KB\n", QZSTD_ERROR_TYPE);
                 return QZSTD_ERROR;
             }
@@ -69,17 +70,19 @@ int main(int argc, char **argv)
             qzstd_help();
             return QZSTD_OK;
         case 'L':
-            g_sess_params.comp_lvl = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            g_sess_params.common_params.comp_lvl = GET_LOWER_32BITS(strtoul(optarg, &stop,
+                                                   0));
             break;
         case 'o':
             output_name = optarg;
             break;
         case 'r':
-            g_sess_params.req_cnt_thrshold = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            g_sess_params.common_params.req_cnt_thrshold = GET_LOWER_32BITS(strtoul(optarg,
+                    &stop, 0));
             break;
         case 'P':
             if (strcmp(optarg, "busy") == 0) {
-                g_sess_params.polling_mode = QZ_BUSY_POLLING;
+                g_sess_params.common_params.polling_mode = QZ_BUSY_POLLING;
             } else {
                 QZ_ERROR("%s : set wrong polling mode: %s\n", QZSTD_ERROR_TYPE, optarg);
                 return QZSTD_ERROR;
