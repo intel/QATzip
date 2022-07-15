@@ -1755,7 +1755,8 @@ static void *doCompressOut(void *in)
                     if (likely(NULL != qz_sess->crc32 &&
                                (data_fmt == DEFLATE_GZIP_EXT ||
                                 data_fmt == DEFLATE_GZIP ||
-                                data_fmt == DEFLATE_4B))) {
+                                data_fmt == DEFLATE_4B  ||
+                                data_fmt == DEFLATE_RAW))) {
                         if (0 == *(qz_sess->crc32)) {
                             *(qz_sess->crc32) = resl->checksum;
                             QZ_DEBUG("crc32 1st blk is 0x%lX \n", *(qz_sess->crc32));
