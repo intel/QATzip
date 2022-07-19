@@ -1338,7 +1338,7 @@ static void *doCompressIn(void *in)
             QZ_MEMCPY(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData,
                       src_ptr,
                       src_send_sz,
-                      src_send_sz);
+                      remaining);
             g_process.qz_inst[i].stream[j].src_need_reset = 0;
         } else {
             QZ_DEBUG("changing src_ptr to 0x%lx\n", (unsigned long)src_ptr);
@@ -1476,7 +1476,7 @@ static int qzLZ4StoredBlocks(QzSess_T *qz_sess, const unsigned char *src,
 
         // copy the source data
         QZ_MEMCPY(qz_sess->next_dest, &src[src_location],
-                  this_block_len, this_block_len);
+                  this_block_len, src_len);
 
         // update the xxhash
         (void)XXH32_update(xxhash_state,  &src[src_location],
@@ -1540,9 +1540,8 @@ static int qzDeflateStoredBlocks(QzSess_T *qz_sess, const unsigned char *src,
         if (this_block_len > block_size) {
             this_block_len = block_size;
         }
-        src_len -= this_block_len;
         // create store block header here
-        if (src_len == 0) {
+        if (src_len == this_block_len) {
             // set bfinal bit + block type
             *(unsigned char *)(qz_sess->next_dest) = 0x01;
             QZ_DEBUG("Creating the final block\n");
@@ -1564,7 +1563,7 @@ static int qzDeflateStoredBlocks(QzSess_T *qz_sess, const unsigned char *src,
         QZ_MEMCPY(qz_sess->next_dest,
                   &src[src_location],
                   this_block_len,
-                  this_block_len);
+                  src_len);
         // update the crc
         resl.checksum = crc32(resl.checksum,
                               &src[src_location],
@@ -1572,6 +1571,7 @@ static int qzDeflateStoredBlocks(QzSess_T *qz_sess, const unsigned char *src,
         // jump to next source data location
         qz_sess->next_dest += this_block_len;
         src_location += this_block_len;
+        src_len -= this_block_len;
         QZ_DEBUG("src_len :%u this_block_len: %d this block checksum: %x\n",
                  src_len, this_block_len, resl.checksum);
     }
@@ -1744,7 +1744,7 @@ static void *doCompressOut(void *in)
                     } else {
                         QZ_MEMCPY(qz_sess->next_dest,
                                   g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData,
-                                  resl->produced,
+                                  *qz_sess->dest_sz - qz_sess->qz_out_len,
                                   resl->produced);
                     }
                     qz_sess->next_dest += resl->produced;
@@ -2423,7 +2423,7 @@ static void *doDecompressIn(void *in)
                 QZ_DEBUG("memory copy in doDecompressIn\n");
                 QZ_MEMCPY(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData,
                           src_ptr,
-                          src_send_sz,
+                          src_avail_len,
                           src_send_sz);
                 g_process.qz_inst[i].stream[j].src_need_reset = 0;
             } else {
@@ -2536,6 +2536,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
     unsigned int sleep_cnt = 0;
     unsigned int done = 0;
     unsigned int src_send_sz;
+    unsigned int dest_avail_len;
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
@@ -2544,6 +2545,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
     QZ_DEBUG("mw>> function %s() called\n", __func__);
     fflush(stdout);
     i = qz_sess->inst_hint;
+    dest_avail_len = *qz_sess->dest_sz - qz_sess->qz_out_len;
 
     while (!done) {
         /*Poll for responses*/
@@ -2598,7 +2600,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                     QZ_DEBUG("memory copy in doDecompressOut\n");
                     QZ_MEMCPY(qz_sess->next_dest,
                               g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData,
-                              resl->produced,
+                              dest_avail_len,
                               resl->produced);
                 } else {
                     g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
@@ -2639,7 +2641,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                 qz_sess->qz_in_len += (outputHeaderSz(data_fmt) + src_send_sz +
                                        outputFooterSz(data_fmt));
                 qz_sess->qz_out_len += resl->produced;
-
+                dest_avail_len -= resl->produced;
                 QZ_DEBUG("qz_sess->next_dest = %p\n", qz_sess->next_dest);
 
                 swapDataBuffer(i, j); /*swap pdata back after decompress*/

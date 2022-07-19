@@ -383,7 +383,7 @@ static unsigned int copyStreamInput(QzStream_T *strm, unsigned char *in)
 
     avail_in = stream_buf->buf_len - strm->pending_in;
     cpy_cnt = (strm->in_sz > avail_in) ? avail_in : strm->in_sz;
-    QZ_MEMCPY(stream_buf->in_buf + strm->pending_in, in, cpy_cnt, cpy_cnt);
+    QZ_MEMCPY(stream_buf->in_buf + strm->pending_in, in, cpy_cnt, strm->in_sz);
     QZ_DEBUG("Copy to input from %p, to %p, count %u\n",
              in, stream_buf->in_buf + strm->pending_in, cpy_cnt);
 
@@ -400,7 +400,8 @@ static unsigned int copyStreamOutput(QzStream_T *strm, unsigned char *out)
 
     avail_out = strm->out_sz;
     cpy_cnt = (strm->pending_out > avail_out) ? avail_out : strm->pending_out;
-    QZ_MEMCPY(out, stream_buf->out_buf + stream_buf->out_offset, cpy_cnt, cpy_cnt);
+    QZ_MEMCPY(out, stream_buf->out_buf + stream_buf->out_offset, avail_out,
+              cpy_cnt);
     QZ_DEBUG("copy %ld to user output\n", cpy_cnt);
 
     strm->out_sz -= cpy_cnt;
