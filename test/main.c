@@ -118,6 +118,15 @@ typedef enum {
     BOTH
 } ServiceType_T;
 
+typedef enum {
+    TEST_DEFLATE = 0,
+    TEST_GZIP,
+    TEST_GZIPEXT,
+    TEST_DEFLATE_4B,
+    TEST_LZ4,
+    TEST_LZ4S
+} TEST_FORMAT_T;
+
 typedef struct CPUCore_S {
     int seq;
     int used;
@@ -137,11 +146,19 @@ typedef struct {
     int src_sz;
     int comp_out_sz;
     int decomp_out_sz;
+    int max_forks;
     unsigned char *src;
     unsigned char *comp_out;
     unsigned char *decomp_out;
     int gen_data;
-    QzSessionParamsGen3_T *params;
+    int comp_algorithm;
+    int sw_backup;
+    int hw_buff_sz;
+    int comp_lvl;
+    int req_cnt_thrshold;
+    int huffman_hdr;
+    QzPollingMode_T polling_mode;
+    TEST_FORMAT_T test_format;
     QzThdOps *ops;
     QzBlock_T *blks;
     int init_engine_disabled;
@@ -154,10 +171,6 @@ const unsigned int USDM_ALLOC_MAX_SZ = (2 * MB - 5 * KB);
 const unsigned int DEFAULT_BUF_SZ    = 256 * KB;
 const unsigned int QATZIP_MAX_HW_SZ  = 512 * KB;
 const unsigned int MAX_HUGE_PAGE_SZ  = 2 * MB;
-
-QzSession_T g_session1;
-QzSession_T g_session_th[100];
-QzSessionParamsGen3_T g_params_th;
 
 static pthread_mutex_t g_lock_print = PTHREAD_MUTEX_INITIALIZER;
 #ifndef ENABLE_THREAD_BARRIER
@@ -343,32 +356,18 @@ static void dumpOutputData(size_t size, uint8_t *data, char *filename)
 {
     int fd = 0;
     ssize_t ulen;
-    char *filename_ptr = NULL;
     char *output_filename = NULL;
     char tmp_filename[] = "QATZip_Output_XXXXXX";
-    unsigned int filename_len = 0;
     const unsigned int suffix_len = 3;
-    const char *suffix[] = {"df", "gz", "gz", "gz", "lz4"};
 
     if (0 == size || NULL == data)
         return;
 
     if (NULL == filename) {
-        filename_len = sizeof(tmp_filename);
-        filename_ptr = tmp_filename;
+        output_filename = tmp_filename;
     } else {
-        filename_len = strlen(filename);
-        filename_ptr = filename;
+        output_filename = filename;
     }
-
-    filename_len = (filename_len + suffix_len + 7) / 8 * 8;
-    output_filename = (char *) calloc(1, filename_len);
-    if (NULL == output_filename) {
-        QZ_ERROR("Creat dump file Failed\n");
-        goto done;
-    }
-    snprintf(output_filename, filename_len, "%s.%s",
-             filename_ptr, suffix[g_params_th.data_fmt]);
 
     if (NULL == filename) {
         fd = mkstemps(output_filename, suffix_len);
@@ -388,7 +387,6 @@ static void dumpOutputData(size_t size, uint8_t *data, char *filename)
     }
 
 done:
-    free(output_filename);
     if (fd >= 0) {
         close(fd);
     }
@@ -442,6 +440,145 @@ done:
     }
 }
 
+int qzSetupDeflate(QzSession_T *sess, TestArg_T *arg)
+{
+    int status;
+
+    QzSessionParamsDeflate_T params;
+    status = qzGetDefaultsDeflate(&params);
+    if (status < 0) {
+        QZ_ERROR("Get defaults params error with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    switch (arg->test_format) {
+    case TEST_DEFLATE:
+        params.data_fmt = QZ_DEFLATE_RAW;
+        break;
+    case TEST_GZIP:
+        params.data_fmt = QZ_DEFLATE_GZIP;
+        break;
+    case TEST_GZIPEXT:
+        params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        break;
+    case TEST_DEFLATE_4B:
+        params.data_fmt = QZ_DEFLATE_4B;
+        break;
+    default:
+        QZ_ERROR("Unsupport data format\n");
+        return QZ_FAIL;
+    }
+
+    params.huffman_hdr = arg->huffman_hdr;
+    params.common_params.comp_lvl = arg->comp_lvl;
+    params.common_params.comp_algorithm = arg->comp_algorithm;
+    params.common_params.hw_buff_sz = arg->hw_buff_sz;
+    params.common_params.polling_mode = arg->polling_mode;
+    params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
+    params.common_params.max_forks = arg->max_forks;
+
+    status = qzSetupSessionDeflate(sess, &params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    return QZ_OK;
+}
+
+int qzSetupLZ4(QzSession_T *sess, TestArg_T *arg)
+{
+    int status;
+
+    QzSessionParamsLZ4_T params;
+
+    status = qzGetDefaultsLZ4(&params);
+    if (status < 0) {
+        QZ_ERROR("Get defaults params error with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    params.common_params.comp_lvl = arg->comp_lvl;
+    params.common_params.comp_algorithm = arg->comp_algorithm;
+    params.common_params.hw_buff_sz = arg->hw_buff_sz;
+    params.common_params.polling_mode = arg->polling_mode;
+    params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
+    params.common_params.max_forks = arg->max_forks;
+
+    status = qzSetupSessionLZ4(sess, &params);
+    if (status) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    return QZ_OK;
+}
+
+int qzSetupLZ4S(QzSession_T *sess, TestArg_T *arg)
+{
+    int status;
+
+    QzSessionParamsLZ4S_T params;
+    status = qzGetDefaultsLZ4S(&params);
+    if (status < 0) {
+        QZ_ERROR("Get defaults params error with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    params.common_params.comp_lvl = arg->comp_lvl;
+    params.common_params.comp_algorithm = arg->comp_algorithm;
+    params.common_params.hw_buff_sz = arg->hw_buff_sz;
+    params.common_params.polling_mode = arg->polling_mode;
+    params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
+    params.common_params.max_forks = arg->max_forks;
+
+    status = qzSetupSessionLZ4S(sess, &params);
+    if (status) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    return QZ_OK;
+}
+
+int qzInitSetupsession(QzSession_T *sess, TestArg_T *arg)
+{
+    int rc = QZ_FAIL;
+
+    if (!((TestArg_T *)arg)->init_engine_disabled) {
+        rc = qzInit(sess, arg->sw_backup);
+        if (QZ_INIT_FAIL(rc)) {
+            return rc;
+        }
+    }
+
+    if (!((TestArg_T *)arg)->init_sess_disabled) {
+        switch (arg->test_format) {
+        case TEST_DEFLATE:
+        case TEST_GZIP:
+        case TEST_GZIPEXT:
+            rc = qzSetupDeflate(sess, arg);
+            break;
+        case TEST_LZ4:
+            rc = qzSetupLZ4(sess, arg);
+            break;
+        case TEST_LZ4S:
+            rc = qzSetupLZ4S(sess, arg);
+            break;
+        default:
+            QZ_ERROR("Unsupported data format\n");
+            return QZ_FAIL;
+            break;
+        }
+        if (QZ_SETUP_SESSION_FAIL(rc)) {
+            return rc;
+        }
+
+    }
+
+    return rc;
+}
+
 void *qzDecompressSwQz(void *arg)
 {
     int rc, k;
@@ -456,9 +593,10 @@ void *qzDecompressSwQz(void *arg)
     const long tid = ((TestArg_T *)arg)->thd_id;
     const int verify_data = 1;
     const int count = ((TestArg_T *)arg)->count;
+    QzSession_T sess = {0};
 
-    QzSessionParamsGen3_T cus_params = {0};
-    if (qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    QzSessionParams_T cus_params = {0};
+    if (qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
@@ -493,7 +631,7 @@ void *qzDecompressSwQz(void *arg)
         {
             //Set default hwBufferSize to 64KB
             cus_params.hw_buff_sz = 64 * 1024;
-            if (qzSetDefaultsGen3(&cus_params) != QZ_OK) {
+            if (qzSetDefaults(&cus_params) != QZ_OK) {
                 QZ_ERROR("Err: set params fail with incorrect hw_buff_sz %d.\n",
                          cus_params.hw_buff_sz);
                 goto done;
@@ -503,7 +641,7 @@ void *qzDecompressSwQz(void *arg)
                      src_sz, comp_out_sz);
 
             unsigned int last = 0;
-            rc = qzCompress(&g_session_th[tid], src, (uint32_t *)(&src_sz), comp_out,
+            rc = qzCompress(&sess, src, (uint32_t *)(&src_sz), comp_out,
                             (uint32_t *)(&comp_out_sz), last);
             if (rc != QZ_OK) {
                 QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
@@ -522,7 +660,7 @@ void *qzDecompressSwQz(void *arg)
         //Decompress SW
         {
             cus_params.hw_buff_sz = 32 * 1024; //32KB
-            if (qzSetDefaultsGen3(&cus_params) != QZ_OK) {
+            if (qzSetDefaults(&cus_params) != QZ_OK) {
                 QZ_ERROR("Err: set params fail with incorrect hw_buff_sz %d.\n",
                          cus_params.hw_buff_sz);
                 goto done;
@@ -530,9 +668,9 @@ void *qzDecompressSwQz(void *arg)
 
             QZ_DEBUG("thread %ld before Decompressed %d bytes into %d\n", tid, comp_out_sz,
                      decomp_sw_out_sz);
-            qzSetupSessionGen3(&g_session_th[tid], NULL);
+            qzSetupSession(&sess, NULL);
             unsigned int tmp_comp_out_sz = GET_LOWER_32BITS(comp_out_sz);
-            rc = qzDecompress(&g_session_th[tid], comp_out, (uint32_t *)(&tmp_comp_out_sz),
+            rc = qzDecompress(&sess, comp_out, (uint32_t *)(&tmp_comp_out_sz),
                               decomp_sw_out, (uint32_t *)(&decomp_sw_out_sz));
             if (rc != QZ_OK) {
                 QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
@@ -552,7 +690,7 @@ void *qzDecompressSwQz(void *arg)
         {
             //Reset default hwBufferSize to 64KB
             cus_params.hw_buff_sz = 64 * 1024;
-            if (qzSetDefaultsGen3(&cus_params) != QZ_OK) {
+            if (qzSetDefaults(&cus_params) != QZ_OK) {
                 QZ_ERROR("Err: set params fail with incorrect hw_buff_sz %d.\n",
                          cus_params.hw_buff_sz);
                 goto done;
@@ -560,9 +698,9 @@ void *qzDecompressSwQz(void *arg)
 
             QZ_DEBUG("thread %ld before Decompressed %d bytes into %d\n", tid, comp_out_sz,
                      decomp_qz_out_sz);
-            qzSetupSessionGen3(&g_session_th[tid], NULL);
+            qzSetupSession(&sess, NULL);
             unsigned int tmp_comp_out_sz = GET_LOWER_32BITS(comp_out_sz);
-            rc = qzDecompress(&g_session_th[tid], comp_out, (uint32_t *)&tmp_comp_out_sz,
+            rc = qzDecompress(&sess, comp_out, (uint32_t *)&tmp_comp_out_sz,
                               decomp_qz_out, (uint32_t *)(&decomp_qz_out_sz));
             if (rc != QZ_OK) {
                 QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
@@ -633,7 +771,7 @@ done:
     qzFree(comp_out);
     qzFree(decomp_sw_out);
     qzFree(decomp_qz_out);
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -652,6 +790,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
     const int count = ((TestArg_T *)arg)->count;
     const int gen_data = ((TestArg_T *)arg)->gen_data;
     QzBlock_T *head, *blk;
+    QzSession_T sess = {0};
 
     head = ((TestArg_T *)arg)->blks;
     if (head == NULL) {
@@ -669,21 +808,16 @@ void *qzCompressDecompressWithFormatOption(void *arg)
     QZ_DEBUG("Hello from qzCompressDecompressWithFormatOption tid=%ld, count=%d, service=2, "
              "verify_data=%d\n", tid, count, verify_data);
 
-    if (!((TestArg_T *)arg)->init_engine_disabled) {
-        rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
-        if (QZ_INIT_HW_FAIL(rc)) {
-            pthread_exit((void *)"qzInit failed");
-        }
+    rc = qzInitSetupsession(&sess, (TestArg_T *)arg);
+    if (rc != QZ_OK) {
+#ifndef ENABLE_THREAD_BARRIER
+        g_ready_thread_count++;
+        pthread_cond_signal(&g_ready_cond);
+#endif
+        pthread_exit((void *)"qzInit failed");
     }
-    QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    if (!((TestArg_T *)arg)->init_sess_disabled) {
-        rc = qzSetupSessionGen3(&g_session_th[tid], ((TestArg_T *)arg)->params);
-        if (QZ_SETUP_SESSION_FAIL(rc)) {
-            pthread_exit((void *)"qzSetupSessionGen3 failed");
-        }
-    }
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
+    QZ_DEBUG("qzInitSetupsession rc = %d\n", rc);
 
     if (gen_data) {
         src = qzMalloc(src_sz, 0, PINNED_MEM);
@@ -735,10 +869,10 @@ void *qzCompressDecompressWithFormatOption(void *arg)
                 tmp_comp_out_sz = comp_available_out;
 
                 if (QZ == blk->fmt) {
-                    rc = qzCompress(&g_session_th[tid], tmp_src, &tmp_src_sz,
+                    rc = qzCompress(&sess, tmp_src, &tmp_src_sz,
                                     tmp_comp_out, &tmp_comp_out_sz, last);
                 } else {
-                    rc = qzSWCompress(&g_session_th[tid], tmp_src, &tmp_src_sz,
+                    rc = qzSWCompress(&sess, tmp_src, &tmp_src_sz,
                                       tmp_comp_out, &tmp_comp_out_sz, last);
                 }
 
@@ -783,7 +917,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
                 tmp_comp_out_sz = remaining;
                 tmp_decomp_out_sz = decomp_available_out;
 
-                rc = qzDecompress(&g_session_th[tid], tmp_comp_out, &tmp_comp_out_sz,
+                rc = qzDecompress(&sess, tmp_comp_out, &tmp_comp_out_sz,
                                   tmp_decomp_out, &tmp_decomp_out_sz);
                 if (rc != QZ_OK) {
                     QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
@@ -854,20 +988,20 @@ done:
         qzFree(decomp_out);
     }
 
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
 
 void *qzSetupParamFuncTest(void *arg)
 {
-    QzSessionParamsGen3_T def_params = {0};
-    QzSessionParamsGen3_T new_params = {0};
-    QzSessionParamsGen3_T cus_params = {0};
+    QzSessionParams_T def_params = {0};
+    QzSessionParams_T new_params = {0};
+    QzSessionParams_T cus_params = {0};
     unsigned char *src, *dest;
     size_t src_sz, dest_sz, test_dest_sz;;
     int rc;
-    const long tid = ((TestArg_T *)arg)->thd_id;
+    QzSession_T sess = {0};
 
     src_sz = 256 * 1024;
     test_dest_sz = dest_sz = 256 * 1024 * 2;
@@ -879,23 +1013,23 @@ void *qzSetupParamFuncTest(void *arg)
         return NULL;
     }
 
-    if (qzGetDefaultsGen3(&def_params) != QZ_OK ||
-        qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzGetDefaults(&def_params) != QZ_OK ||
+        qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
 
-    rc = qzInit(&g_session_th[tid], 0);
+    rc = qzInit(&sess, 0);
     if (QZ_INIT_HW_FAIL(rc)) {
         QZ_ERROR("Err: fail to init HW with ret: %d.\n", rc);
         goto end;
     }
-    rc = qzSetupSessionGen3(&g_session_th[tid], &def_params);
+    rc = qzSetupSession(&sess, &def_params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("Err: fail to setup session with ret: %d\n", rc);
         goto end;
     }
-    rc = qzCompress(&g_session_th[tid], src, (uint32_t *)(&src_sz), dest,
+    rc = qzCompress(&sess, src, (uint32_t *)(&src_sz), dest,
                     (uint32_t *)(&test_dest_sz), 1);
     if (rc != QZ_OK) {
         QZ_ERROR("Err: fail to compress data with ret: %d\n", rc);
@@ -907,97 +1041,97 @@ void *qzSetupParamFuncTest(void *arg)
 
     // Negative Test
     cus_params.huffman_hdr = QZ_STATIC_HDR + 1;
-    if (qzSetDefaultsGen3(&cus_params) != QZ_PARAMS) {
+    if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect huffman: %d.\n",
                  cus_params.huffman_hdr);
         goto end;
     }
 
-    if (qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
 
     cus_params.direction = QZ_DIR_BOTH + 1;
-    if (qzSetDefaultsGen3(&cus_params) != QZ_PARAMS) {
+    if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect direction: %d.\n",
                  cus_params.direction);
         goto end;
     }
 
-    if (qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
 
     cus_params.comp_lvl = 0;
-    if (qzSetDefaultsGen3(&cus_params) != QZ_PARAMS) {
+    if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect comp_level: %d.\n",
                  cus_params.comp_lvl);
         goto end;
     }
 
-    if (qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
 
     cus_params.comp_lvl = (COMP_LVL_MAXIMUM + 1);
-    if (qzSetDefaultsGen3(&cus_params) != QZ_PARAMS) {
+    if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect comp_level: %d.\n",
                  cus_params.comp_lvl);
         goto end;
     }
 
-    if (qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
 
     cus_params.sw_backup = 2;
-    if (qzSetDefaultsGen3(&cus_params) != QZ_PARAMS) {
+    if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect sw_backup: %d.\n",
                  cus_params.sw_backup);
         goto end;
     }
 
-    if (qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
 
     cus_params.hw_buff_sz = 0;
-    if (qzSetDefaultsGen3(&cus_params) != QZ_PARAMS) {
+    if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect hw_buff_sz %d.\n",
                  cus_params.hw_buff_sz);
         goto end;
     }
 
-    if (qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
 
     cus_params.hw_buff_sz = 1025;
-    if (qzSetDefaultsGen3(&cus_params) != QZ_PARAMS) {
+    if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect hw_buff_sz %d.\n",
                  cus_params.hw_buff_sz);
         goto end;
     }
 
-    if (qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
 
     cus_params.hw_buff_sz = 2 * 1024 * 1024; //2M
-    if (qzSetDefaultsGen3(&cus_params) != QZ_PARAMS) {
+    if (qzSetDefaults(&cus_params) != QZ_PARAMS) {
         QZ_ERROR("FAILED: set params should fail with incorrect hw_buff_sz %d.\n",
                  cus_params.hw_buff_sz);
         goto end;
     }
 
-    if (qzGetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzGetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
@@ -1005,35 +1139,35 @@ void *qzSetupParamFuncTest(void *arg)
     // Positive Test
     cus_params.huffman_hdr = (QZ_HUFF_HDR_DEFAULT == QZ_DYNAMIC_HDR) ?
                              QZ_STATIC_HDR : QZ_DYNAMIC_HDR;
-    if (qzSetDefaultsGen3(&cus_params) != QZ_OK) {
+    if (qzSetDefaults(&cus_params) != QZ_OK) {
         QZ_ERROR("Err: fail to set defulat params.\n");
         goto end;
     }
 
-    if (qzGetDefaultsGen3(&new_params) != QZ_OK) {
+    if (qzGetDefaults(&new_params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto end;
     }
 
-    if (memcmp(&def_params, &new_params, sizeof(QzSessionParamsGen3_T)) == 0) {
+    if (memcmp(&def_params, &new_params, sizeof(QzSessionParams_T)) == 0) {
         QZ_ERROR("Err: set default params fail.\n");
         goto end;
     }
 
-    if (memcmp(&cus_params, &new_params, sizeof(QzSessionParamsGen3_T)) != 0) {
+    if (memcmp(&cus_params, &new_params, sizeof(QzSessionParams_T)) != 0) {
         QZ_ERROR("Err: set default params fail with incorrect value.\n");
         QZ_ERROR("  cus_params.huff(%d) != new_params.huff(%d).\n",
                  cus_params.huffman_hdr, new_params.huffman_hdr);
         goto end;
     }
 
-    rc = qzSetupSessionGen3(&g_session_th[tid], &new_params);
+    rc = qzSetupSession(&sess, &new_params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
         QZ_ERROR("Err: fail to setup session with ret: %d\n", rc);
         goto end;
     }
 
-    rc = qzCompress(&g_session_th[tid], src, (uint32_t *)(&src_sz), dest,
+    rc = qzCompress(&sess, src, (uint32_t *)(&src_sz), dest,
                     (uint32_t *)(&test_dest_sz), 1);
     if (rc != QZ_OK) {
         QZ_ERROR("Err: fail to compress data with ret: %d\n", rc);
@@ -1045,7 +1179,7 @@ void *qzSetupParamFuncTest(void *arg)
 end:
     qzFree(src);
     qzFree(dest);
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -1069,6 +1203,7 @@ void *qzCompressAndDecompress(void *arg)
     const int count = ((TestArg_T *)arg)->count;
     const int gen_data = ((TestArg_T *)arg)->gen_data;
     int thread_sleep = ((TestArg_T *)arg)->thread_sleep;
+    QzSession_T sess = {0};
 
     src_sz = org_src_sz;
     comp_out_sz = org_comp_out_sz;
@@ -1078,32 +1213,17 @@ void *qzCompressAndDecompress(void *arg)
              "verify_data=%d\n",
              tid, count, service, verify_data);
 
-    if (!((TestArg_T *)arg)->init_engine_disabled) {
-        rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
-        if (QZ_INIT_FAIL(rc)) {
+    rc = qzInitSetupsession(&sess, (TestArg_T *)arg);
+    if (rc != QZ_OK) {
 #ifndef ENABLE_THREAD_BARRIER
-            g_ready_thread_count++;
-            pthread_cond_signal(&g_ready_cond);
+        g_ready_thread_count++;
+        pthread_cond_signal(&g_ready_cond);
 #endif
-            pthread_exit((void *)"qzInit failed");
-        }
-    }
-
-    QZ_DEBUG("qzInit  rc = %d\n", rc);
-    //timeCheck(2, tid);
-    if (!((TestArg_T *)arg)->init_sess_disabled) {
-        rc = qzSetupSessionGen3(&g_session_th[tid], ((TestArg_T *)arg)->params);
-        if (QZ_SETUP_SESSION_FAIL(rc)) {
-#ifndef ENABLE_THREAD_BARRIER
-            g_ready_thread_count++;
-            pthread_cond_signal(&g_ready_cond);
-#endif
-            pthread_exit((void *)"qzSetupSessionGen3 failed");
-        }
+        pthread_exit((void *)"qzInit failed");
     }
 
     //timeCheck(3, tid);
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
+    QZ_DEBUG("qzInitSetupsession rc = %d\n", rc);
 
     if (gen_data && !g_perf_svm) {
         src = qzMalloc(src_sz, 0, PINNED_MEM);
@@ -1153,7 +1273,7 @@ void *qzCompressAndDecompress(void *arg)
             in_sz =  block_size < (org_src_sz - consumed) ? block_size :
                      (org_src_sz - consumed);
             out_sz = comp_out_sz - produced;
-            rc = qzCompress(&g_session_th[tid], src + consumed, (uint32_t *)(&in_sz),
+            rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
                             comp_out + produced,
                             (uint32_t *)(&out_sz), 1);
             if (rc != QZ_OK) {
@@ -1221,7 +1341,7 @@ void *qzCompressAndDecompress(void *arg)
                          (org_src_sz - consumed);
                 out_sz = comp_out_sz - produced;
 
-                rc = qzCompress(&g_session_th[tid], src + consumed, (uint32_t *)(&in_sz),
+                rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
                                 comp_out + produced,
                                 (uint32_t *)(&out_sz), 1);
                 if (rc != QZ_OK) {
@@ -1256,7 +1376,7 @@ void *qzCompressAndDecompress(void *arg)
             for (int i = 0; i < num_blocks; i ++) {
                 in_sz = compressed_blocks_sz[i];
                 out_sz = decomp_out_sz - produced;
-                rc = qzDecompress(&g_session_th[tid], comp_out + consumed, (uint32_t *)(&in_sz),
+                rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
                                   decomp_out + produced, (uint32_t *)(&out_sz));
                 if (rc != QZ_OK) {
                     QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
@@ -1362,100 +1482,7 @@ done:
     if (compressed_blocks_sz != NULL) {
         free(compressed_blocks_sz);
     }
-    (void)qzTeardownSession(&g_session_th[tid]);
-    pthread_exit((void *)NULL);
-}
-
-void *qzCompressOnPinnedMem(void *thd_arg)
-{
-    int rc, k;
-    unsigned char *src, *dest;
-    size_t src_sz, dest_sz, avail_dest_sz;
-    struct timeval ts, te;
-    unsigned long long ts_m, te_m, el_m;
-    long double sec, rate;
-    TestArg_T *test_arg = (TestArg_T *)thd_arg;
-    const int gen_data = test_arg->gen_data;
-    const long tid = test_arg->thd_id;
-
-    QZ_DEBUG("Hello from qzCompressOnPinnedMem id %d\n", tid);
-
-    timeCheck(0, tid);
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (QZ_INIT_HW_FAIL(rc)) {
-        pthread_exit((void *)"qzInit failed");
-    }
-    QZ_DEBUG("qzInit  rc = %d\n", rc);
-    timeCheck(1, tid);
-
-    //set by default configurations
-    rc = qzSetupSessionGen3(&g_session_th[tid], NULL);
-    if (QZ_SETUP_SESSION_FAIL(rc)) {
-        pthread_exit((void *)"qzSetupSessionGen3 failed");
-    }
-    timeCheck(2, tid);
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
-
-    if (gen_data) {
-        src_sz = 256 * 1024;
-        avail_dest_sz = dest_sz = 256 * 1024 * 2;
-        src = qzMalloc(src_sz, 0, PINNED_MEM);
-        dest = qzMalloc(dest_sz, 0, PINNED_MEM);
-    } else {
-        src = test_arg->src;
-        src_sz = test_arg->src_sz;
-        avail_dest_sz = dest_sz = test_arg->comp_out_sz;
-        dest = qzMalloc(dest_sz, 0, PINNED_MEM);
-    }
-
-    if (!src || !dest) {
-        QZ_ERROR("Malloc failed\n");
-        goto done;
-    }
-
-    el_m = 0;
-    if (gen_data) {
-        QZ_DEBUG("Gen Data...\n");
-        genRandomData(src, src_sz);
-    }
-
-    timeCheck(3, tid);
-    for (k = 0; k < test_arg->count; k++) {
-
-        dest_sz = avail_dest_sz;
-        (void)gettimeofday(&ts, NULL);
-        rc = qzCompress(&g_session_th[tid], src, (uint32_t *)(&src_sz), dest,
-                        (uint32_t *)(&dest_sz), 1);
-        if (rc != QZ_OK) {
-            QZ_ERROR("qzCompress FAILED, return: %d", rc);
-            goto done;
-        }
-        (void)gettimeofday(&te, NULL);
-        QZ_DEBUG("Compressed %d bytes into %d\n", src_sz, dest_sz);
-
-        ts_m = (ts.tv_sec * 1000000) + ts.tv_usec;
-        te_m = (te.tv_sec * 1000000) + te.tv_usec;
-        el_m += te_m - ts_m;
-    }
-
-    timeCheck(4, tid);
-    sec = (long double)(el_m);
-    sec = sec / 1000000.0;
-    rate = src_sz * 8; // bits
-    rate = rate / 1000000000.0; // gigbits
-    rate = rate / sec;// Gbps
-    rate = rate * 1000;
-    QZ_PRINT("[%ld] elasped microsec = %lld bytes = %d rate = %Lf\n",
-             tid, el_m, src_sz, rate);
-
-done:
-    timeCheck(5, tid);
-    qzFree(dest);
-    if (gen_data) {
-        qzFree(src);
-    }
-
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -1501,99 +1528,8 @@ void *qzMemFuncTest(void *test_arg)
     pthread_exit((void *)NULL);
 }
 
-void *qzCompressOnCommonMem(void *thd_arg)
-{
-    int rc, k;
-    unsigned char *src, *dest;
-    size_t src_sz, dest_sz, avail_dest_sz;
-    struct timeval ts, te;
-    unsigned long long ts_m, te_m, el_m;
-    long double sec, rate;
-    TestArg_T *test_arg = (TestArg_T *)thd_arg;
-    const int gen_data = test_arg->gen_data;
-    const long tid = test_arg->thd_id;
-
-    QZ_DEBUG("Hello from thread id %d\n", tid);
-
-    timeCheck(0, tid);
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
-    if (QZ_INIT_HW_FAIL(rc)) {
-        pthread_exit((void *)"qzInit failed");
-    }
-
-    QZ_DEBUG("qzInit  rc = %d\n", rc);
-    timeCheck(1, tid);
-    rc = qzSetupSessionGen3(&g_session_th[tid], test_arg->params);
-    if (QZ_SETUP_SESSION_FAIL(rc)) {
-        pthread_exit((void *)"qzSetupSessionGen3 failed");
-    }
-    timeCheck(2, tid);
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
-
-    if (gen_data) {
-        src_sz = 256 * 1024;
-        avail_dest_sz = dest_sz = 256 * 1024 * 2;
-        src = qzMalloc(src_sz, 0, COMMON_MEM);
-        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
-    } else {
-        src = test_arg->src;
-        src_sz = test_arg->src_sz;
-        avail_dest_sz = dest_sz = test_arg->comp_out_sz;
-        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
-    }
-
-    if (!src || !dest) {
-        QZ_ERROR("Malloc failed\n");
-        goto done;
-    }
-
-    el_m = 0;
-    if (gen_data) {
-        QZ_DEBUG("Gen Data...\n");
-        genRandomData(src, src_sz);
-    }
-
-    timeCheck(3, tid);
-    for (k = 0; k < test_arg->count; k++) {
-        dest_sz = avail_dest_sz;
-        (void)gettimeofday(&ts, NULL);
-        rc = qzCompress(&g_session_th[tid], src, (uint32_t *)(&src_sz), dest,
-                        (uint32_t *)(&dest_sz), 1);
-        if (rc != QZ_OK) {
-            QZ_ERROR("qzCompress FAILED, return: %d", rc);
-            goto done;
-        }
-
-        (void)gettimeofday(&te, NULL);
-        QZ_DEBUG("Compressed %d bytes into %d\n", src_sz, dest_sz);
-
-        ts_m = (ts.tv_sec * 1000000) + ts.tv_usec;
-        te_m = (te.tv_sec * 1000000) + te.tv_usec;
-        el_m += te_m - ts_m;
-    }
-    timeCheck(4, tid);
-    sec = (long double)(el_m);
-    sec = sec / 1000000.0;
-    rate = src_sz * 8; // bits
-    rate = rate / 1000000000.0; // gigbits
-    rate = rate / sec;// Gbps
-    rate = rate * 1000;
-    QZ_PRINT("[%ld] elasped microsec = %lld bytes = %d rate = %Lf\n",
-             tid, el_m, src_sz, rate);
-
-done:
-    qzFree(dest);
-    if (gen_data) {
-        qzFree(src);
-    }
-
-    (void)qzTeardownSession(&g_session_th[tid]);
-    timeCheck(5, tid);
-    pthread_exit((void *)NULL);
-}
-
 int qzCompressDecompressWithParams(const TestArg_T *arg,
-                                   QzSessionParamsGen3_T *comp_params, QzSessionParamsGen3_T *decomp_params)
+                                   QzSessionParams_T *comp_params, QzSessionParams_T *decomp_params)
 {
     int rc = -1;
     QzSession_T comp_sess = {0}, decomp_sess = {0};
@@ -1616,7 +1552,7 @@ int qzCompressDecompressWithParams(const TestArg_T *arg,
 
     /*do compress Data*/
     src_sz = orig_sz;
-    if (qzSetDefaultsGen3(comp_params) != QZ_OK) {
+    if (qzSetDefaults(comp_params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
@@ -1631,7 +1567,7 @@ int qzCompressDecompressWithParams(const TestArg_T *arg,
     }
 
     /*do decompress Data*/
-    if (qzSetDefaultsGen3(decomp_params) != QZ_OK) {
+    if (qzSetDefaults(decomp_params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
@@ -1660,7 +1596,7 @@ void *qzCompressStreamAndDecompress(void *arg)
     int rc = -1;
     QzSession_T comp_sess = {0}, decomp_sess = {0};
     QzStream_T comp_strm = {0};
-    QzSessionParamsGen3_T comp_params = {0};
+    QzSessionParams_T comp_params = {0};
     uint8_t *orig_src, *comp_src, *decomp_src;
     size_t orig_sz, comp_sz, decomp_sz;
     unsigned int slice_sz = 0, done = 0;
@@ -1676,7 +1612,7 @@ void *qzCompressStreamAndDecompress(void *arg)
     comp_src = malloc(comp_sz);
     decomp_src = calloc(orig_sz, 1);
 
-    if (qzGetDefaultsGen3(&comp_params) != QZ_OK) {
+    if (qzGetDefaults(&comp_params) != QZ_OK) {
         QZ_ERROR("Err: get params fail with incorrect compress params.\n");
         goto exit;
     }
@@ -1691,7 +1627,21 @@ void *qzCompressStreamAndDecompress(void *arg)
         QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
         return NULL;
     }
-    comp_params.data_fmt = test_arg->params->data_fmt;
+
+    switch (test_arg->test_format) {
+    case TEST_DEFLATE:
+        comp_params.data_fmt = QZ_DEFLATE_RAW;
+        break;
+    case TEST_GZIPEXT:
+        comp_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        break;
+    default:
+        QZ_ERROR("Unsupport data format in Stream API\n");
+        free(orig_src);
+        free(comp_src);
+        free(decomp_src);
+        return NULL;
+    }
     QZ_DEBUG("*** Data Format: %d ***\n", comp_params.data_fmt);
 
     genRandomData(orig_src, orig_sz);
@@ -1789,7 +1739,7 @@ void *qzCompressStreamAndDecompress(void *arg)
     }
     QZ_DEBUG("*** Decompress Stream Test 1 PASS ***\n");
 
-    if (comp_params.data_fmt != QZ_DEFLATE_GZIP_EXT_Gen3) {
+    if (comp_params.data_fmt != QZ_DEFLATE_GZIP_EXT) {
         goto test_2_end;
     }
     QZ_DEBUG("*** Decompress Stream Test 2 ***\n");
@@ -1840,7 +1790,7 @@ void *qzCompressStreamAndDecompress(void *arg)
     QZ_DEBUG("*** Decompress Stream Test 2 PASS ***\n");
 test_2_end:
 
-    if (comp_params.data_fmt == QZ_DEFLATE_GZIP_EXT_Gen3) {
+    if (comp_params.data_fmt == QZ_DEFLATE_GZIP_EXT) {
         goto test_3_end;
     }
     QZ_DEBUG("*** Decompress Stream Test 3 ***\n");
@@ -1962,28 +1912,29 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     unsigned long long ts_m, te_m, el_m;
     long double sec, rate;
     QzStream_T comp_strm = {0};
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     unsigned int last = 0;
     TestArg_T *test_arg = (TestArg_T *)thd_arg;
     const int gen_data = test_arg->gen_data;
     const long tid = test_arg->thd_id;
+    QzSession_T sess = {0};
 
     QZ_DEBUG("Hello from qzCompressStreamOnCommonMem id %d\n", tid);
 
     timeCheck(0, tid);
 
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_HW_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    if (qzGetDefaultsGen3(&params) != QZ_OK) {
+    if (qzGetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
     params.strm_buff_sz = DEFAULT_BUF_SZ;
-    if (qzSetDefaultsGen3(&params) != QZ_OK) {
+    if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
@@ -1991,12 +1942,12 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     timeCheck(1, tid);
 
     //set by default configurations
-    rc = qzSetupSessionGen3(&g_session_th[tid], NULL);
+    rc = qzSetupSession(&sess, NULL);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        pthread_exit((void *)"qzSetupSessionGen3 failed");
+        pthread_exit((void *)"qzSetupSession failed");
     }
     timeCheck(2, tid);
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
 
     src_sz = QATZIP_MAX_HW_SZ;
     avail_dest_sz = dest_sz = QATZIP_MAX_HW_SZ;
@@ -2035,8 +1986,8 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
         comp_strm.in_sz = src_sz;
         comp_strm.out_sz =  dest_sz;
         last = 1;
-        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
-        qzEndStream(&g_session_th[tid], &comp_strm);
+        rc = qzCompressStream(&sess, &comp_strm, last);
+        qzEndStream(&sess, &comp_strm);
 
         if (rc != QZ_OK) {
             QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
@@ -2066,7 +2017,7 @@ done:
         qzFree(dest);
     }
 
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -2076,37 +2027,37 @@ void *qzCompressStreamOutput(void *thd_arg)
     unsigned char *src = NULL, *dest = NULL;
     unsigned int src_sz, dest_sz;
     QzStream_T comp_strm = {0};
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     unsigned int last = 0;
     char *filename = NULL;
     TestArg_T *test_arg = (TestArg_T *)thd_arg;
     const int gen_data = test_arg->gen_data;
-    const long tid = test_arg->thd_id;
+    QzSession_T sess = {0};
 
-    QZ_DEBUG("Hello from qzCompressStreamOutput id %d\n", tid);
+    QZ_DEBUG("Hello from qzCompressStreamOutput\n");
 
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    if (qzGetDefaultsGen3(&params) != QZ_OK) {
+    if (qzGetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
     params.strm_buff_sz = DEFAULT_BUF_SZ;
-    if (qzSetDefaultsGen3(&params) != QZ_OK) {
+    if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
 
     //set by default configurations
-    rc = qzSetupSessionGen3(&g_session_th[tid], NULL);
+    rc = qzSetupSession(&sess, NULL);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        pthread_exit((void *)"qzSetupSessionGen3 failed");
+        pthread_exit((void *)"qzSetupSession failed");
     }
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
 
     if (gen_data) {
         src_sz = QATZIP_MAX_HW_SZ;
@@ -2118,7 +2069,14 @@ void *qzCompressStreamOutput(void *thd_arg)
         src_sz = test_arg->src_sz;
         dest = test_arg->comp_out;
         dest_sz = test_arg->comp_out_sz;
-        filename = g_input_file_name;
+        filename = (char *) calloc(1, strlen(g_input_file_name) + 4);
+        if (NULL != filename) {
+            snprintf(filename, strlen(g_input_file_name) + 4, "%s.%s", g_input_file_name,
+                     "gz");
+        } else {
+            QZ_ERROR("Calloc failed\n");
+            goto done;
+        }
     }
 
     if (!src || !dest) {
@@ -2137,7 +2095,7 @@ void *qzCompressStreamOutput(void *thd_arg)
         comp_strm.in_sz = src_sz;
         comp_strm.out_sz =  dest_sz;
         last = 1;
-        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
+        rc = qzCompressStream(&sess, &comp_strm, last);
 
         if (rc != QZ_OK) {
             QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
@@ -2146,16 +2104,18 @@ void *qzCompressStreamOutput(void *thd_arg)
         QZ_DEBUG("Compressed %d bytes into %d\n", src_sz, dest_sz);
 
         dumpOutputData(comp_strm.out_sz, comp_strm.out, filename);
-        qzEndStream(&g_session_th[tid], &comp_strm);
+        qzEndStream(&sess, &comp_strm);
     }
 
 done:
     if (gen_data) {
         qzFree(src);
         qzFree(dest);
+    } else {
+        free(filename);
     }
 
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -2166,37 +2126,37 @@ void *qzDecompressStreamInput(void *thd_arg)
     unsigned int src_sz, dest_sz;
     unsigned int consumed, done;
     QzStream_T decomp_strm = {0};
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     unsigned int last = 0;
     char *filename = NULL;
     TestArg_T *test_arg = (TestArg_T *)thd_arg;
     const int gen_data = test_arg->gen_data;
-    const long tid = test_arg->thd_id;
+    QzSession_T sess = {0};
 
-    QZ_DEBUG("Hello from qzDecompressStreamInput id %d\n", tid);
+    QZ_DEBUG("Hello from qzDecompressStreamInput%d\n");
 
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    if (qzGetDefaultsGen3(&params) != QZ_OK) {
+    if (qzGetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
     params.strm_buff_sz = 1024 * 1024;
-    if (qzSetDefaultsGen3(&params) != QZ_OK) {
+    if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
 
     //set by default configurations
-    rc = qzSetupSessionGen3(&g_session_th[tid], NULL);
+    rc = qzSetupSession(&sess, NULL);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        pthread_exit((void *)"qzSetupSessionGen3 failed");
+        pthread_exit((void *)"qzSetupSession failed");
     }
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
 
     if (gen_data) {
         QZ_ERROR("Err: No input file.\n");
@@ -2224,7 +2184,7 @@ void *qzDecompressStreamInput(void *thd_arg)
             decomp_strm.out_sz =  dest_sz;
             last = 1;
 
-            rc = qzDecompressStream(&g_session_th[tid], &decomp_strm, last);
+            rc = qzDecompressStream(&sess, &decomp_strm, last);
             if (rc != QZ_OK) {
                 QZ_ERROR("qzDecompressStream FAILED, return: %d\n", rc);
                 goto done;
@@ -2239,7 +2199,7 @@ void *qzDecompressStreamInput(void *thd_arg)
             }
         }
 
-        qzEndStream(&g_session_th[tid], &decomp_strm);
+        qzEndStream(&sess, &decomp_strm);
     }
 
 done:
@@ -2248,7 +2208,7 @@ done:
         qzFree(dest);
     }
 
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -2256,37 +2216,38 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
 {
     int rc;
     unsigned char *src = NULL, *dest = NULL;
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     TestArg_T *test_arg = (TestArg_T *)thd_arg;
     const int gen_data = test_arg->gen_data;
     const long tid = test_arg->thd_id;
+    QzSession_T sess = {0};
 
     QZ_PRINT("Hello from qzCompressStreamInvalidChunkSize id %d\n", tid);
 
     timeCheck(0, tid);
 
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_HW_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    qzGetDefaultsGen3(&params);
+    qzGetDefaults(&params);
     params.strm_buff_sz = DEFAULT_BUF_SZ;
-    if (qzSetDefaultsGen3(&params) != QZ_OK) {
+    if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
 
     params.hw_buff_sz = 525312;    /*513k*/
-    rc = qzSetupSessionGen3(&g_session_th[tid], &params);
+    rc = qzSetupSession(&sess, &params);
     if (rc != QZ_PARAMS) {
         pthread_exit((void *)
                      "qzCompressStreamInvalidChunkSize input param check FAILED");
     }
 
     params.hw_buff_sz = 100;
-    rc = qzSetupSessionGen3(&g_session_th[tid], &params);
+    rc = qzSetupSession(&sess, &params);
     if (rc != QZ_PARAMS) {
         pthread_exit((void *)
                      "qzCompressStreamInvalidChunkSize input param check FAILED");
@@ -2300,7 +2261,7 @@ done:
         qzFree(dest);
     }
 
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -2311,33 +2272,34 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     unsigned char *src = NULL, *dest = NULL;
     unsigned int src_sz, dest_sz;
     QzStream_T comp_strm = {0};
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     unsigned int last = 0;
     char *filename = NULL;
     TestArg_T *test_arg = (TestArg_T *)thd_arg;
     const int gen_data = test_arg->gen_data;
     const long tid = test_arg->thd_id;
+    QzSession_T sess = {0};
 
     QZ_PRINT("Hello from qzCompressStreamInvalidQzStreamParam id %d\n", tid);
 
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_HW_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    qzGetDefaultsGen3(&params);
+    qzGetDefaults(&params);
     params.strm_buff_sz = DEFAULT_BUF_SZ;
-    if (qzSetDefaultsGen3(&params) != QZ_OK) {
+    if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
 
-    rc = qzSetupSessionGen3(&g_session_th[tid], NULL);
+    rc = qzSetupSession(&sess, NULL);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        pthread_exit((void *)"qzSetupSessionGen3 failed");
+        pthread_exit((void *)"qzSetupSession failed");
     }
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
 
     if (gen_data) {
         src_sz = QATZIP_MAX_HW_SZ;
@@ -2349,7 +2311,14 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
         src_sz = test_arg->src_sz;
         dest = test_arg->comp_out;
         dest_sz = test_arg->comp_out_sz;
-        filename = g_input_file_name;
+        filename = (char *) calloc(1, strlen(g_input_file_name) + 4);
+        if (NULL != filename) {
+            snprintf(filename, strlen(g_input_file_name) + 4, "%s.%s", g_input_file_name,
+                     "gz");
+        } else {
+            QZ_ERROR("Calloc failed\n");
+            goto done;
+        }
     }
 
     if (!src || !dest) {
@@ -2366,7 +2335,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
         /*case 1: set strm all params to zero*/
         last = 1;
         memset(&comp_strm, 0, sizeof(QzStream_T));
-        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
+        rc = qzCompressStream(&sess, &comp_strm, last);
         if (rc != QZ_PARAMS) {
             QZ_ERROR("qzCompressStream FAILED, return: %d\n", rc);
             goto done;
@@ -2377,14 +2346,14 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
         memset(&comp_strm, 0, sizeof(QzStream_T));
         comp_strm.in_sz = src_sz;
         comp_strm.out_sz =  dest_sz;
-        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
+        rc = qzCompressStream(&sess, &comp_strm, last);
         if (rc != QZ_PARAMS) {
             QZ_ERROR("qzCompressStream FAILED, return: %d\n", rc);
             goto done;
         }
 
         dumpOutputData(comp_strm.out_sz, comp_strm.out, filename);
-        qzEndStream(&g_session_th[tid], &comp_strm);
+        qzEndStream(&sess, &comp_strm);
     }
     QZ_PRINT("qzCompressStreamInvalidQzStreamParam : PASS\n");
 
@@ -2392,9 +2361,11 @@ done:
     if (gen_data) {
         qzFree(src);
         qzFree(dest);
+    } else {
+        free(filename);
     }
 
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -2403,7 +2374,7 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
     int rc = -1;
     QzSession_T comp_sess = {0}, decomp_sess = {0};
     QzStream_T comp_strm = {0};
-    QzSessionParamsGen3_T comp_params = {0};
+    QzSessionParams_T comp_params = {0};
     uint8_t *orig_src, *comp_src, *decomp_src;
     size_t orig_sz, comp_sz, decomp_sz;
     unsigned int slice_sz = 0, done = 0;
@@ -2419,7 +2390,7 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
     comp_src = malloc(comp_sz);
     decomp_src = calloc(orig_sz, 1);
 
-    qzGetDefaultsGen3(&comp_params);
+    qzGetDefaults(&comp_params);
 
     slice_sz = comp_params.hw_buff_sz / 4;
 
@@ -2432,7 +2403,21 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
         QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
         return NULL;
     }
-    comp_params.data_fmt = test_arg->params->data_fmt;
+
+    switch (test_arg->test_format) {
+    case TEST_DEFLATE:
+        comp_params.data_fmt = QZ_DEFLATE_RAW;
+        break;
+    case TEST_GZIPEXT:
+        comp_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        break;
+    default:
+        QZ_ERROR("Unsupport data format in Stream API\n");
+        free(orig_src);
+        free(comp_src);
+        free(decomp_src);
+        return NULL;
+    }
     QZ_DEBUG("*** Data Format: %d ***\n", comp_params.data_fmt);
 
     genRandomData(orig_src, orig_sz);
@@ -2503,23 +2488,16 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
         QZ_DEBUG("T#############T DecompressStream Session is null Test ***\n");
         test_strm = &comp_strm;
     } else if (2 == test_no) {
-        QZ_DEBUG("T#############T DecompressStream comp level is %d Test ***\n",
-                 (COMP_LVL_MAXIMUM + 1));
-        test_sess = &comp_sess;
-        ((QzSess_T *)(test_sess->internal))->sess_params.comp_lvl =
-            (COMP_LVL_MAXIMUM + 1);
-        test_strm = &comp_strm;
-    } else if (3 == test_no) {
         QZ_DEBUG("T#############T DecompressStream Neg parameter for last is -1 Test ***\n");
         last = -1;
         test_sess = &comp_sess;
         test_strm = &comp_strm;
-    } else if (4 == test_no) {
+    } else if (3 == test_no) {
         QZ_DEBUG("T#############T DecompressStream Neg parameter for last is 2 Test ***\n");
         last = 2;
         test_sess = &comp_sess;
         test_strm = &comp_strm;
-    } else if (5 == test_no) {
+    } else if (4 == test_no) {
         QZ_DEBUG("T#############T DecompressStream Neg parameter for strm null Test ***\n");
         test_sess = &comp_sess;
     } else {
@@ -2552,7 +2530,7 @@ exit:
 void *qzDecompressStreamNegParam(void *arg)
 {
     int test_no = 0;
-    for (test_no = 1; test_no <= 6; test_no++) {
+    for (test_no = 1; test_no <= 5; test_no++) {
         QZ_DEBUG("*** qzDecompressStreamNegParam test_no: %d ***\n", test_no);
         testqzDecompressStreamInvalidParam(arg, test_no);
     }
@@ -2566,7 +2544,7 @@ void *testqzEndStreamInvalidParam(void *arg, int test_no)
     int rc = -1;
     QzSession_T comp_sess = {0}, decomp_sess = {0};
     QzStream_T comp_strm = {0};
-    QzSessionParamsGen3_T comp_params = {0};
+    QzSessionParams_T comp_params = {0};
     uint8_t *orig_src, *comp_src, *decomp_src;
     size_t orig_sz, comp_sz, decomp_sz;
     unsigned int slice_sz = 0, done = 0;
@@ -2583,7 +2561,7 @@ void *testqzEndStreamInvalidParam(void *arg, int test_no)
     comp_src = malloc(comp_sz);
     decomp_src = calloc(orig_sz, 1);
 
-    qzGetDefaultsGen3(&comp_params);
+    qzGetDefaults(&comp_params);
 
     slice_sz = comp_params.hw_buff_sz / 4;
 
@@ -2596,7 +2574,21 @@ void *testqzEndStreamInvalidParam(void *arg, int test_no)
         QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
         return NULL;
     }
-    comp_params.data_fmt = test_arg->params->data_fmt;
+
+    switch (test_arg->test_format) {
+    case TEST_DEFLATE:
+        comp_params.data_fmt = QZ_DEFLATE_RAW;
+        break;
+    case TEST_GZIPEXT:
+        comp_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        break;
+    default:
+        QZ_ERROR("Unsupport data format in Stream API\n");
+        free(orig_src);
+        free(comp_src);
+        free(decomp_src);
+        return NULL;
+    }
     QZ_DEBUG("*** Data Format: %d ***\n", comp_params.data_fmt);
 
     genRandomData(orig_src, orig_sz);
@@ -2673,16 +2665,16 @@ void *qzInitPcieCountCheck(void *thd_arg)
     unsigned int src_sz, dest_sz;
     unsigned int consumed, done;
     QzStream_T decomp_strm = {0};
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     unsigned int last = 0;
     char *filename = NULL;
     TestArg_T *test_arg = (TestArg_T *)thd_arg;
     const int gen_data = test_arg->gen_data;
-    const long tid = test_arg->thd_id;
+    QzSession_T sess = {0};
 
     QZ_DEBUG("Start qzInitPcieCountCheck test\n");
 
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_HW_FAIL(rc)) {
         QZ_ERROR("qzInit1 error. rc = %d\n", rc);
     }
@@ -2690,12 +2682,12 @@ void *qzInitPcieCountCheck(void *thd_arg)
     QZ_DEBUG("qzInit1 done. rc = %d, g_process.qat_available = %d\n", rc,
              g_process.qat_available);
 
-    qzClose(&g_session_th[tid]);
+    qzClose(&sess);
 
     QZ_DEBUG("qzClose done. g_process.qat_available = %d\n",
              g_process.qat_available);
 
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_HW_FAIL(rc)) {
         QZ_ERROR("qzInit2 error. rc = %d\n", rc);
     }
@@ -2703,22 +2695,22 @@ void *qzInitPcieCountCheck(void *thd_arg)
     QZ_DEBUG("qzInit2 done. rc = %d, g_process.qat_available = %d\n", rc,
              g_process.qat_available);
 
-    if (qzGetDefaultsGen3(&params) != QZ_OK) {
+    if (qzGetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
     params.strm_buff_sz = 1024 * 1024;
-    if (qzSetDefaultsGen3(&params) != QZ_OK) {
+    if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
 
     //set by default configurations
-    rc = qzSetupSessionGen3(&g_session_th[tid], NULL);
+    rc = qzSetupSession(&sess, NULL);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        pthread_exit((void *)"qzSetupSessionGen3 failed");
+        pthread_exit((void *)"qzSetupSession failed");
     }
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
 
     if (gen_data) {
         QZ_ERROR("Err: No input file.\n");
@@ -2746,7 +2738,7 @@ void *qzInitPcieCountCheck(void *thd_arg)
             decomp_strm.out_sz =  dest_sz;
             last = 1;
 
-            rc = qzDecompressStream(&g_session_th[tid], &decomp_strm, last);
+            rc = qzDecompressStream(&sess, &decomp_strm, last);
             if (rc != QZ_OK) {
                 QZ_ERROR("qzDecompressStream FAILED, return: %d\n", rc);
                 goto done;
@@ -2761,7 +2753,7 @@ void *qzInitPcieCountCheck(void *thd_arg)
             }
         }
 
-        qzEndStream(&g_session_th[tid], &decomp_strm);
+        qzEndStream(&sess, &decomp_strm);
     }
 
 done:
@@ -2770,7 +2762,7 @@ done:
         qzFree(dest);
     }
 
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -2787,18 +2779,18 @@ void *qzCompressDecompressSwQZMixed(void *arg)
     struct TestParams_T {
         enum TestType_E type;
         char *name;
-        QzSessionParamsGen3_T *comp_params;
-        QzSessionParamsGen3_T *decomp_params;
+        QzSessionParams_T *comp_params;
+        QzSessionParams_T *decomp_params;
     };
 
-    QzSessionParamsGen3_T sw_comp_params = {0}, qz_comp_params = {0},
-                          sw_decomp_params = {0}, qz_decomp_params = {0};
+    QzSessionParams_T sw_comp_params = {0}, qz_comp_params = {0},
+                      sw_decomp_params = {0}, qz_decomp_params = {0};
     int i = 0;
 
-    if ((qzGetDefaultsGen3(&sw_comp_params) != QZ_OK) ||
-        (qzGetDefaultsGen3(&qz_comp_params) != QZ_OK) ||
-        (qzGetDefaultsGen3(&sw_decomp_params) != QZ_OK) ||
-        (qzGetDefaultsGen3(&qz_decomp_params) != QZ_OK)) {
+    if ((qzGetDefaults(&sw_comp_params) != QZ_OK) ||
+        (qzGetDefaults(&qz_comp_params) != QZ_OK) ||
+        (qzGetDefaults(&sw_decomp_params) != QZ_OK) ||
+        (qzGetDefaults(&qz_decomp_params) != QZ_OK)) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         return NULL;
     }
@@ -2890,7 +2882,7 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
     QzSession_T sess = {0};
     uint8_t *orig_src, *comp_src, *decomp_src;
     size_t orig_sz, src_sz, comp_sz, decomp_sz;
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     unsigned int produce;
 
     orig_sz = comp_sz = decomp_sz = USDM_ALLOC_MAX_SZ;
@@ -2911,11 +2903,11 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
         goto done;
     }
 
-    qzGetDefaultsGen3(&params);
+    qzGetDefaults(&params);
     params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
-    rc = qzSetupSessionGen3(&sess, &params);
+    rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        QZ_ERROR("qzSetupSessionGen3 for testing %s error, return: %d\n", __func__, rc);
+        QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
 
@@ -2946,9 +2938,9 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
 
     QZ_DEBUG("produce: %u, DEST_SZ(hw_sz): %d\n", produce,
              DEST_SZ(params.hw_buff_sz));
-    rc = qzSetupSessionGen3(&sess, &params);
+    rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        QZ_ERROR("ERROR: qzSetupSessionGen3 FAILED with return value: %d\n", rc);
+        QZ_ERROR("ERROR: qzSetupSession FAILED with return value: %d\n", rc);
         goto done;
     }
 
@@ -3033,7 +3025,7 @@ int qzDecompressForceSW(void)
     QzSession_T sess = {0};
     uint8_t *orig_src, *comp_src, *decomp_src;
     size_t orig_sz, src_sz, comp_sz, decomp_sz;
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     uint32_t consume, produce;
 
     orig_sz = comp_sz = decomp_sz = USDM_ALLOC_MAX_SZ;
@@ -3054,11 +3046,11 @@ int qzDecompressForceSW(void)
         goto done;
     }
 
-    qzGetDefaultsGen3(&params);
+    qzGetDefaults(&params);
     params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
-    rc = qzSetupSessionGen3(&sess, &params);
+    rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        QZ_ERROR("qzSetupSessionGen3 for testing %s error, return: %d\n", __func__, rc);
+        QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
 
@@ -3087,9 +3079,9 @@ int qzDecompressForceSW(void)
 
     QZ_DEBUG("produce: %d, DEST_SZ(hw_sz): %d\n", produce,
              DEST_SZ(params.hw_buff_sz));
-    rc = qzSetupSessionGen3(&sess, &params);
+    rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        QZ_ERROR("ERROR: qzSetupSessionGen3 FAILED with return value: %d\n", rc);
+        QZ_ERROR("ERROR: qzSetupSession FAILED with return value: %d\n", rc);
         goto done;
     }
 
@@ -3111,9 +3103,9 @@ int qzDecompressForceSW(void)
     }
     QZ_DEBUG("consume: %d, hw_sz: %d\n", consume, params.hw_buff_sz);
 
-    rc = qzSetupSessionGen3(&sess, &params);
+    rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        QZ_ERROR("ERROR: qzSetupSessionGen3 FAILED with return value: %d\n", rc);
+        QZ_ERROR("ERROR: qzSetupSession FAILED with return value: %d\n", rc);
         goto done;
     }
 
@@ -3138,7 +3130,7 @@ int qzDecompressStandalone(void)
     QzSession_T sess = {0};
     uint8_t *orig_src, *comp_src, *decomp_src;
     size_t orig_sz, src_sz, comp_sz, decomp_sz;
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
 
     orig_sz = src_sz = comp_sz = decomp_sz = 4 * KB;
     orig_src = calloc(1, orig_sz);
@@ -3152,14 +3144,14 @@ int qzDecompressStandalone(void)
         goto done;
     }
 
-    if (qzGetDefaultsGen3(&params) != QZ_OK) {
+    if (qzGetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: get params fail with incorrect compress params.\n");
         goto done;
     }
 
     /*compression output 4 blocks*/
     params.hw_buff_sz = 1 * KB;
-    if (qzSetDefaultsGen3(&params) != QZ_OK) {
+    if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
@@ -3312,7 +3304,7 @@ int qzCompressSWL9DecompressHW(void)
     QzSession_T sess = {0};
     uint8_t *orig_src, *comp_src, *decomp_src;
     size_t orig_sz, src_sz, comp_sz, decomp_sz;
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
 
     orig_sz = comp_sz = decomp_sz = 4 * MB;
     orig_src = qzMalloc(orig_sz, 0, COMMON_MEM);
@@ -3332,12 +3324,12 @@ int qzCompressSWL9DecompressHW(void)
         goto done;
     }
 
-    qzGetDefaultsGen3(&params);
+    qzGetDefaults(&params);
     params.input_sz_thrshold = orig_sz + 1;
-    params.comp_lvl = COMP_LVL_MAXIMUM;
-    rc = qzSetupSessionGen3(&sess, &params);
+    params.comp_lvl = QZ_DEFLATE_COMP_LVL_MAXIMUM;
+    rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        QZ_ERROR("qzSetupSessionGen3 for testing %s error, return: %d\n", __func__, rc);
+        QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
 
@@ -3355,9 +3347,9 @@ int qzCompressSWL9DecompressHW(void)
 
     /*decompress data by hardware*/
     params.input_sz_thrshold = QZ_COMP_THRESHOLD_DEFAULT;
-    rc = qzSetupSessionGen3(&sess, &params);
+    rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        QZ_ERROR("qzSetupSessionGen3 for testing %s error, return: %d\n", __func__, rc);
+        QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
     rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
@@ -3432,39 +3424,39 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
     unsigned char *src = NULL, *dest = NULL;
     unsigned int src_sz, dest_sz;
     QzStream_T comp_strm = {0};
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     unsigned int last = 0;
     char *filename = NULL;
     TestArg_T *test_arg = (TestArg_T *)thd_arg;
     const int gen_data = test_arg->gen_data;
-    const long tid = test_arg->thd_id;
     unsigned char *out;
     unsigned int out_sz = 0;
+    QzSession_T sess = {0};
 
-    QZ_DEBUG("Hello from qzCompressStreamWithPendingOut id %d\n", tid);
+    QZ_DEBUG("Hello from qzCompressStreamWithPendingOut\n");
 
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    if (qzGetDefaultsGen3(&params) != QZ_OK) {
+    if (qzGetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
     params.strm_buff_sz = DEFAULT_BUF_SZ;
-    if (qzSetDefaultsGen3(&params) != QZ_OK) {
+    if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
 
     //set by default configurations
-    rc = qzSetupSessionGen3(&g_session_th[tid], NULL);
+    rc = qzSetupSession(&sess, NULL);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        pthread_exit((void *)"qzSetupSessionGen3 failed");
+        pthread_exit((void *)"qzSetupSession failed");
     }
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
 
     if (gen_data) {
         src_sz = QATZIP_MAX_HW_SZ;
@@ -3476,7 +3468,14 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
         src_sz = test_arg->src_sz;
         dest = test_arg->comp_out;
         dest_sz = test_arg->comp_out_sz;
-        filename = g_input_file_name;
+        filename = (char *) calloc(1, strlen(g_input_file_name) + 4);
+        if (NULL != filename) {
+            snprintf(filename, strlen(g_input_file_name) + 4, "%s.%s", g_input_file_name,
+                     "gz");
+        } else {
+            QZ_ERROR("Calloc failed\n");
+            goto done;
+        }
     }
 
     if (!src || !dest) {
@@ -3496,7 +3495,7 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
     comp_strm.out_sz =  8192;
     last = 1;
     if (comp_strm.in_sz) {
-        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
+        rc = qzCompressStream(&sess, &comp_strm, last);
         if (rc != QZ_OK) {
             QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
             goto done;
@@ -3512,7 +3511,7 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
         comp_strm.in_sz = 0;
         comp_strm.out_sz =  8192;
         last = 1;
-        rc = qzCompressStream(&g_session_th[tid], &comp_strm, last);
+        rc = qzCompressStream(&sess, &comp_strm, last);
 
         if (rc != QZ_OK) {
             QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
@@ -3524,36 +3523,37 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
     }
 
     dumpOutputData(out_sz, out, filename);
-    qzEndStream(&g_session_th[tid], &comp_strm);
+    qzEndStream(&sess, &comp_strm);
 
 done:
     if (gen_data) {
         qzFree(src);
         qzFree(dest);
+    } else {
+        free(filename);
     }
 
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
 void *forkResourceCheck(void *arg)
 {
     int rc = -1;
-    TestArg_T *test_arg = (TestArg_T *)arg;
-    const long tid = test_arg->thd_id;
     pid_t pid;
     int status;
     char max_hp_str[10] = {0};
     int hp_params_fd;
     size_t number_huge_pages;
     char *stop = NULL;
+    QzSession_T sess = {0};
 
-    QZ_DEBUG("Hello from forkResourceCheck tid=%ld\n", tid);
+    QZ_DEBUG("Hello from forkResourceCheck\n");
     QZ_PRINT("This is parent process, my pid = %d\n", getpid());
     QZ_PRINT("Before qzInit, qz_init_status in parent process is %d\n",
              g_process.qz_init_status);
     if (!((TestArg_T *)arg)->init_engine_disabled) {
-        rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
+        rc = qzInit(&sess, ((TestArg_T *)arg)->sw_backup);
         if (QZ_INIT_FAIL(rc)) {
             pthread_exit((void *)"qzInit failed");
         }
@@ -3595,7 +3595,7 @@ void *forkResourceCheck(void *arg)
         QZ_PRINT("Before qzInit, qz_init_status in child process is %d\n",
                  g_process.qz_init_status);
         if (!((TestArg_T *)arg)->init_engine_disabled) {
-            rc = qzInit(&g_session_th[tid], ((TestArg_T *)arg)->params->sw_backup);
+            rc = qzInit(&sess, ((TestArg_T *)arg)->sw_backup);
             if (QZ_INIT_FAIL(rc)) {
                 pthread_exit((void *)"qzInit failed");
             }
@@ -3640,36 +3640,36 @@ void *qzDecompressStreamWithBufferError(void *thd_arg)
     unsigned char *src = NULL, *dest = NULL;
     unsigned int src_sz, dest_sz;
     QzStream_T decomp_strm = {0};
-    QzSessionParamsGen3_T params = {0};
+    QzSessionParams_T params = {0};
     unsigned int last = 1;
     TestArg_T *test_arg = (TestArg_T *)thd_arg;
     const int gen_data = test_arg->gen_data;
-    const long tid = test_arg->thd_id;
+    QzSession_T sess = {0};
 
-    QZ_DEBUG("Hello from qzDecompressStreamWithBufferError id %ld\n", tid);
+    QZ_DEBUG("Hello from qzDecompressStreamWithBufferError\n");
 
-    rc = qzInit(&g_session_th[tid], test_arg->params->sw_backup);
+    rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_FAIL(rc)) {
         pthread_exit((void *)"qzInit failed");
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    if (qzGetDefaultsGen3(&params) != QZ_OK) {
+    if (qzGetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
     params.strm_buff_sz = QZ_STRM_BUFF_SZ_DEFAULT - 1;
-    if (qzSetDefaultsGen3(&params) != QZ_OK) {
+    if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
     }
 
     //set by default configurations
-    rc = qzSetupSessionGen3(&g_session_th[tid], NULL);
+    rc = qzSetupSession(&sess, NULL);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
-        pthread_exit((void *)"qzSetupSessionGen3 failed");
+        pthread_exit((void *)"qzSetupSession failed");
     }
-    QZ_DEBUG("qzSetupSessionGen3 rc = %d\n", rc);
+    QZ_DEBUG("qzSetupSession rc = %d\n", rc);
 
     if (gen_data) {
         src_sz = QATZIP_MAX_HW_SZ;
@@ -3698,9 +3698,9 @@ void *qzDecompressStreamWithBufferError(void *thd_arg)
     decomp_strm.out = dest;
     decomp_strm.in_sz = src_sz;
     decomp_strm.out_sz = dest_sz;
-    rc = qzDecompressStream(&g_session_th[tid], &decomp_strm, last);
+    rc = qzDecompressStream(&sess, &decomp_strm, last);
     assert(QZ_FAIL == rc);
-    rc = qzEndStream(&g_session_th[tid], &decomp_strm);
+    rc = qzEndStream(&sess, &decomp_strm);
 
 done:
     if (gen_data) {
@@ -3708,7 +3708,7 @@ done:
         qzFree(dest);
     }
 
-    (void)qzTeardownSession(&g_session_th[tid]);
+    (void)qzTeardownSession(&sess);
     pthread_exit((void *)NULL);
 }
 
@@ -3802,6 +3802,7 @@ int main(int argc, char *argv[])
     struct sigaction s1;
     int block_size = -1;
     PinMem_T compress_buf_type = COMMON_MEM;
+    TestArg_T args = {0};
 
     unsigned char *input_buf = NULL;
     unsigned int input_buf_len = QATZIP_MAX_HW_SZ;
@@ -3821,9 +3822,23 @@ int main(int argc, char *argv[])
     QzBlock_T  *qzBlocks = NULL;
     errno = 0;
 
-    if (qzGetDefaultsGen3(&g_params_th) != QZ_OK) {
+    QzSessionParamsDeflate_T default_params = {0};
+    rc = qzGetDefaultsDeflate(&default_params);
+    if (rc != QZ_OK) {
+        QZ_ERROR("Get default params error\n");
         return -1;
     }
+
+    args.test_format = TEST_GZIPEXT;
+    args.comp_algorithm = default_params.common_params.comp_algorithm;
+    args.sw_backup = default_params.common_params.sw_backup;
+    args.hw_buff_sz = default_params.common_params.hw_buff_sz;
+    args.comp_lvl = default_params.common_params.comp_lvl;
+    args.huffman_hdr = default_params.huffman_hdr;
+    args.polling_mode = default_params.common_params.polling_mode;
+    args.req_cnt_thrshold = default_params.common_params.req_cnt_thrshold;
+    args.max_forks = default_params.common_params.max_forks;
+
 
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
@@ -3836,15 +3851,15 @@ int main(int argc, char *argv[])
             break;
         case 't':
             thread_count = GET_LOWER_32BITS(strtol(optarg, &stop, 0));
-            g_params_th.max_forks = thread_count;
-            if (*stop != '\0' || errno || g_params_th.max_forks > 100) {
+            args.max_forks = thread_count;
+            if (*stop != '\0' || errno || thread_count > 100) {
                 QZ_ERROR("Error thread count arg: %s\n", optarg);
                 return -1;
             }
             break;
         case 'A':
             if (strcmp(optarg, "deflate") == 0) {
-                g_params_th.comp_algorithm = QZ_DEFLATE;
+                args.comp_algorithm = QZ_DEFLATE;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;
@@ -3852,33 +3867,33 @@ int main(int argc, char *argv[])
             break;
         case 'O':
             if (strcmp(optarg, "deflate") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_RAW_Gen3;
+                args.test_format = TEST_DEFLATE;
             } else if (strcmp(optarg, "gzip") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_GZIP_Gen3;
+                args.test_format = TEST_GZIP;
             } else if (strcmp(optarg, "gzipext") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_GZIP_EXT_Gen3;
+                args.test_format = TEST_GZIPEXT;
             } else if (strcmp(optarg, "deflate_4B") == 0) {
-                g_params_th.data_fmt = QZ_DEFLATE_4B_Gen3;
+                args.test_format = TEST_DEFLATE_4B;
             } else if (strcmp(optarg, "lz4") == 0) {
-                g_params_th.data_fmt = QZ_LZ4_FH;
+                args.test_format = TEST_LZ4;
             } else if (strcmp(optarg, "lz4s") == 0) {
-                g_params_th.data_fmt = QZ_LZ4S_FH;
+                args.test_format = TEST_LZ4S;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;
             }
             break;
         case 'B':
-            g_params_th.sw_backup = GET_LOWER_32BITS(strtol(optarg, &stop, 0));
-            if (*stop != '\0' || errno || (g_params_th.sw_backup != 0 &&
-                                           g_params_th.sw_backup != 1)) {
+            args.sw_backup = GET_LOWER_32BITS(strtol(optarg, &stop, 0));
+            if (*stop != '\0' || errno || (args.sw_backup != 0 &&
+                                           args.sw_backup != 1)) {
                 QZ_ERROR("Error input: %s\n", optarg);
                 return -1;
             }
             break;
         case 'C':
-            g_params_th.hw_buff_sz = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
-            if (*stop != '\0' || errno || g_params_th.hw_buff_sz > USDM_ALLOC_MAX_SZ / 2) {
+            args.hw_buff_sz = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            if (*stop != '\0' || errno || args.hw_buff_sz > USDM_ALLOC_MAX_SZ / 2) {
                 QZ_ERROR("Error chunkSize arg: %s\n", optarg);
                 return -1;
             }
@@ -3903,19 +3918,19 @@ int main(int argc, char *argv[])
             }
             break;
         case 'L':
-            g_params_th.comp_lvl = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            args.comp_lvl = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (*stop != '\0' || errno ||  \
-                g_params_th.comp_lvl > COMP_LVL_MAXIMUM ||
-                g_params_th.comp_lvl <= 0) {
+                args.comp_lvl > COMP_LVL_MAXIMUM ||
+                args.comp_lvl <= 0) {
                 QZ_ERROR("Error compLevel arg: %s\n", optarg);
                 return -1;
             }
             break;
         case 'T':
             if (strcmp(optarg, "static") == 0) {
-                g_params_th.huffman_hdr = QZ_STATIC_HDR;
+                args.huffman_hdr = QZ_STATIC_HDR;
             } else if (strcmp(optarg, "dynamic") == 0) {
-                g_params_th.huffman_hdr = QZ_DYNAMIC_HDR;
+                args.huffman_hdr = QZ_DYNAMIC_HDR;
             } else {
                 QZ_ERROR("Error huffman arg: %s\n", optarg);
                 return -1;
@@ -3955,7 +3970,7 @@ int main(int argc, char *argv[])
             }
             break;
         case 'r':
-            g_params_th.req_cnt_thrshold = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            args.req_cnt_thrshold = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             if (*stop != '\0' || errno) {
                 QZ_ERROR("Error req_cnt_thrshold arg: %s\n", optarg);
                 return -1;
@@ -3971,7 +3986,7 @@ int main(int argc, char *argv[])
             break;
         case 'P':
             if (strcmp(optarg, "busy") == 0) {
-                g_params_th.polling_mode = QZ_BUSY_POLLING;
+                args.polling_mode = QZ_BUSY_POLLING;
             } else {
                 QZ_ERROR("Error set polling mode: %s\n", optarg);
                 return -1;
@@ -4013,21 +4028,16 @@ int main(int argc, char *argv[])
         qzPrintUsageAndExit(argv[0]);
     }
 
-    if (qzSetDefaultsGen3(&g_params_th) != QZ_OK) {
-        QZ_ERROR("Err: fail to set default session paramsters.\n");
-        return -1;
-    }
-
     switch (test) {
     case 1:
-        qzThdOps = qzCompressOnCommonMem;
-        break;
+        QZ_ERROR("Test mode 1 has been removed\n");
+        return 0;
     case 2:
         qzThdOps = qzMemFuncTest;
         break;
     case 3:
-        qzThdOps = qzCompressOnPinnedMem;
-        break;
+        QZ_ERROR("Test mode 3 has been removed\n");
+        return 0;
     case 4:
         qzThdOps = qzCompressAndDecompress;
         break;
@@ -4136,6 +4146,7 @@ int main(int argc, char *argv[])
     }
 
     for (i = 0; i < thread_count; i++) {
+        test_arg[i] = args;
         test_arg[i].thd_id = i;
         test_arg[i].service = service;
         test_arg[i].verify_data = verify;
@@ -4158,7 +4169,6 @@ int main(int argc, char *argv[])
         test_arg[i].gen_data = g_input_file_name ? 0 : 1;
         test_arg[i].init_engine_disabled = disable_init_engine;
         test_arg[i].init_sess_disabled = disable_init_session;
-        test_arg[i].params = &g_params_th;
         test_arg[i].ops = qzThdOps;
         test_arg[i].blks = qzBlocks;
         test_arg[i].thread_sleep = thread_sleep;
@@ -4239,8 +4249,6 @@ int main(int argc, char *argv[])
     }
 
 done:
-    qzClose(&g_session1);
-
     if (NULL != qzBlocks) {
         QzBlock_T *tmp, *blk = qzBlocks;
         while (blk) {
