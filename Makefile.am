@@ -39,7 +39,7 @@ QATZIP_LIB = libqatzip.la
 CODE_FORMATTING_BIN = $(top_builddir)/test/code_format_tests/format.sh
 
 DIST_SUBDIRS = src utils test
-SUBDIRS = src utils
+SUBDIRS = src utils test
 
 pkgincludedir = $(includedir)
 pkginclude_HEADERS = include/qatzip.h
@@ -55,13 +55,12 @@ EXTRA_DIST = \
              src/qatzip_internal.h \
              src/qatzip_page_table.h \
              utils/qzip.h \
+             utils/qzstd.h \
              test/code_format_tests \
              test/performance_tests \
              docs/QATzip-man.pdf \
              config_file/
 
-default: $(QATZIP_LIB) qzip
-all:$(QATZIP_LIB) qzip test bt
 
 $(QATZIP_LIB):
 	@make -C $(QATZIP_LIB_DIR)  $(QATZIP_LIB)
