@@ -239,14 +239,14 @@ AS_IF([test ! -z "${ICP_ROOT}"],
 #check for compile flags
 AC_MSG_CHECKING([cflags])
 CFLAGS+=' -Wall -Werror -std=gnu99 -pedantic \
-          -fstack-protector -fPIE -fPIC \
+          -fstack-protector-strong -fPIE -fPIC \
           -fno-delete-null-pointer-checks -fwrapv'
 AS_IF([test "x${CC}" = "xgcc"], [CFLAGS+=' -fno-strict-overflow'], [])
 AC_MSG_RESULT([yes])
 
 #check for compile flags
 AC_MSG_CHECKING([ldflags])
-LDFLAGS+=' -fstack-protector -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
+LDFLAGS+=' -fstack-protector-strong -fPIC -pie -z relro -z now -Wl,-z,noexecstack'
 AC_MSG_RESULT([yes])
 
 #Enable debug mode
