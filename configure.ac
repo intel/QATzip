@@ -73,17 +73,13 @@ AC_TYPE_UINT8_T
 AC_CHECK_HEADERS([stdio.h stdarg.h fcntl.h limits.h memory.h \
     unistd.h stdint.h stdlib.h string.h sys/ioctl.h \
     sys/time.h sys/types.h sys/stat.h unistd.h utime.h \
-    pthread.h], ,
-    [AC_MSG_ERROR([not found header file])]
-)
+    pthread.h])
 
 # Checks for library functions.
 AC_CHECK_FUNCS([atexit getcwd gettimeofday \
     memmove memset mkdir munmap \
     realpath strdup strerror strrchr \
-    strtol strtoul utime fork malloc mmap], ,
-    [AC_MSG_ERROR([not found function])]
-)
+    strtol strtoul utime fork malloc mmap])
 
 # Checks for pthread.
 AC_CHECK_LIB([pthread], [pthread_create], ,
@@ -97,21 +93,20 @@ AC_CHECK_HEADER([zlib.h],
         ZLIB_V=`grep ^'#define ZLIB_VERSION' ${ZLIB_PATH} |\
                 awk '{print $3}'| sed 's/"//g'`
         AC_MSG_CHECKING([zlib version ${ZLIB_V}])
-        AS_VERSION_COMPARE(${ZLIB_V}, ${ZLIB_VERSION},
+        AS_VERSION_COMPARE(${ZLIB_V}, ${ZLIB_V_MIN},
             [AC_MSG_ERROR([zlib version ${ZLIB_V} < ${ZLIB_V_MIN}])],
             [AC_MSG_RESULT([yes])],
             [AC_MSG_RESULT([yes])])
     ],
-    [AC_MSG_ERROR([not found zlib.h])]
+    [AC_MSG_ERROR([zlib.h not found])]
 )
 
-AC_CHECK_LIB([z], [deflate], , AC_MSG_ERROR([not found deflate in -lz]))
-AC_CHECK_LIB([z], [inflate], , AC_MSG_ERROR([not found inflate in -lz]))
+AC_CHECK_LIB([z], [deflate], , AC_MSG_ERROR([deflate not found]))
 
 #check for lz4 lib
-AC_CHECK_HEADER([lz4.h],,[AC_MSG_ERROR([not found lz4.h])])
-AC_CHECK_HEADER([lz4frame.h],,[AC_MSG_ERROR([not found lz4frame.h])])
-AC_CHECK_LIB([lz4], [LZ4F_compressBegin], ,AC_MSG_ERROR([not found LZ4F_compressBegin in -llz4]))
+AC_CHECK_HEADER([lz4.h], , [AC_MSG_ERROR([lz4.h not found])])
+AC_CHECK_HEADER([lz4frame.h], , [AC_MSG_ERROR([lz4frame.h not found])])
+AC_CHECK_LIB([lz4], [LZ4F_compressBegin], , AC_MSG_ERROR([LZ4F_compressBegin not found]))
 
 ##check for xxhash lib
 #AC_CHECK_HEADER([xxhash.h],,[AC_MSG_ERROR([not found xxhash.h])])
@@ -119,8 +114,6 @@ AC_CHECK_LIB([lz4], [LZ4F_compressBegin], ,AC_MSG_ERROR([not found LZ4F_compress
 
 #check for qat header file.
 ICP_INCLUDE_CFLAGS=
-ICP_LDDFLAGS=
-
 AS_IF([test ! -z "${ICP_ROOT}"],
 [
     #check for OOT relative header and lib
@@ -131,7 +124,8 @@ AS_IF([test ! -z "${ICP_ROOT}"],
         test ! -e ${ICP_ROOT}/quickassist/lookaside/access_layer/include/icp_sal_poll.h ||
         test ! -e ${ICP_ROOT}/quickassist/lookaside/access_layer/include/icp_sal_user.h],
         [
-            AC_MSG_RESULT([no]);
+            AC_MSG_RESULT([no])
+            AC_MSG_ERROR([QAT header files not found in $ICP_ROOT, please check \$ICP_ROOT])
         ],
         [
             AC_MSG_RESULT([yes])
@@ -139,15 +133,14 @@ AS_IF([test ! -z "${ICP_ROOT}"],
                                 -I${ICP_ROOT}/quickassist/include/dc/ \
                                 -I${ICP_ROOT}/quickassist/utilities/libusdm_drv/ \
                                 -I${ICP_ROOT}/quickassist/lookaside/access_layer/include/ "
-            ICP_LDFLAGS=" -Wl,-rpath,${ICP_ROOT}/build/ -L${ICP_ROOT}/build/"
+            LDFLAGS+=" -Wl,-rpath,${ICP_ROOT}/build/ -L${ICP_ROOT}/build/ "
         ]
     )
     AC_SUBST(ICP_INCLUDE_CFLAGS)
-    AC_SUBST(ICP_LDFLAGS)
 
-    AC_CHECK_LIB(qat_s, cpaDcCompressData2,,
+    AC_CHECK_LIB(qat_s, cpaDcCompressData2, ,
         [
-            AC_MSG_ERROR([not found cpaDcCompressData2 in -lqat_s])
+            AC_MSG_ERROR([cpaDcCompressData2 not found cpaDcCompressData2])
         ]
     )
 
@@ -159,18 +152,14 @@ AS_IF([test ! -z "${ICP_ROOT}"],
             AC_CHECK_LIB(qat_s, icp_sal_userIsQatAvailable,
                 [SAL_CFLAGS="-DSAL_DEV_API"
                 AC_SUBST(SAL_CFLAGS)],
-                [AC_MSG_ERROR([Not found function icp_sal_userIsQatAvailable/icp_adf_get_numDevices])]
+                [AC_MSG_ERROR([icp_sal_userIsQatAvailable/icp_adf_get_numDevices not found])]
             )
         ]
     )
 
     #check for usdm lib
-    AC_CHECK_LIB(usdm_drv_s, qaeMemAllocNUMA,,
-        [
-            AC_MSG_RESULT([no]);
-            AC_MSG_ERROR([not found qaeMemAllocNUMA in -lusdm_drv_s])
-        ]
-    )
+    AC_CHECK_LIB(usdm_drv_s, qaeMemAllocNUMA, ,
+        [AC_MSG_ERROR([qaeMemAllocNUMA not found])])
 ],
 [
     #check for qat lib.
@@ -180,39 +169,32 @@ AS_IF([test ! -z "${ICP_ROOT}"],
         [
             AC_DEFINE([HAVE_QAT_HEADERS], [], [QAT header files in include/qat subdirectory])
         ],
-        [AC_MSG_ERROR([not found qat header files])],
-        [[#ifdef HAVE_QAT_CPA_H
+        [AC_MSG_ERROR([qat header files not found])],
+        [#ifdef HAVE_QAT_CPA_H
         # include <qat/cpa.h>
         #endif
-        ]]
-    )
-
-    AC_CHECK_LIB(qat, cpaDcCompressData2,,
-        [
-            AC_MSG_ERROR([not found cpaDcCompressData2 in -lqat])
         ]
     )
+
+    AC_CHECK_LIB(qat, cpaDcCompressData2, ,
+        [ AC_MSG_ERROR([cpaDcCompressData2 not found])])
 
     #check for icp_adf_get_numDevices/icp_sal_userIsQatAvailable
     AC_CHECK_LIB(qat, icp_adf_get_numDevices,
         [ADF_CFLAGS="-DADF_PCI_API"
-        AC_SUBST(ADF_CFLAGS)],
+         AC_SUBST(ADF_CFLAGS)],
         [
             AC_CHECK_LIB(qat, icp_sal_userIsQatAvailable,
                 [SAL_CFLAGS="-DSAL_DEV_API"
-                AC_SUBST(SAL_CFLAGS)],
-                [AC_MSG_ERROR([Not found function icp_sal_userIsQatAvailable/icp_adf_get_numDevices])]
+                 AC_SUBST(SAL_CFLAGS)],
+                [AC_MSG_ERROR([icp_sal_userIsQatAvailable/icp_adf_get_numDevices not found])]
             )
         ]
     )
 
     #check for usdm lib
     AC_CHECK_LIB(usdm, qaeMemAllocNUMA,,
-        [
-            AC_MSG_RESULT([no]);
-            AC_MSG_ERROR([not found qaeMemAllocNUMA in -lusdm])
-        ]
-    )
+        [AC_MSG_ERROR([qaeMemAllocNUMA not found])])
 ])
 
 #check for compile flags
