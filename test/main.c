@@ -543,7 +543,7 @@ int qzSetupLZ4S(QzSession_T *sess, TestArg_T *arg)
 
 int qzInitSetupsession(QzSession_T *sess, TestArg_T *arg)
 {
-    int rc = QZ_FAIL;
+    int rc = QZ_OK;
 
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(sess, arg->sw_backup);
@@ -568,12 +568,10 @@ int qzInitSetupsession(QzSession_T *sess, TestArg_T *arg)
         default:
             QZ_ERROR("Unsupported data format\n");
             return QZ_FAIL;
-            break;
         }
         if (QZ_SETUP_SESSION_FAIL(rc)) {
             return rc;
         }
-
     }
 
     return rc;
