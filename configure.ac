@@ -118,11 +118,8 @@ AC_CHECK_LIB([lz4], [LZ4F_compressBegin], ,AC_MSG_ERROR([not found LZ4F_compress
 #AC_CHECK_LIB([xxhash], [XXH32_update], ,AC_MSG_ERROR([not found XXH32_update in -lxxhash]))
 
 #check for qat header file.
-QAT_HEADER=
 ICP_INCLUDE_CFLAGS=
 ICP_LDDFLAGS=
-QATLIB_NAME=""
-QATLIB_FLAGS=""
 
 AS_IF([test ! -z "${ICP_ROOT}"],
 [
@@ -143,29 +140,23 @@ AS_IF([test ! -z "${ICP_ROOT}"],
                                 -I${ICP_ROOT}/quickassist/utilities/libusdm_drv/ \
                                 -I${ICP_ROOT}/quickassist/lookaside/access_layer/include/ "
             ICP_LDFLAGS=" -Wl,-rpath,${ICP_ROOT}/build/ -L${ICP_ROOT}/build/"
-            QAT_HEADER=1
         ]
     )
     AC_SUBST(ICP_INCLUDE_CFLAGS)
     AC_SUBST(ICP_LDFLAGS)
 
-    AC_CHECK_LIB(qat_s, cpaDcCompressData2,
-        [
-            QATLIB_NAME="qat_s"
-            QATLIB_FLAGS="-lqat_s"
-        ],
+    AC_CHECK_LIB(qat_s, cpaDcCompressData2,,
         [
             AC_MSG_ERROR([not found cpaDcCompressData2 in -lqat_s])
         ]
     )
-    AC_SUBST(QATLIB_FLAGS)
 
     #check for icp_adf_get_numDevices/icp_sal_userIsQatAvailable
-    AC_CHECK_LIB(${QATLIB_NAME}, icp_adf_get_numDevices,
+    AC_CHECK_LIB(qat_s, icp_adf_get_numDevices,
         [ADF_CFLAGS="-DADF_PCI_API"
         AC_SUBST(ADF_CFLAGS)],
         [
-            AC_CHECK_LIB(${QATLIB_NAME},icp_sal_userIsQatAvailable,
+            AC_CHECK_LIB(qat_s, icp_sal_userIsQatAvailable,
                 [SAL_CFLAGS="-DSAL_DEV_API"
                 AC_SUBST(SAL_CFLAGS)],
                 [AC_MSG_ERROR([Not found function icp_sal_userIsQatAvailable/icp_adf_get_numDevices])]
@@ -174,15 +165,12 @@ AS_IF([test ! -z "${ICP_ROOT}"],
     )
 
     #check for usdm lib
-    USDMLIB_FLAGS=""
-    AC_CHECK_LIB(usdm_drv_s, qaeMemAllocNUMA,
-        [USDMLIB_FLAGS="-lusdm_drv_s"],
+    AC_CHECK_LIB(usdm_drv_s, qaeMemAllocNUMA,,
         [
             AC_MSG_RESULT([no]);
-            AC_MSG_ERROR([not found qaeMemAllocNUMA in -lusdm/usdm_drv_s])
+            AC_MSG_ERROR([not found qaeMemAllocNUMA in -lusdm_drv_s])
         ]
     )
-    AC_SUBST(USDMLIB_FLAGS)
 ],
 [
     #check for qat lib.
@@ -190,7 +178,6 @@ AS_IF([test ! -z "${ICP_ROOT}"],
     AC_CHECK_HEADERS(
         [qat/cpa.h qat/cpa_dc.h qat/qae_mem.h qat/icp_sal_poll.h qat/icp_sal_user.h],
         [
-            QAT_HEADER=1
             AC_DEFINE([HAVE_QAT_HEADERS], [], [QAT header files in include/qat subdirectory])
         ],
         [AC_MSG_ERROR([not found qat header files])],
@@ -200,23 +187,18 @@ AS_IF([test ! -z "${ICP_ROOT}"],
         ]]
     )
 
-    AC_CHECK_LIB(qat, cpaDcCompressData2,
-        [
-            QATLIB_NAME="qat"
-            QATLIB_FLAGS="-lqat"
-        ],
+    AC_CHECK_LIB(qat, cpaDcCompressData2,,
         [
             AC_MSG_ERROR([not found cpaDcCompressData2 in -lqat])
         ]
     )
-    AC_SUBST(QATLIB_FLAGS)
 
     #check for icp_adf_get_numDevices/icp_sal_userIsQatAvailable
-    AC_CHECK_LIB(${QATLIB_NAME}, icp_adf_get_numDevices,
+    AC_CHECK_LIB(qat, icp_adf_get_numDevices,
         [ADF_CFLAGS="-DADF_PCI_API"
         AC_SUBST(ADF_CFLAGS)],
         [
-            AC_CHECK_LIB(${QATLIB_NAME},icp_sal_userIsQatAvailable,
+            AC_CHECK_LIB(qat, icp_sal_userIsQatAvailable,
                 [SAL_CFLAGS="-DSAL_DEV_API"
                 AC_SUBST(SAL_CFLAGS)],
                 [AC_MSG_ERROR([Not found function icp_sal_userIsQatAvailable/icp_adf_get_numDevices])]
@@ -225,15 +207,12 @@ AS_IF([test ! -z "${ICP_ROOT}"],
     )
 
     #check for usdm lib
-    USDMLIB_FLAGS=""
-    AC_CHECK_LIB(usdm, qaeMemAllocNUMA,
-        [USDMLIB_FLAGS="-lusdm"],
+    AC_CHECK_LIB(usdm, qaeMemAllocNUMA,,
         [
             AC_MSG_RESULT([no]);
-            AC_MSG_ERROR([not found qaeMemAllocNUMA in -lusdm/usdm_drv_s])
+            AC_MSG_ERROR([not found qaeMemAllocNUMA in -lusdm])
         ]
     )
-    AC_SUBST(USDMLIB_FLAGS)
 ])
 
 #check for compile flags
