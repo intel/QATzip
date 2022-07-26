@@ -3828,7 +3828,7 @@ int main(int argc, char *argv[])
     QzBlock_T  *qzBlocks = NULL;
     errno = 0;
 
-    QzSessionParamsDeflate_T default_params = {0};
+    QzSessionParamsDeflate_T default_params = {{0}};
     rc = qzGetDefaultsDeflate(&default_params);
     if (rc != QZ_OK) {
         QZ_ERROR("Get default params error\n");

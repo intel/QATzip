@@ -1068,7 +1068,7 @@ int qzSetupSessionDeflate(QzSession_T *sess,  QzSessionParamsDeflate_T *params)
 {
     int rc = QZ_OK;
     QzSess_T *qz_sess;
-    QzSessionParamsDeflate_T temp = {0};
+    QzSessionParamsDeflate_T temp = {{0}};
 
     if (unlikely(NULL == sess)) {
         return QZ_PARAMS;
@@ -1110,7 +1110,7 @@ int qzSetupSessionLZ4(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
 {
     int rc = QZ_OK;
     QzSess_T *qz_sess;
-    QzSessionParamsLZ4_T temp = {0};
+    QzSessionParamsLZ4_T temp = {{0}};
 
     if (unlikely(NULL == sess)) {
         return QZ_PARAMS;
@@ -1151,7 +1151,7 @@ int qzSetupSessionLZ4S(QzSession_T *sess,  QzSessionParamsLZ4S_T *params)
 {
     int rc = QZ_OK;
     QzSess_T *qz_sess;
-    QzSessionParamsLZ4S_T temp = {0};
+    QzSessionParamsLZ4S_T temp = {{0}};
 
     if (unlikely(NULL == sess)) {
         return QZ_PARAMS;
