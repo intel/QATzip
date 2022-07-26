@@ -112,6 +112,16 @@ AC_CHECK_LIB([lz4], [LZ4F_compressBegin], , AC_MSG_ERROR([LZ4F_compressBegin not
 #AC_CHECK_HEADER([xxhash.h],,[AC_MSG_ERROR([not found xxhash.h])])
 #AC_CHECK_LIB([xxhash], [XXH32_update], ,AC_MSG_ERROR([not found XXH32_update in -lxxhash]))
 
+#wiht ICP_ROOT
+AC_ARG_WITH([ICP_ROOT],
+    AS_HELP_STRING([--with-ICP_ROOT=PATH],[Used to link Cpa library]),
+    AS_IF(
+        [test "$withval" = "yes"],
+        AC_MSG_ERROR([--with-ICP_ROOT=PATH requires a PATH]),
+        [ICP_ROOT="$withval"]
+    )
+)
+
 #check for qat header file.
 ICP_INCLUDE_CFLAGS=
 AS_IF([test ! -z "${ICP_ROOT}"],
@@ -271,16 +281,6 @@ AC_ARG_ENABLE(lz4s_postprocessing,
     ]
 )
 AM_CONDITIONAL([QATZIP_LZ4S_POSTPROCESS_AC], [test x$lz4s_postprocessing = xtrue])
-
-#wiht ICP_ROOT
-AC_ARG_WITH([ICP_ROOT],
-    AS_HELP_STRING([--with-ICP_ROOT=PATH],[Used to link Cpa library]),
-    AS_IF(
-        [test "$withval" = "yes"],
-        AC_MSG_ERROR([--with-ICP_ROOT=PATH requires a PATH]),
-        [ICP_ROOT="$withval"]
-    )
-)
 
 AC_CONFIG_FILES([Makefile
                  qatzip.spec
