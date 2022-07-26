@@ -1212,7 +1212,7 @@ void *qzCompressAndDecompress(void *arg)
              tid, count, service, verify_data);
 
     rc = qzInitSetupsession(&sess, (TestArg_T *)arg);
-    if (rc != QZ_OK) {
+    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
 #ifndef ENABLE_THREAD_BARRIER
         g_ready_thread_count++;
         pthread_cond_signal(&g_ready_cond);
