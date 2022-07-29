@@ -36,7 +36,7 @@
 #include "qzstd.h"
 
 QzSession_T qzstd_g_sess;
-QzSessionParamsLZ4S_T g_sess_params = {0};
+QzSessionParamsLZ4S_T g_sess_params = {{0}};
 QzSessionParamsLZ4S_T sess_params_zstd_default = {
     .common_params.direction         = QZ_DIRECTION_DEFAULT,
     .common_params.comp_lvl          = QZ_COMP_LEVEL_DEFAULT,
