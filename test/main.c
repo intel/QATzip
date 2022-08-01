@@ -1602,8 +1602,8 @@ void *qzCompressStreamAndDecompress(void *arg)
     int rc = -1;
     QzSession_T comp_sess = {0}, decomp_sess = {0};
     QzStream_T comp_strm = {0};
-    QzSessionParams_T comp_params = {0};
-    uint8_t *orig_src, *comp_src, *decomp_src;
+    QzSessionParams_T comp_params = {0}, decomp_params = {0};
+    uint8_t *orig_src = NULL, *comp_src = NULL, *decomp_src = NULL;
     size_t orig_sz, comp_sz, decomp_sz;
     unsigned int slice_sz = 0, done = 0;
     unsigned int consumed = 0, produced = 0;
@@ -1615,40 +1615,63 @@ void *qzCompressStreamAndDecompress(void *arg)
 
     orig_sz = comp_sz = decomp_sz = test_arg->src_sz;
     orig_src = malloc(orig_sz);
+    if (NULL == orig_src) {
+        QZ_ERROR("Err: fail to malloc memory\n");
+        goto exit;
+    }
     comp_src = malloc(comp_sz);
+    if (NULL == comp_src) {
+        QZ_ERROR("Err: fail to malloc memory\n");
+        goto exit;
+    }
     decomp_src = calloc(orig_sz, 1);
+    if (NULL == decomp_src) {
+        QZ_ERROR("Err: fail to malloc memory\n");
+        goto exit;
+    }
 
     if (qzGetDefaults(&comp_params) != QZ_OK) {
         QZ_ERROR("Err: get params fail with incorrect compress params.\n");
         goto exit;
     }
+    if (qzGetDefaults(&decomp_params) != QZ_OK) {
+        QZ_ERROR("Err: get params fail with incorrect decompress params.\n");
+        goto exit;
+    }
     slice_sz = comp_params.hw_buff_sz / 4;
 
-    if (NULL == orig_src ||
-        NULL == comp_src ||
-        NULL == decomp_src) {
-        free(orig_src);
-        free(comp_src);
-        free(decomp_src);
-        QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
-        return NULL;
+    rc = qzInit(&comp_sess, 0);
+    if (QZ_INIT_HW_FAIL(rc)) {
+        QZ_ERROR("Err: fail to init HW with ret: %d.\n", rc);
+        goto exit;
     }
 
     switch (test_arg->test_format) {
     case TEST_DEFLATE:
         comp_params.data_fmt = QZ_DEFLATE_RAW;
+        decomp_params.data_fmt = QZ_DEFLATE_RAW;
         break;
     case TEST_GZIPEXT:
         comp_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        decomp_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
         break;
     default:
         QZ_ERROR("Unsupport data format in Stream API\n");
-        free(orig_src);
-        free(comp_src);
-        free(decomp_src);
-        return NULL;
+        goto exit;
     }
     QZ_DEBUG("*** Data Format: %d ***\n", comp_params.data_fmt);
+
+    rc = qzSetupSession(&comp_sess, &comp_params);
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
+        QZ_ERROR("Err: fail to setup session with ret: %d\n", rc);
+        goto exit;
+    }
+
+    rc = qzSetupSession(&decomp_sess, &decomp_params);
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
+        QZ_ERROR("Err: fail to setup session with ret: %d\n", rc);
+        goto exit;
+    }
 
     genRandomData(orig_src, orig_sz);
 
@@ -1715,7 +1738,7 @@ void *qzCompressStreamAndDecompress(void *arg)
         last = (comp_sz == (consumed + comp_strm.in_sz)) ? 1 : 0;
         org_in_sz = comp_strm.in_sz;
 
-        rc = qzDecompressStream(&comp_sess, &comp_strm, last);
+        rc = qzDecompressStream(&decomp_sess, &comp_strm, last);
         if (rc != QZ_OK) {
             QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
             dumpOutputData(comp_sz, comp_src, "decomp_stream__input");
@@ -1769,7 +1792,7 @@ void *qzCompressStreamAndDecompress(void *arg)
         last = 1;
         offset += comp_strm.in_sz;
 
-        rc = qzDecompressStream(&comp_sess, &comp_strm, last);
+        rc = qzDecompressStream(&decomp_sess, &comp_strm, last);
         if (rc != QZ_OK) {
             QZ_ERROR("ERROR: Memcmp with return value: %d\n", rc);
             goto exit;
@@ -1814,7 +1837,7 @@ test_2_end:
         last = 1;
         org_in_sz = comp_strm.in_sz;
 
-        rc = qzDecompressStream(&comp_sess, &comp_strm, last);
+        rc = qzDecompressStream(&decomp_sess, &comp_strm, last);
         if (rc != QZ_OK) {
             QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
             goto exit;
@@ -1863,7 +1886,7 @@ test_3_end:
         last = (comp_sz == (consumed + comp_strm.in_sz)) ? 1 : 0;
         org_in_sz = comp_strm.in_sz;
 
-        rc = qzDecompressStream(&comp_sess, &comp_strm, last);
+        rc = qzDecompressStream(&decomp_sess, &comp_strm, last);
         if (rc != QZ_OK) {
             QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
             goto exit;
@@ -1899,9 +1922,18 @@ test_3_end:
     QZ_PRINT("Compress Stream and Decompress function test: PASS\n");
 
 exit:
-    qzFree(orig_src);
-    qzFree(comp_src);
-    qzFree(decomp_src);
+    if (NULL != orig_src) {
+        free(orig_src);
+        orig_src = NULL;
+    }
+    if (NULL != comp_src) {
+        free(comp_src);
+        comp_src = NULL;
+    }
+    if (NULL != decomp_src) {
+        free(decomp_src);
+        decomp_src = NULL;
+    }
     qzEndStream(&comp_sess, &comp_strm);
     (void)qzTeardownSession(&comp_sess);
     (void)qzTeardownSession(&decomp_sess);
