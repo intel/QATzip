@@ -358,8 +358,6 @@ inline void outputFooterGen(QzSess_T *qz_sess,
                             CpaDcRqResults *res,
                             DataFormatInternal_T data_fmt)
 {
-    QZ_DEBUG("Generate footer\n");
-
     unsigned char *ptr = qz_sess->next_dest;
     switch (data_fmt) {
     case DEFLATE_RAW:
