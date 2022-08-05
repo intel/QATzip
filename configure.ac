@@ -187,7 +187,8 @@ AS_IF([test ! -z "${ICP_ROOT}"],
     )
 
     AC_CHECK_LIB(qat, cpaDcCompressData2, ,
-        [ AC_MSG_ERROR([cpaDcCompressData2 not found])])
+        [ AC_MSG_ERROR([cpaDcCompressData2 not found])],
+	[-lusdm -lcrypto])
 
     #check for icp_adf_get_numDevices/icp_sal_userIsQatAvailable
     AC_CHECK_LIB(qat, icp_adf_get_numDevices,
@@ -197,7 +198,8 @@ AS_IF([test ! -z "${ICP_ROOT}"],
             AC_CHECK_LIB(qat, icp_sal_userIsQatAvailable,
                 [SAL_CFLAGS="-DSAL_DEV_API"
                  AC_SUBST(SAL_CFLAGS)],
-                [AC_MSG_ERROR([icp_sal_userIsQatAvailable/icp_adf_get_numDevices not found])]
+                [AC_MSG_ERROR([icp_sal_userIsQatAvailable/icp_adf_get_numDevices not found])],
+		[-lusdm -lcrypto]
             )
         ]
     )
