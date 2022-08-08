@@ -46,7 +46,7 @@ This package contains headers and libraries required to build
 applications that use the QATzip APIs.
 
 %prep
-%autosetup -p0 -n %{name}-%{version}
+%autosetup -p0 -n %{githubname}-%{version}
 
 %build
 %set_build_flags
