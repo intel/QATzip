@@ -284,11 +284,9 @@ int qzZstdGetDefaults(QzSessionParamsLZ4S_T *defaults)
     return QZSTD_OK;
 }
 
-int compressFile(char *input_file_name, char *output_file_name)
+int compressFile(int in_file, int out_file)
 {
-    FILE *src_file = NULL;
-    FILE *dst_file = NULL;
-    struct stat src_file_state;
+
     long input_file_size = 0;
     long output_file_size = 0;
     unsigned int src_buffer_size = 0;
@@ -299,7 +297,6 @@ int compressFile(char *input_file_name, char *output_file_name)
     unsigned int block_size = ZSRC_BUFF_LEN;
     long file_remaining = 0;
     unsigned int bytes_read = 0;
-    int need_free = 0;
     int rc = QZSTD_OK;
     int is_compress = 1;
     uint64_t callback_error_code = 0;
@@ -333,17 +330,8 @@ int compressFile(char *input_file_name, char *output_file_name)
     }
 
     //get input file size
-    if (!input_file_name) {
-        QZ_ERROR("%s : The input file name is empty\n", QZSTD_ERROR_TYPE);
-        return QZSTD_ERROR;
-    } else {
-        if (stat(input_file_name, &src_file_state)) {
-            QZ_ERROR("%s : fail to get stat of file %s\n", QZSTD_ERROR_TYPE,
-                     input_file_name);
-            return QZSTD_ERROR;
-        }
-        input_file_size = src_file_state.st_size;
-    }
+    input_file_size = lseek(in_file, 0, SEEK_END);
+    lseek(in_file, 0, SEEK_SET);
 
     src_buffer_size = (input_file_size > block_size) ?
                       block_size : input_file_size;
@@ -358,21 +346,6 @@ int compressFile(char *input_file_name, char *output_file_name)
     assert(src_buffer != NULL);
     dst_buffer = malloc(max_dst_buffer_size);
     assert(dst_buffer != NULL);
-    src_file = fopen(input_file_name, "r");
-    assert(src_file != NULL);
-
-    if (!output_file_name) {
-        size_t const in_len = strlen(input_file_name);
-        size_t const out_len = in_len + 5;
-        output_file_name = malloc(out_len);
-        assert(output_file_name != NULL);
-        need_free = 1;
-        memset(output_file_name, 0, out_len);
-        strcat(output_file_name, input_file_name);
-        strcat(output_file_name, ".zst");
-    }
-    dst_file = fopen(output_file_name, "w");
-    assert(dst_file != NULL);
 
     file_remaining = input_file_size;
     struct timeval time_s;
@@ -380,8 +353,8 @@ int compressFile(char *input_file_name, char *output_file_name)
     double time = 0.0f;
 
     do {
-        bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
-        QZ_PRINT("Reading input file %s (%u Bytes)\n", input_file_name, bytes_read);
+        bytes_read = read(in_file, src_buffer, src_buffer_size);
+        QZ_PRINT("Reading input file (%u Bytes)\n", bytes_read);
         puts("compressing...");
 
         dst_buffer_size = max_dst_buffer_size;
@@ -402,7 +375,7 @@ int compressFile(char *input_file_name, char *output_file_name)
                                     (unsigned int *)(&bytes_read),
                                     dst_buffer, &dst_buffer_size, 1, &callback_error_code);
             if (QZ_BUF_ERROR == ret && 0 != bytes_read) {
-                if (-1 == fseek(src_file, bytes_read - src_buffer_size, SEEK_CUR)) {
+                if (-1 == lseek(in_file, bytes_read - src_buffer_size, SEEK_CUR)) {
                     QZ_ERROR("%s : failed to re-seek input file\n", QZSTD_ERROR_TYPE);
                     rc = QZSTD_ERROR;
                     goto done;
@@ -421,7 +394,7 @@ int compressFile(char *input_file_name, char *output_file_name)
         gettimeofday(&time_e, NULL);
         time += get_time_diff(time_e, time_s);
 
-        size_t write_size = fwrite(dst_buffer, 1, dst_buffer_size, dst_file);
+        size_t write_size = write(out_file, dst_buffer, dst_buffer_size);
         if (write_size != dst_buffer_size) {
             QZ_ERROR("%s : failed to write output data into file\n", QZSTD_ERROR_TYPE);
             rc = QZSTD_ERROR;
@@ -436,38 +409,23 @@ int compressFile(char *input_file_name, char *output_file_name)
 
     QzstdDisplayStats(time, input_file_size, output_file_size, is_compress);
 
-    //keep file permission
-    ret = chmod(output_file_name, src_file_state.st_mode);
-    if (ret != 0) {
-        QZ_ERROR("%s : failed to keep file permission\n", QZSTD_ERROR_TYPE);
-        rc = QZSTD_ERROR;
-        goto done;
-    }
-
 done:
     //release resource
-    if (need_free) {
-        free(output_file_name);
-    }
+
     if (zc != NULL) {
         ZSTD_freeCCtx(zc);
     }
 
     free(src_buffer);
     free(dst_buffer);
-    fclose(src_file);
-    fclose(dst_file);
     qzTeardownSession(&qzstd_g_sess);
     qzClose(&qzstd_g_sess);
 
     return rc;
 }
 
-int decompressFile(const char *const input_file_name, char *output_file_name)
+int decompressFile(int in_file, int out_file)
 {
-    FILE *src_file = NULL;
-    FILE *dst_file = NULL;
-    struct stat src_file_state;
     long input_file_size = 0;
     long output_file_size = 0;
     size_t src_buffer_size = ZSTD_DStreamInSize();
@@ -475,7 +433,6 @@ int decompressFile(const char *const input_file_name, char *output_file_name)
     unsigned char *src_buffer = NULL;
     unsigned char *dst_buffer = NULL;
 
-    int need_free = 0;
     int rc = QZSTD_OK;
     int is_compress = 0;
 
@@ -484,51 +441,14 @@ int decompressFile(const char *const input_file_name, char *output_file_name)
     double time = 0.0f;
 
     //get input file size
-    if (!input_file_name) {
-        QZ_ERROR("%s : The input file name is empty\n", QZSTD_ERROR_TYPE);
-        return QZSTD_ERROR;
-    } else {
-        //verify filename suffix
-        int str_len = strlen(input_file_name);
-        if (str_len <= 4) {
-            QZ_ERROR("%s : Incorrect input file name %s\n", QZSTD_ERROR_TYPE,
-                     input_file_name);
-            return QZSTD_ERROR;
-        }
-        char *zst = ".zst";
-        if (strncmp(input_file_name + str_len - 4, zst, 4)) {
-            QZ_ERROR("%s : unsupported file format\n", QZSTD_ERROR_TYPE);
-            return QZSTD_ERROR;
-        }
 
-        if (stat(input_file_name, &src_file_state)) {
-            QZ_ERROR("%s : fail to get stat of file %s\n", QZSTD_ERROR_TYPE,
-                     input_file_name);
-            return QZSTD_ERROR;
-        }
-        input_file_size = src_file_state.st_size;
-    }
+    input_file_size = lseek(in_file, 0, SEEK_END);
+    lseek(in_file, 0, SEEK_SET);
 
     src_buffer = malloc(src_buffer_size);
     assert(src_buffer != NULL);
     dst_buffer = malloc(dst_buffer_size);
     assert(dst_buffer != NULL);
-
-    src_file = fopen(input_file_name, "r");
-    assert(src_file != NULL);
-
-    if (!output_file_name) {
-        size_t const in_len = strlen(input_file_name);
-        size_t const out_len = in_len - strlen(".zst");
-        output_file_name = malloc(out_len + 1);
-        assert(output_file_name != NULL);
-        need_free = 1;
-        memcpy(output_file_name, input_file_name, out_len);
-        output_file_name[out_len] = '\0';
-    }
-
-    dst_file = fopen(output_file_name, "w");
-    assert(dst_file != NULL);
 
     ZSTD_DCtx *zstd_dctx = ZSTD_createDCtx();
     assert(zstd_dctx != NULL);
@@ -540,8 +460,8 @@ int decompressFile(const char *const input_file_name, char *output_file_name)
     int ret = 0;
 
     do {
-        bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
-        QZ_PRINT("Reading input file %s (%u Bytes)\n", input_file_name, bytes_read);
+        bytes_read = read(in_file, src_buffer, src_buffer_size);
+        QZ_PRINT("Reading input file (%u Bytes)\n", bytes_read);
         puts("Decompressing...");
 
         ZSTD_inBuffer input = { src_buffer, bytes_read, 0 };
@@ -559,7 +479,7 @@ int decompressFile(const char *const input_file_name, char *output_file_name)
             gettimeofday(&time_e, NULL);
             time += get_time_diff(time_e, time_s);
 
-            bytes_write = fwrite(dst_buffer, 1, output.pos, dst_file);
+            bytes_write = write(out_file, dst_buffer, output.pos);
             output_file_size += bytes_write;
         }
         file_remaining -= bytes_read;
@@ -576,23 +496,10 @@ int decompressFile(const char *const input_file_name, char *output_file_name)
 
     QzstdDisplayStats(time, input_file_size, output_file_size, is_compress);
 
-    //keep file permission
-    ret = chmod(output_file_name, src_file_state.st_mode);
-    if (ret != 0) {
-        QZ_ERROR("%s : failed to keep file permission\n", ZSTD_ERROR_TYPE);
-        rc = QZSTD_ERROR;
-        goto done;
-    }
-
 done:
     ZSTD_freeDCtx(zstd_dctx);
-    fclose(dst_file);
-    fclose(src_file);
     free(src_buffer);
     free(dst_buffer);
-    if (need_free) {
-        free(output_file_name);
-    }
 
     return rc;
 }
