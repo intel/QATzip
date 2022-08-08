@@ -117,9 +117,9 @@ void decLz4Block(unsigned char *lz4s, int lz4sSize, ZSTD_Sequence *zstdSeqs,
 
 int qzZstdGetDefaults(QzSessionParamsLZ4S_T *defaults);
 
-int compressFile(char *input_file_name, char *output_file_name);
+int compressFile(int in_file, int out_file);
 
-int decompressFile(const char *const input_file_name, char *output_file_name);
+int decompressFile(int in_file, int out_file);
 
 int zstdCallBack(void *external, const unsigned char *src,
                  unsigned int *src_len, unsigned char *dest,

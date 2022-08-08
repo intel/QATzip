@@ -36,6 +36,14 @@
 /*
 sample zstd-qat application
 */
+
+#include <limits.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+
 #include "qzstd.h"
 
 extern QzSessionParamsLZ4S_T g_sess_params;
@@ -43,7 +51,15 @@ extern QzSessionParamsLZ4S_T g_sess_params;
 int main(int argc, char **argv)
 {
     int decompress = 0;
-    char *output_name = NULL;
+    struct stat in_file_state;
+    char out_path [PATH_MAX] = {0};
+    char in_path[PATH_MAX] = {0};
+    char *out_filename = NULL;
+    char *in_filename = NULL;
+    int in_file = -1;
+    int out_file = -1;
+    char *tmp = NULL;
+    char *suffix = NULL;
 
     if (qzZstdGetDefaults(&g_sess_params) != QZ_OK) {
         return QZSTD_ERROR;
@@ -74,7 +90,7 @@ int main(int argc, char **argv)
                                                    0));
             break;
         case 'o':
-            output_name = optarg;
+            out_filename = optarg;
             break;
         case 'r':
             g_sess_params.common_params.req_cnt_thrshold = GET_LOWER_32BITS(strtoul(optarg,
@@ -108,17 +124,90 @@ int main(int argc, char **argv)
         return QZSTD_ERROR;
     }
 
+    /* argv[optind] is the input file name, need to check the input filename */
+    in_filename = argv[optind];
+    in_filename = realpath(in_filename, in_path);
+    if (!in_filename) {
+        QZ_ERROR("Please check input file name %s\n", in_filename);
+        return QZSTD_ERROR;
+    }
+
+    /*
+     * For compression, if the output file name is not be specified
+     * we need to suffix the input filename with .zst as the output filename
+     */
+    if (!decompress && !out_filename) {
+        tmp = strrchr(in_filename, '/');
+        assert(tmp);
+        strncpy(out_path, tmp + 1, PATH_MAX - 1);
+        strcat(out_path, ".zst");
+        out_filename = &out_path[0];
+    }
+
+    /* check the input filename suffix for decompression,
+     * if output file name is not specified, we need to unsuffix the
+     * input filename as the output filename
+     */
+    if (decompress) {
+        suffix = strrchr(in_filename, '.');
+        if (suffix == NULL) {
+            QZ_ERROR("%s : unsupported file format\n", QZSTD_ERROR_TYPE);
+            return QZSTD_ERROR;
+        }
+        if (strcmp(suffix, ".zst")) {
+            QZ_ERROR("%s : unsupported file format\n", QZSTD_ERROR_TYPE);
+            return QZSTD_ERROR;
+        }
+
+        if (!out_filename) {
+            tmp = strrchr(in_filename, '/');
+            assert(tmp);
+            strncpy(out_path, tmp + 1, PATH_MAX - 1);
+            suffix = strrchr(out_path, '.');
+            assert(suffix);
+            suffix[0] = '\0';
+            out_filename = &out_path[0];
+        }
+    }
+
+    in_file = open(in_filename, O_RDONLY);
+    if (in_file < 0) {
+        perror("Cannot open input file");
+        return QZSTD_ERROR;
+    }
+
+    if (fstat(in_file, &in_file_state)) {
+        perror("Cannot get file stat");
+        close(in_file);
+        return QZSTD_ERROR;
+    }
+
+    out_file = open(out_filename, O_CREAT | O_WRONLY,
+                    in_file_state.st_mode);
+    if (out_file == -1) {
+        perror("Cannot open output file");
+        close(in_file);
+        return QZSTD_ERROR;
+    }
+
+
     if (!decompress) {
-        int rc = compressFile(argv[optind], output_name);
+        int rc = compressFile(in_file, out_file);
         if (rc != QZSTD_OK) {
+            close(in_file);
+            close(out_file);
             return QZSTD_ERROR;
         }
     } else {
-        int rc = decompressFile(argv[optind], output_name);
+        int rc = decompressFile(in_file, out_file);
         if (rc != QZSTD_OK) {
+            close(in_file);
+            close(out_file);
             return QZSTD_ERROR;
         }
     }
 
+    close(in_file);
+    close(out_file);
     return QZSTD_OK;
 }
