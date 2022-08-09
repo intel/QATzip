@@ -34,6 +34,7 @@
  ***************************************************************************/
 
 #include <assert.h>
+#define XXH_NAMESPACE QATZIP_
 #include "xxhash.h"
 
 
