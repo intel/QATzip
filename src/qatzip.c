@@ -47,6 +47,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#define XXH_NAMESPACE QATZIP_
 #include "xxhash.h"
 
 #ifdef HAVE_QAT_HEADERS

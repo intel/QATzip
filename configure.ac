@@ -86,20 +86,19 @@ AC_CHECK_LIB([pthread], [pthread_create], ,
     [AC_MSG_ERROR([not found pthread_create in -lpthread])])
 
 #check for zlib.
-ZLIB_V_MIN="1.2.7"
-AC_CHECK_HEADER([zlib.h],
-    [
-        ZLIB_PATH=`whereis zlib.h | awk '{print $2}'`
-        ZLIB_V=`grep ^'#define ZLIB_VERSION' ${ZLIB_PATH} |\
-                awk '{print $3}'| sed 's/"//g'`
-        AC_MSG_CHECKING([zlib version ${ZLIB_V}])
-        AS_VERSION_COMPARE(${ZLIB_V}, ${ZLIB_V_MIN},
-            [AC_MSG_ERROR([zlib version ${ZLIB_V} < ${ZLIB_V_MIN}])],
-            [AC_MSG_RESULT([yes])],
-            [AC_MSG_RESULT([yes])])
-    ],
-    [AC_MSG_ERROR([zlib.h not found])]
-)
+AC_CHECK_HEADER([zlib.h], , [AC_MSG_ERROR([zlib.h not found])])
+
+AC_MSG_CHECKING(zlib version)
+AC_TRY_COMPILE(
+[#include <zlib.h>
+],
+[#if ZLIB_VERNUM < 0x1270
+#error zlib version is too old ...
+#endif],
+[AC_MSG_RESULT([ok])],
+[AC_MSG_ERROR([zlib version must be 1.2.7 or higher.])
+])
+
 
 AC_CHECK_LIB([z], [deflate], , AC_MSG_ERROR([deflate not found]))
 
@@ -111,6 +110,7 @@ AC_CHECK_LIB([lz4], [LZ4F_compressBegin], , AC_MSG_ERROR([LZ4F_compressBegin not
 ##check for xxhash lib
 #AC_CHECK_HEADER([xxhash.h],,[AC_MSG_ERROR([not found xxhash.h])])
 #AC_CHECK_LIB([xxhash], [XXH32_update], ,AC_MSG_ERROR([not found XXH32_update in -lxxhash]))
+AC_DEFINE(XXH_NAMESPACE, QATZIP_, "Prefix xxhash API with QATZIP_")
 
 #wiht ICP_ROOT
 AC_ARG_WITH([ICP_ROOT],
