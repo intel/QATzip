@@ -45,6 +45,7 @@ extern"C" {
 #include <cpa_dev.h>
 #endif
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <zlib.h>
 #include <lz4frame.h>
 
@@ -198,7 +199,7 @@ typedef struct ProccesData_S {
     CpaInstanceHandle *dc_inst_handle;
     QzInstance_T *qz_inst;
     Cpa16U num_instances;
-    char qat_available;
+    atomic_char qat_available;
     CpaDeviceInfo device_info;
 } processData_T;
 

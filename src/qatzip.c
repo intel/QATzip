@@ -566,8 +566,8 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     unsigned int dev_id = 0;
     QzHardware_T *qat_hw = NULL;
     unsigned int instance_found = 0;
-    static unsigned int waiting = 0;
-    static unsigned int wait_cnt = 0;
+    static atomic_int waiting = 0;
+    static atomic_int wait_cnt = 0;
 #ifdef ADF_PCI_API
     Cpa32U pcie_count = 0;
 #endif

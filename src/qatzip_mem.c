@@ -58,7 +58,7 @@
 
 static QzPageTable_T g_qz_page_table = {{{0}}};
 static pthread_mutex_t g_qz_table_lock = PTHREAD_MUTEX_INITIALIZER;
-static volatile int g_table_init = 0;
+static atomic_int g_table_init = 0;
 static __thread unsigned char *g_a;
 extern processData_T g_process;
 
@@ -121,9 +121,14 @@ static void qzMemRegAddr(unsigned char *a, size_t sz)
 {
     unsigned long al, b;
 
+    if (0 != pthread_mutex_lock(&g_qz_table_lock)) {
+        return;
+    }
+
     /*addr already registered*/
     if ((1 == qzMemFindAddr(a)) &&
         (1 == qzMemFindAddr(a + sz - 1))) {
+        pthread_mutex_unlock(&g_qz_table_lock);
         return;
     }
 
@@ -131,10 +136,6 @@ static void qzMemRegAddr(unsigned char *a, size_t sz)
     b = (al & PAGE_MASK);
     sz += (al - b);
     QZ_DEBUG("4 KB page is 0x%lx\n", b);
-
-    if (0 != pthread_mutex_lock(&g_qz_table_lock)) {
-        return;
-    }
 
     QZ_DEBUG("Inserting 0x%lx size %lx to page table\n", b, sz);
     storeMmapRange(&g_qz_page_table, (void *)b, PINNED, sz);
