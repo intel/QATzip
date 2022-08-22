@@ -1248,6 +1248,7 @@ int qzSetupHW(QzSession_T *sess, int i)
         if (qz_sess->sess_status != CPA_STATUS_SUCCESS) {
             rc = QZ_FAIL;
         }
+        g_process.qz_inst[i].session_setup_data = qz_sess->session_setup_data;
     }
 
     if (rc == QZ_OK) {
@@ -1256,6 +1257,68 @@ int qzSetupHW(QzSession_T *sess, int i)
 
 done_sess:
     return rc;
+}
+
+/*
+ * Update cpa session of instance i, it will remove cpa session first,
+ * and reallocate memory and re-initialize cpa session based on
+ * session setup data.
+ */
+int qzUpdateCpaSession(QzSession_T *sess, int i)
+{
+    QzSess_T *qz_sess;
+    CpaStatus ret = CPA_STATUS_SUCCESS;
+
+    assert(sess);
+
+    g_process.qz_inst[i].cpa_sess_setup = 0;
+    qz_sess = (QzSess_T *)sess->internal;
+    assert(qz_sess);
+
+    /* Remove cpa session */
+    ret = cpaDcRemoveSession(g_process.dc_inst_handle[i],
+                             g_process.qz_inst[i].cpaSess);
+    if (ret != CPA_STATUS_SUCCESS) {
+        QZ_ERROR("qzUpdateCpaSession: remove session failed\n");
+        return QZ_FAIL;
+    }
+
+    /* free memory of capSess */
+    qzFree(g_process.qz_inst[i].cpaSess);
+
+    /* As the session setup data has been updated, need to get the size of
+     * session again. */
+    ret = cpaDcGetSessionSize(g_process.dc_inst_handle[i],
+                              &qz_sess->session_setup_data,
+                              &qz_sess->session_size,
+                              &qz_sess->ctx_size);
+    if (ret != CPA_STATUS_SUCCESS) {
+        QZ_ERROR("qzUpdateCpaSession: get session size failed\n");
+        return QZ_FAIL;
+    }
+
+    g_process.qz_inst[i].cpaSess = qzMalloc((size_t)(qz_sess->session_size),
+                                            NODE_0, PINNED_MEM);
+    if (!g_process.qz_inst[i].cpaSess) {
+        QZ_ERROR("qzUpdateCpaSession: allocate session failed\n");
+        return QZ_FAIL;
+    }
+
+    ret = cpaDcInitSession(g_process.dc_inst_handle[i],
+                           g_process.qz_inst[i].cpaSess,
+                           &qz_sess->session_setup_data,
+                           NULL,
+                           dcCallback);
+    if (ret != CPA_STATUS_SUCCESS) {
+        QZ_ERROR("qzUpdateCpaSession: init session failed\n");
+        free(g_process.qz_inst[i].cpaSess);
+        g_process.qz_inst[i].cpaSess = NULL;
+        return QZ_FAIL;
+    }
+    g_process.qz_inst[i].session_setup_data = qz_sess->session_setup_data;
+
+    g_process.qz_inst[i].cpa_sess_setup = 1;
+    return QZ_OK;
 }
 
 /* The internal function to send the comrpession request
@@ -2074,6 +2137,17 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
                 return rc;
             }
         }
+    } else if (memcmp(&g_process.qz_inst[i].session_setup_data,
+                      &qz_sess->session_setup_data, sizeof(CpaDcSessionSetupData))) {
+        /* session_setup_data of qz_sess is not same with instance i,
+           need to update cpa session of instance i. */
+        rc = qzUpdateCpaSession(sess, i);
+        if (QZ_OK != rc) {
+            qzReleaseInstance(i);
+            *src_len = 0;
+            *dest_len = 0;
+            return rc;
+        }
     }
 
 #ifdef QATZIP_DEBUG
@@ -2845,6 +2919,17 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
                 *dest_len = 0;
                 return rc;
             }
+        }
+    } else if (memcmp(&g_process.qz_inst[i].session_setup_data,
+                      &qz_sess->session_setup_data, sizeof(CpaDcSessionSetupData))) {
+        /* session_setup_data of qz_sess is not same with instance i,
+           need to update cpa session of instance i. */
+        rc = qzUpdateCpaSession(sess, i);
+        if (QZ_OK != rc) {
+            qzReleaseInstance(i);
+            *src_len = 0;
+            *dest_len = 0;
+            return rc;
         }
     }
 
