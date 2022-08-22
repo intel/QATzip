@@ -177,6 +177,7 @@ typedef struct QzInstance_S {
     CpaStatus inst_start_status;
     unsigned int num_retries;
     CpaDcSessionHandle cpaSess;
+    CpaDcSessionSetupData session_setup_data;
 } QzInstance_T;
 
 typedef struct QzInstanceList_S {
