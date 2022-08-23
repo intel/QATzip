@@ -661,6 +661,7 @@ void *qzDecompressSwQz(void *arg)
             }
             QZ_DEBUG("thread %ld after Compressed %d bytes into %d\n", tid, src_sz,
                      comp_out_sz);
+            qzTeardownSession(&sess);
         }
 
         //Decompress SW
@@ -690,6 +691,7 @@ void *qzDecompressSwQz(void *arg)
             }
             QZ_DEBUG("thread %ld after SW Decompressed %d bytes into %d\n", tid,
                      comp_out_sz, decomp_sw_out_sz);
+            qzTeardownSession(&sess);
         }
 
         //Decompress QAT
@@ -720,6 +722,7 @@ void *qzDecompressSwQz(void *arg)
             }
             QZ_DEBUG("thread %ld after QZ Decompressed %d bytes into %d\n", tid,
                      comp_out_sz, decomp_qz_out_sz);
+            qzTeardownSession(&sess);
         }
 
         (void)gettimeofday(&te, NULL);
