@@ -100,10 +100,6 @@ extern"C" {
 #define QATZIP_API
 #endif
 
-#ifdef ERR_INJECTION
-#include "cf.h"
-#endif
-
 /**
  *****************************************************************************
  *
@@ -489,8 +485,8 @@ typedef struct QzSessionParams_S {
     /**< When previous try failed, wait for specific number of calls */
     /**< before retrying to open device. Default threshold is 8 */
 #ifdef ERR_INJECTION
-    FallbackError *fbError;
-    FallbackError *fbErrorCurr;
+    void *fbError;
+    void *fbErrorCurr;
     /* Linked list for simulated errors from HW */
 #endif
 } QzSessionParams_T;
@@ -529,8 +525,8 @@ typedef struct QzSessionParamsCommon_S {
     unsigned int is_sensitive_mode;
     /**< 0 means disable sensitive mode, 1 means enable sensitive mode*/
 #ifdef ERR_INJECTION
-    FallbackError *fbError;
-    FallbackError *fbErrorCurr;
+    void *fbError;
+    void *fbErrorCurr;
     /* Linked list for simulated errors from HW */
 #endif
 } QzSessionParamsCommon_T;
