@@ -726,6 +726,30 @@ typedef struct QzSoftwareVersionInfo_S {
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      QATzip CRC64 configuration structure
+ *
+ * @description
+ *      This structure contains data relating to configuration of the sessions
+ *   CRC64 functionality.Session defaults to using ECMA-182 Normal on creation.
+ *
+ *****************************************************************************/
+typedef struct QzCrc64Config_S {
+    uint64_t polynomial;
+    /**< Polynomial used for CRC64 calculation. Default 0x42F0E1EBA9EA3693 */
+    uint64_t initial_value;
+    /**< Defaults to 0x0000000000000000 */
+    uint32_t reflect_in;
+    /**< Reflect bit order before CRC calculation. Default 0 */
+    uint32_t reflect_out;
+    /**< Reflect bit order after CRC calculation.Default 0 */
+    uint64_t xor_out;
+    /**< Defaults to 0x0000000000000000 */
+} QzCrc64Config_T;
+
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      Initialize QAT hardware
  *
  * @description
@@ -979,8 +1003,8 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
  *    gzip blocks, as per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
- *    buffer and put CRC32 checksum for compressed input data in user provided
- *    buffer *crc.
+ *    buffer and put CRC32 or CRC64 checksum for compressed input data in
+ *    the user provided buffer *crc.
  *
  *    The caller must check the updated src_len. This value will be the
  *    number of consumed bytes on exit. The calling API may have to
@@ -1016,8 +1040,8 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
  *                           function returns
  * @param[in]       last     1 for 'No more data to be compressed'
  *                           0 for 'More data to be compressed'
- * @param[in,out]   crc      Pointer to CRC32 checksum buffer
- * @param[in,out]   ext_rc   qzCompressCrcExt only.
+ * @param[in,out]   crc      Pointer to CRC32 or CRC64 checksum buffer
+ * @param[in,out]   ext_rc   qzCompressCrcExt or qzCompressCrc64Ext only.
  *                           If not NULL, ext_rc point to a location where
  *                           extended return codes may be returned. See
  *                           extended return code section for details.
@@ -1038,15 +1062,39 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
  *      None
  *
  *****************************************************************************/
-QATZIP_API int qzCompressCrc(QzSession_T *sess, const unsigned char *src,
-                             unsigned int *src_len, unsigned char *dest,
-                             unsigned int *dest_len, unsigned int last,
+QATZIP_API int qzCompressCrc(QzSession_T *sess,
+                             const unsigned char *src,
+                             unsigned int *src_len,
+                             unsigned char *dest,
+                             unsigned int *dest_len,
+                             unsigned int last,
                              unsigned long *crc);
 
-QATZIP_API int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
-                                unsigned int *src_len, unsigned char *dest,
-                                unsigned int *dest_len, unsigned int last,
-                                unsigned long *crc, uint64_t *ext_rc);
+QATZIP_API int qzCompressCrcExt(QzSession_T *sess,
+                                const unsigned char *src,
+                                unsigned int *src_len,
+                                unsigned char *dest,
+                                unsigned int *dest_len,
+                                unsigned int last,
+                                unsigned long *crc,
+                                uint64_t *ext_rc);
+
+QATZIP_API int qzCompressCrc64(QzSession_T *sess,
+                               const unsigned char *src,
+                               unsigned int *src_len,
+                               unsigned char *dest,
+                               unsigned int *dest_len,
+                               unsigned int last,
+                               uint64_t *crc);
+
+QATZIP_API int qzCompressCrc64Ext(QzSession_T *sess,
+                                  const unsigned char *src,
+                                  unsigned int *src_len,
+                                  unsigned char *dest,
+                                  unsigned int *dest_len,
+                                  unsigned int last,
+                                  uint64_t *crc,
+                                  uint64_t *ext_rc);
 
 /**
  *****************************************************************************
@@ -1884,6 +1932,97 @@ int qzGetSoftwareComponentVersionList(QzSoftwareVersionInfo_T *api_info,
  *****************************************************************************/
 QATZIP_API int qzGetSoftwareComponentCount(unsigned int *num_elem);
 
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Requests the CRC64 configuration of the provided session
+ *
+ * @description
+ *      This function populates crc64_config with the CRC64 configuration
+ *      details of sess. This function has a dependency on invoking a setup
+ *      session function first.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      Yes
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess           Session handle
+ *                                 (pointer to opaque instance and session data)
+ * @param[out]      crc64_config   Configuration for CRC 64 generation.
+ *
+ * @retval QZ_OK               Function executed successfully
+ * @retval QZ_FAIL             Session was not setup
+ * @retval QZ_PARAMS           *sess or *crc64_config is NULL
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzGetSessionCrc64Config(QzSession_T *sess,
+                                       QzCrc64Config_T *crc64_config);
+
+/**
+*****************************************************************************
+* @ingroup qatZip
+*      Sets the CRC64 configuration of the provided session with a
+*      user defined set of parameters.
+*
+* @description
+*      This function populates the CRC64 configuration details of sess
+*      using the paramaters provided in crc64_config. This function has a
+*      dependency on invoking a setup session function first.
+*
+* @context
+*      This function shall not be called in an interrupt context.
+* @assumptions
+*      None
+* @sideEffects
+*      None
+* @blocking
+*      Yes
+* @reentrant
+*      Yes
+* @threadSafe
+*      Yes
+*
+* @param[in]       sess           Session handle
+*                                 (pointer to opaque instance and session data)
+* @param[out]      crc64_config   Configuration for CRC 64 generation.
+*
+* @retval QZ_OK               Function executed successfully
+* @retval QZ_FAIL             Session was not setup
+* @retval QZ_PARAMS           *sess or *crc64_config is NULL or contains
+*                             invalid paramters.
+*
+* @pre
+*      None
+* @post
+*      None
+* @note
+*      Only a synchronous version of this function is provided.
+*
+* @see
+*      None
+*
+*****************************************************************************/
+QATZIP_API int qzSetSessionCrc64Config(QzSession_T *sess,
+                                       QzCrc64Config_T *crc64_config);
 #ifdef __cplusplus
 }
 #endif
