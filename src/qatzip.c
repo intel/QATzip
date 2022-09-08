@@ -568,7 +568,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     static unsigned int waiting = 0;
     static unsigned int wait_cnt = 0;
 #ifdef ADF_PCI_API
-    Cpa32U pcie_count;
+    Cpa32U pcie_count = 0;
 #endif
 
     if (unlikely(sess == NULL)) {
@@ -583,12 +583,6 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         QZ_OK == g_process.qz_init_status) {
         return QZ_DUPLICATE;
     }
-
-    if (waiting && wait_cnt > 0) {
-        wait_cnt--;
-        return QZ_DUPLICATE;
-    }
-    waiting = 0;
 
     if (unlikely(0 != pthread_mutex_lock(&g_lock))) {
         return QZ_NOSW_NO_HW;
@@ -610,6 +604,11 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     init_timers();
     g_process.sw_backup = sw_backup;
 
+    if (waiting && wait_cnt > 0) {
+        wait_cnt--;
+        BACKOUT(QZ_NOSW_NO_HW);
+    }
+    waiting = 0;
     // Start HW initilization. it could be first call qzinit or
     // Before HW init failed, which mean qz_init_status may be
     // QZ_NOSW_NO_HW or QZ_NO_HW

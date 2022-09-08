@@ -85,9 +85,9 @@
 #define G_PROCESS_NUM_INSTANCES_64 64                               /* instance=4 * device=16 */
 #define MAX_HUGEPAGE_FILE  "/sys/module/usdm_drv/parameters/max_huge_pages"
 
-#define QZ_INIT_HW_FAIL(rc)       (QZ_OK != rc        && \
-                                   QZ_DUPLICATE != rc && \
-                                   g_process.qz_init_status != QZ_NO_HW)
+#define QZ_INIT_HW_FAIL(rc)       (QZ_DUPLICATE != rc   && \
+                                   (QZ_OK != rc         || \
+                                   QZ_NO_HW == g_process.qz_init_status))
 
 #if CPA_DC_API_VERSION_AT_LEAST(3,0)
 #define COMP_LVL_MAXIMUM QZ_LZS_COMP_LVL_MAXIMUM
