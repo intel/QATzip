@@ -484,6 +484,7 @@ int qzSetupDeflate(QzSession_T *sess, TestArg_T *arg)
     params.common_params.polling_mode = arg->polling_mode;
     params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
     params.common_params.max_forks = arg->max_forks;
+    params.common_params.sw_backup = arg->sw_backup;
 
     status = qzSetupSessionDeflate(sess, &params);
     if (status < 0) {
@@ -512,6 +513,7 @@ int qzSetupLZ4(QzSession_T *sess, TestArg_T *arg)
     params.common_params.polling_mode = arg->polling_mode;
     params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
     params.common_params.max_forks = arg->max_forks;
+    params.common_params.sw_backup = arg->sw_backup;
 
     status = qzSetupSessionLZ4(sess, &params);
     if (status) {
@@ -539,6 +541,7 @@ int qzSetupLZ4S(QzSession_T *sess, TestArg_T *arg)
     params.common_params.polling_mode = arg->polling_mode;
     params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
     params.common_params.max_forks = arg->max_forks;
+    params.common_params.sw_backup = arg->sw_backup;
 
     status = qzSetupSessionLZ4S(sess, &params);
     if (status) {
