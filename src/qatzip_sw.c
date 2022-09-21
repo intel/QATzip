@@ -213,7 +213,9 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
 
         if (NULL != qz_sess->crc32) {
             if (DEFLATE_RAW == data_fmt) {
-                *qz_sess->crc32 = crc32(*qz_sess->crc32, src, *src_len);
+                *qz_sess->crc32 = crc32(*qz_sess->crc32,
+                                        src + total_in - current_loop_in,
+                                        current_loop_in);
             } else {
                 if (0 == *qz_sess->crc32) {
                     *qz_sess->crc32 = stream->adler;
