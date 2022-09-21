@@ -176,7 +176,7 @@ typedef struct {
 } TestArg_T;
 
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * MB - 5 * KB);
-const unsigned int DEFAULT_BUF_SZ    = 256 * KB;
+const unsigned int DEFAULT_STREAM_BUF_SZ    = 256 * KB;
 const unsigned int QATZIP_MAX_HW_SZ  = 512 * KB;
 const unsigned int MAX_HUGE_PAGE_SZ  = 2 * MB;
 
@@ -365,7 +365,7 @@ static void dumpOutputData(size_t size, uint8_t *data, char *filename)
     int fd = 0;
     ssize_t ulen;
     char *output_filename = NULL;
-    char tmp_filename[] = "QATZip_Output_XXXXXX";
+    char tmp_filename[] = "QATZip_Output_XXXXXX.gz";
     const unsigned int suffix_len = 3;
 
     if (0 == size || NULL == data)
@@ -1977,7 +1977,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
-    params.strm_buff_sz = DEFAULT_BUF_SZ;
+    params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
     if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
@@ -2090,14 +2090,19 @@ void *qzCompressStreamOutput(void *thd_arg)
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
-    params.strm_buff_sz = DEFAULT_BUF_SZ;
-    if (qzSetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: set params fail with incorrect compress params.\n");
-        goto done;
+    params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
+    switch (test_arg->test_format) {
+    case TEST_DEFLATE:
+        params.data_fmt = QZ_DEFLATE_RAW;
+        break;
+    case TEST_GZIPEXT:
+        params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        break;
+    default:
+        break;
     }
 
-    //set by default configurations
-    rc = qzSetupSession(&sess, NULL);
+    rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
         pthread_exit((void *)"qzSetupSession failed");
     }
@@ -2134,8 +2139,17 @@ void *qzCompressStreamOutput(void *thd_arg)
     }
 
     {
+        // Add header and tailer for DEFLATE_RAW data, this is simulate from
+        // nginx qatzip module, and it's convenient for us to valid correctness.
+        if (params.data_fmt == QZ_DEFLATE_RAW) {
+            static u_char  gzheader[10] = { 0x1f, 0x8b, Z_DEFLATED, 0, 0, 0, 0, 0, 0, 3 };
+            memcpy(dest, gzheader, 10);
+            comp_strm.out   = dest + 10;
+        } else {
+            comp_strm.out   = dest;
+        }
+
         comp_strm.in    = src;
-        comp_strm.out   = dest;
         comp_strm.in_sz = src_sz;
         comp_strm.out_sz =  dest_sz;
         last = 1;
@@ -2147,6 +2161,15 @@ void *qzCompressStreamOutput(void *thd_arg)
         }
         QZ_DEBUG("Compressed %d bytes into %d\n", src_sz, dest_sz);
 
+        // Add tailer for Deflate raw data.
+        if (params.data_fmt == QZ_DEFLATE_RAW) {
+            StdGzF_T *tailer = (StdGzF_T *)(comp_strm.out + comp_strm.out_sz);
+            tailer->crc32 = comp_strm.crc_32;
+            tailer->i_size = comp_strm.in_sz;
+
+            comp_strm.out_sz += 18;
+            comp_strm.out = dest;
+        }
         dumpOutputData(comp_strm.out_sz, comp_strm.out, filename);
         qzEndStream(&sess, &comp_strm);
     }
@@ -2277,7 +2300,7 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
     qzGetDefaults(&params);
-    params.strm_buff_sz = DEFAULT_BUF_SZ;
+    params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
     if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
@@ -2333,7 +2356,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
     qzGetDefaults(&params);
-    params.strm_buff_sz = DEFAULT_BUF_SZ;
+    params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
     if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
@@ -3489,7 +3512,7 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
         QZ_ERROR("Err: fail to get defulat params.\n");
         goto done;
     }
-    params.strm_buff_sz = DEFAULT_BUF_SZ;
+    params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
     if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
