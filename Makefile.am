@@ -43,7 +43,8 @@ SUBDIRS = src utils test
 
 pkgincludedir = $(includedir)
 pkginclude_HEADERS = include/qatzip.h
-
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = qatzip.pc
 dist_man_MANS = \
                 man/qzip.1
 
