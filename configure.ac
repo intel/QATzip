@@ -288,5 +288,6 @@ AC_CONFIG_FILES([Makefile
                  qatzip.spec
                  src/Makefile
                  test/Makefile
-                 utils/Makefile])
+                 utils/Makefile]
+                 qatzip.pc)
 AC_OUTPUT
