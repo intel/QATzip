@@ -1049,6 +1049,8 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
             sess->hw_session_stat = QZ_NOSW_LOW_MEM;
             return QZ_NOSW_LOW_MEM;
         }
+    } else {
+        return QZ_DUPLICATE;
     }
 
     qz_sess = (QzSess_T *)sess->internal;
@@ -1090,6 +1092,8 @@ int qzSetupSessionDeflate(QzSession_T *sess,  QzSessionParamsDeflate_T *params)
             sess->hw_session_stat = QZ_NOSW_LOW_MEM;
             return QZ_NOSW_LOW_MEM;
         }
+    } else {
+        return QZ_DUPLICATE;
     }
 
     qz_sess = (QzSess_T *)sess->internal;
@@ -1132,6 +1136,8 @@ int qzSetupSessionLZ4(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
             sess->hw_session_stat = QZ_NOSW_LOW_MEM;
             return QZ_NOSW_LOW_MEM;
         }
+    } else {
+        return QZ_DUPLICATE;
     }
 
     qz_sess = (QzSess_T *)sess->internal;
@@ -1173,6 +1179,8 @@ int qzSetupSessionLZ4S(QzSession_T *sess,  QzSessionParamsLZ4S_T *params)
             sess->hw_session_stat = QZ_NOSW_LOW_MEM;
             return QZ_NOSW_LOW_MEM;
         }
+    } else {
+        return QZ_DUPLICATE;
     }
 
     qz_sess = (QzSess_T *)sess->internal;
