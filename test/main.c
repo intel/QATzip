@@ -3137,6 +3137,8 @@ int qzDecompressForceSW(void)
     consume = hdr->extra.qz_e.src_sz;
     produce = hdr->extra.qz_e.dest_sz;
 
+    qzTeardownSession(&sess);
+
     /*Scenario1: produce > DEST_SZ(params.hw_buff_sz)*/
     /*set minimum hw size 2K*/
     params.hw_buff_sz = 2 * 1024;
