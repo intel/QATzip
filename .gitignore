@@ -1,0 +1,37 @@
+# automake file
+autom4te.cache
+m4
+src/.deps
+src/.libs
+utils/.deps
+test/.deps
+
+aclocal.m4
+Makefile
+Makefile.in
+ar-lib
+compile
+config.guess
+config.log
+config.status
+config.sub
+configure
+depcomp
+install-sh
+libtool
+ltmain.sh
+missing
+qatzip.spec
+
+# compile obj
+src/*.lo
+src/*.o
+src/*.la
+utils/*.o
+test/*.o
+
+# app
+test/bt
+test/test
+utils/qzip
+utils/qzstd
