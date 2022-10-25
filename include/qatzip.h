@@ -1165,6 +1165,96 @@ QATZIP_API int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      Decompress a buffer and return the CRC checksum
+ *
+ * @description
+ *      This function will decompress a buffer if either a hardware based
+ *    session or a software based session is available. If no session has been
+ *    established - as indicated by the contents of *sess - then this function
+ *    will attempt to set up a session using qzInit and qzSetupSession.
+ *
+ *    This function will place completed decompression chunks in the output
+ *    buffer and put the CRC32 or CRC64 checksum for compressed input data in
+ *    the user provided buffer *crc.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]     sess      Session handle
+ *                          (pointer to opaque instance and session data)
+ * @param[in]     src       Point to source buffer
+ * @param[in]     src_len   Length of source buffer. Modified to
+ *                          length of processed compressed data
+ *                          when function returns
+ * @param[in]      dest     Point to destination buffer
+ * @param[in,out]  dest_len Length of destination buffer. Modified
+ *                          to length of decompressed data when
+ *                          function returns
+ * @param[in,out]  crc      Pointer to CRC32 or CRC64 checksum buffer
+ * @param[in,out]  ext_rc   qzDecompressCrcExt or qzDecompressCrc64Ext only.
+ *                          If not NULL, ext_rc point to a location where
+ *                          extended return codes may be returned. See
+ *                          extended return code section for details.
+ *                          if NULL, no extended information will be
+ *                          provided.
+ *
+ * @retval QZ_OK            Function executed successfully
+ * @retval QZ_FAIL          Function did not succeed
+ * @retval QZ_PARAMS        *sess is NULL or member of params is invalid
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzDecompressCrc(QzSession_T *sess,
+                               const unsigned char *src,
+                               unsigned int *src_len,
+                               unsigned char *dest,
+                               unsigned int *dest_len,
+                               unsigned long *crc);
+
+QATZIP_API int qzDecompressCrcExt(QzSession_T *sess,
+                                  const unsigned char *src,
+                                  unsigned int *src_len,
+                                  unsigned char *dest,
+                                  unsigned int *dest_len,
+                                  unsigned long *crc,
+                                  uint64_t *ext_rc);
+
+QATZIP_API int qzDecompressCrc64(QzSession_T *sess,
+                                 const unsigned char *src,
+                                 unsigned int *src_len,
+                                 unsigned char *dest,
+                                 unsigned int *dest_len,
+                                 uint64_t *crc);
+
+QATZIP_API int qzDecompressCrc64Ext(QzSession_T *sess,
+                                    const unsigned char *src,
+                                    unsigned int *src_len,
+                                    unsigned char *dest,
+                                    unsigned int *dest_len,
+                                    uint64_t *crc,
+                                    uint64_t *ext_rc);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      Uninitialize a QATzip session
  *
  * @description
