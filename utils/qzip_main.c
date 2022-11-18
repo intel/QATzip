@@ -49,6 +49,7 @@ int main(int argc, char **argv)
     int recursive_mode = 0;
     errno = 0;
     int is_format_set = 0;
+    char resolved_path[PATH_MAX];
 
     while (true) {
         int optc;
@@ -227,7 +228,11 @@ int main(int argc, char **argv)
     } else {  // decompress from 7z; compress into gz; decompress from gz
         while (optind < argc) {
 
-            if (access(argv[optind], F_OK)) {
+            /* To avoid CWE-22: Improper Limitation of a Pathname to a Restricted Directory
+             * ('Path Traversal') attacks.
+             * http://cwe.mitre.org/data/definitions/22.html
+             */
+            if (!realpath(argv[optind], resolved_path)) {
                 QZ_ERROR("%s: No such file or directory\n", argv[optind]);
                 exit(ERROR);
             }

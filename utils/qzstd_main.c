@@ -190,7 +190,6 @@ int main(int argc, char **argv)
         return QZSTD_ERROR;
     }
 
-
     if (!decompress) {
         int rc = compressFile(in_file, out_file);
         if (rc != QZSTD_OK) {

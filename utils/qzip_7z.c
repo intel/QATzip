@@ -1727,12 +1727,21 @@ void freeEndHeader(Qz7zEndHeader_T *h, int is_compress)
 
 static int convertToSymlink(const char *name)
 {
+    char resolved_path[PATH_MAX + 1];
+
     FILE *file = fopen(name, "rb");
     if (file) {
         char buf[1000 + 1];
         char *ret = fgets(buf, sizeof(buf) - 1, file);
         fclose(file);
 
+        /* To avoid CWE-22: Improper Limitation of a Pathname to a Restricted Directory
+         * ('Path Traversal') attacks.
+         * http://cwe.mitre.org/data/definitions/22.htm
+         */
+        if (!realpath(name, resolved_path)) {
+            return -1;
+        }
         if (ret) {
             int ir = unlink(name);
             if (ir == 0) {
