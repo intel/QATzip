@@ -464,7 +464,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
     const unsigned int ratio_limit =
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
     unsigned int read_more = 0;
-    int src_fd = 0;
+    int src_fd = -1;
     uint64_t non_empty_number = 0;
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
     Qz7zSignatureHeader_T *sheader = NULL;
@@ -505,7 +505,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
 
     dst_buffer_max_size = qzMaxCompressedLength(SRC_BUFF_LEN, sess);
     dst_buffer = malloc(dst_buffer_max_size);
-    if (!src_buffer) {
+    if (!dst_buffer) {
         QZ_DEBUG("malloc error\n");
         ret = QZ7Z_ERR_OOM;
         goto exit;
@@ -522,44 +522,47 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
 
             Qz7zFileItem_T *cur_file = qzListGet(list->items[1], i);
             src_file_name = cur_file->fileName;
+            if (!cur_file->isSymLink) {
+                src_fd = open(src_file_name, O_RDONLY);
+                if (src_fd < 0) {
+                    ret = QZ7Z_ERR_OPEN;
+                    goto exit;
+                }
 
-            ret = lstat(src_file_name, &src_file_stat);
-            if (ret) {
-                QZ_ERROR("stat(): failed\n");
-                ret = QZ7Z_ERR_STAT;
-                goto exit;
+                ret = fstat(src_fd, &src_file_stat);
+                if (ret) {
+                    QZ_ERROR("stat(): failed\n");
+                    ret = QZ7Z_ERR_STAT;
+                    goto exit;
+                }
+                src_file = fdopen(src_fd, "r");
+                if (!src_file) {
+                    QZ_ERROR("create %s error\n", src_file_name);
+                    ret = QZ7Z_ERR_OPEN;
+                    goto exit;
+                }
+            } else {
+                ret = lstat(src_file_name, &src_file_stat);
+                if (ret) {
+                    QZ_ERROR("lstat(): failed\n");
+                    ret = QZ7Z_ERR_STAT;
+                    goto exit;
+                }
             }
 
             if (S_ISBLK(src_file_stat.st_mode)) {
-                if ((src_fd = open(src_file_name, O_RDONLY)) < 0) {
+                if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
                     perror(src_file_name);
-                    ret = QZ7Z_ERR_OPEN;
+                    ret = QZ7Z_ERR_IOCTL;
                     goto exit;
-                } else {
-                    if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
-                        close(src_fd);
-                        perror(src_file_name);
-                        ret = QZ7Z_ERR_IOCTL;
-                        goto exit;
-                    }
-                    src_file_size *= 512;
-                    /* size get via BLKGETSIZE is divided by 512 */
-                    close(src_fd);
                 }
+                src_file_size *= 512;
             } else {
                 src_file_size = src_file_stat.st_size;
             }
             src_buffer_size = (src_file_size > SRC_BUFF_LEN) ?
                               SRC_BUFF_LEN : src_file_size;
             dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
-
-            src_file = fopen(src_file_name, "r");
-            if (!src_file) {
-                QZ_ERROR("create %s error\n", src_file_name);
-                ret = QZ7Z_ERR_OPEN;
-                goto exit;
-            }
-
             file_remaining = src_file_size;
             read_more = 1;
 
@@ -645,9 +648,14 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                 total_compressed_size = dst_file_size;
 
             } while (file_remaining > 0);
-
-            fclose(src_file);
-            src_file = NULL;
+            if (!cur_file->isSymLink) {
+                fclose(src_file);
+                src_file = NULL;
+		if(src_fd >= 0) {
+                    close(src_fd);
+		    src_fd = -1;
+		}
+            }
         }// end for
 
     } else {
@@ -712,6 +720,9 @@ exit:
     }
     if (dst_file) {
         fclose(dst_file);
+    }
+    if (src_fd >= 0) {
+        close(src_fd);
     }
     freeTimeList(time_list_head);
     if (!g_keep && OK == ret) {
@@ -1751,7 +1762,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     const unsigned int ratio_limit =
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
     unsigned int read_more = 0;
-    int src_fd = 0;
+    int src_fd = -1;
 
     int is_last;
     int n_part; // how much parts can the src file be splited
@@ -1844,29 +1855,22 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
             (file_items + file_index)->size = total_unPack_size;
         }
 
-        ret = stat(src_file_name, &src_file_stat);
-        if (ret) {
-            perror(src_file_name);
-            ret = QZ7Z_ERR_STAT;
+        src_fd = open(src_file_name, O_RDONLY);
+        if (src_fd < 0) {
+            QZ_PRINT("Open input file %s failed\n", src_file_name);
+            ret = QZ7Z_ERR_OPEN;
             goto exit;
         }
+        ret = fstat(src_fd, &src_file_stat);
+        assert(!ret);
 
         if (S_ISBLK(src_file_stat.st_mode)) {
-            if ((src_fd = open(src_file_name, O_RDONLY)) < 0) {
+            if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
                 perror(src_file_name);
-                ret = QZ7Z_ERR_OPEN;
+                ret = QZ7Z_ERR_IOCTL;
                 goto exit;
-            } else {
-                if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
-                    close(src_fd);
-                    perror(src_file_name);
-                    ret = QZ7Z_ERR_IOCTL;
-                    goto exit;
-                }
-                src_file_size *= 512;
-                /* size get via BLKGETSIZE is divided by 512 */
-                close(src_fd);
             }
+            src_file_size *= 512;
         } else {
             src_file_size = src_file_stat.st_size;
         }
@@ -1986,7 +1990,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
                     unsigned int    dst_left;
                     unsigned char *dst_write;
                     size_t         n_written;
-                    struct stat    stat_info;
+                    unsigned int   st_mode;
                     Qz7zFileItem_T *cur_file;
 
                     dst_write = dst_buffer;
@@ -1995,24 +1999,23 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
                     while (dst_left) {
                         cur_file = p + dir_num + i;
+                        st_mode = (cur_file->attribute) >> 16;
                         if (need_check_file_with_same_name) {
-                            if (!access(cur_file->fileName, F_OK)) {
-                                QZ_DEBUG("same name file exist, "
-                                         "need to delete it\n");
-                                unlink((p + dir_num + i)->fileName);
-                                need_check_file_with_same_name = 0;
-                            }
+                            dst_file = fopen(cur_file->fileName, "w+");
+                        } else {
+                            dst_file = fopen(cur_file->fileName, "a");
                         }
-                        lstat(cur_file->fileName, &stat_info);
-                        stat_info.st_mode = (cur_file->attribute) >> 16;
-
-                        dst_file = fopen(cur_file->fileName, "a");
                         if (NULL == dst_file) {
-                            if (S_ISLNK(stat_info.st_mode)) {
+                            if (S_ISLNK(st_mode)) {
                                 QZ_DEBUG("open an broken soft-link file, "
                                          "need to delete it\n");
                                 remove(cur_file->fileName);
                                 dst_file = fopen(cur_file->fileName, "a");
+                                if (NULL == dst_file) {
+                                    QZ_DEBUG("open file %s error\n", cur_file->fileName);
+                                    ret = ERROR;
+                                    goto exit;
+                                }
                             } else {
                                 QZ_DEBUG("open file error\n");
                                 ret = ERROR;
@@ -2047,7 +2050,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
                         dst_file = NULL;
 
                         if (need_check_file_with_same_name) {
-                            if (S_ISLNK(stat_info.st_mode)) {
+                            if (S_ISLNK(st_mode)) {
                                 convertToSymlink(cur_file->fileName);
                             }
                         }
@@ -2098,6 +2101,9 @@ exit:
     }
     if (sheader) {
         qzFree(sheader);
+    }
+    if (src_fd >= 0) {
+        close(src_fd);
     }
 
     freeTimeList(time_list_head);

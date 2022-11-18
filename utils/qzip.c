@@ -267,26 +267,23 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     time_list_head->time_e = time_list_head->time_s;
     time_list_head->next = NULL;
 
-    ret = stat(src_file_name, &src_file_stat);
-    if (ret) {
-        perror(src_file_name);
+    //open file
+    src_fd = open(src_file_name, O_RDONLY);
+    if (src_fd < 0) {
+        QZ_PRINT("Open input file %s failed\n", src_file_name);
         exit(ERROR);
     }
+    ret = fstat(src_fd, &src_file_stat);
+    assert(!ret);
 
     if (S_ISBLK(src_file_stat.st_mode)) {
-        if ((src_fd = open(src_file_name, O_RDONLY)) < 0) {
+        /* ioctl return device size / 512, so device size = src_file_size * 512 */
+        if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
+            close(src_fd);
             perror(src_file_name);
             exit(ERROR);
-        } else {
-            if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
-                close(src_fd);
-                perror(src_file_name);
-                exit(ERROR);
-            }
-            src_file_size *= 512;
-            /* size get via BLKGETSIZE is divided by 512 */
-            close(src_fd);
         }
+        src_file_size *= 512;
     } else {
         src_file_size = src_file_stat.st_size;
     }
@@ -307,7 +304,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     assert(src_buffer != NULL);
     dst_buffer = malloc(dst_buffer_size);
     assert(dst_buffer != NULL);
-    src_file = fopen(src_file_name, "r");
+    src_file = fdopen(src_fd, "r");
     assert(src_file != NULL);
     dst_file = fopen(dst_file_name, "w");
     assert(dst_file != NULL);
@@ -379,6 +376,7 @@ exit:
     freeTimeList(time_list_head);
     fclose(src_file);
     fclose(dst_file);
+    close(src_fd);
     free(src_buffer);
     free(dst_buffer);
     if (!g_keep && OK == ret) {
