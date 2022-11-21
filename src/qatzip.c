@@ -1540,6 +1540,10 @@ static int qzLZ4StoredBlocks(QzSess_T *qz_sess, const unsigned char *src,
     qz_sess->next_dest += outputHeaderSz(data_fmt);
 
     xxhash_state = XXH32_createState();
+    if (!xxhash_state) {
+        QZ_ERROR("qzLZ4StoredBlocks: XXH32_createState create state fail\n");
+	return QZ_FAIL;
+    }
     (void)XXH32_reset(xxhash_state, 0);
 
     resl.checksum = 0;
