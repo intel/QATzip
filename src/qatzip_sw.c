@@ -227,7 +227,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
         }
     } while (left_input_sz);
 
-    if (NULL != qz_sess->deflate_strm && 1 == last) {
+    if (1 == last) {
         /*
          * When data_fmt is DEFLATE_GZIP_EXT,
          * we should fill src_sz & dest_sz in gzipext header field.
