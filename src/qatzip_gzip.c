@@ -73,67 +73,6 @@ inline unsigned long stdGzipFooterSz(void)
     return sizeof(StdGzF_T);
 }
 
-// LZ4S header should have the same size with LZ4.
-// Note: QAT HW compressed LZ4S block without block size at block beginning.
-//      Combind LZ4 frame header size and SW block size as LZ4S header size.
-inline unsigned long qzLZ4SHeaderSz(void)
-{
-    //Lz4 frame header size + block header size
-    return qzLZ4HeaderSz() + QZ_LZ4_BLK_HEADER_SIZE;
-}
-
-inline unsigned long outputFooterSz(DataFormatInternal_T data_fmt)
-{
-    unsigned long size = 0;
-    switch (data_fmt) {
-    case DEFLATE_4B:
-    /* fall through */
-    case DEFLATE_RAW:
-        size = 0;
-        break;
-    case LZ4_FH:
-    case LZ4S_FH:
-    case ZSTD_RAW:   //same as lz4 footer
-        size = qzLZ4FooterSz();
-        break;
-    case DEFLATE_GZIP_EXT:
-    default:
-        size = stdGzipFooterSz();
-        break;
-    }
-
-    return size;
-}
-
-unsigned long outputHeaderSz(DataFormatInternal_T data_fmt)
-{
-    unsigned long size = 0;
-
-    switch (data_fmt) {
-    case DEFLATE_4B:
-        size = qz4BHeaderSz();
-        break;
-    case DEFLATE_RAW:
-        break;
-    case DEFLATE_GZIP:
-        size = stdGzipHeaderSz();
-        break;
-    case LZ4_FH:
-        size = qzLZ4HeaderSz();
-        break;
-    case LZ4S_FH:
-    case ZSTD_RAW:
-        size = qzLZ4SHeaderSz();
-        break;
-    case DEFLATE_GZIP_EXT:
-    default:
-        size = qzGzipHeaderSz();
-        break;
-    }
-
-    return size;
-}
-
 void qzGzipHeaderExtraFieldGen(unsigned char *ptr, CpaDcRqResults *res)
 {
     QzExtraField_T *extra;
@@ -193,56 +132,9 @@ void qz4BHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
     hdr->blk_size = res->produced;
 }
 
-/* Because QAT HW generate LZ4S block without block size at block beginning.
-*  if just add LZ4 frame header and frame footer to those block, it's going
-*  to be very hard to find out where is block ending. so Append block size to
-*  every LZ4S block. it will make LZ4S frame have the same format just like
-*  LZ4 frame.
-*/
-void qzLZ4SHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
-{
-    assert(ptr != NULL);
-    assert(res != NULL);
-    //frame header contains content size
-    qzLZ4HeaderGen(ptr, res);
-
-    //block header contains block size
-    unsigned int *blk_size = (unsigned int *)(ptr + sizeof(QzLZ4H_T));
-    *blk_size = (unsigned int)res->produced;
-}
-
-void outputHeaderGen(unsigned char *ptr,
-                     CpaDcRqResults *res,
-                     DataFormatInternal_T data_fmt)
-{
-    QZ_DEBUG("Generate header\n");
-
-    switch (data_fmt) {
-    case DEFLATE_4B:
-        qz4BHeaderGen(ptr, res);
-        break;
-    case DEFLATE_RAW:
-        break;
-    case DEFLATE_GZIP:
-        stdGzipHeaderGen(ptr, res);
-        break;
-    case LZ4_FH:
-        qzLZ4HeaderGen(ptr, res);
-        break;
-    case LZ4S_FH:
-    case ZSTD_RAW:
-        qzLZ4SHeaderGen(ptr, res);
-        break;
-    case DEFLATE_GZIP_EXT:
-    default:
-        qzGzipHeaderGen(ptr, res);
-        break;
-    }
-}
-
-static int isQATDeflateProcessable(const unsigned char *ptr,
-                                   const unsigned int *const src_len,
-                                   QzSess_T *const qz_sess)
+int isQATDeflateProcessable(const unsigned char *ptr,
+                            const unsigned int *const src_len,
+                            QzSess_T *const qz_sess)
 {
     QzGzH_T *h = (QzGzH_T *)ptr;
     Qz4BH_T *h_4B;
@@ -287,34 +179,6 @@ static int isQATDeflateProcessable(const unsigned char *ptr,
             h->extra.st2 == 'Z');
 }
 
-int isQATProcessable(const unsigned char *ptr,
-                     const unsigned int *const src_len,
-                     QzSess_T *const qz_sess)
-{
-    uint32_t rc = 0;
-    DataFormatInternal_T data_fmt;
-    assert(ptr != NULL);
-    assert(src_len != NULL);
-    assert(qz_sess != NULL);
-
-
-    data_fmt = qz_sess->sess_params.data_fmt;
-    switch (data_fmt) {
-    case DEFLATE_4B:
-    case DEFLATE_GZIP:
-    case DEFLATE_GZIP_EXT:
-        rc = isQATDeflateProcessable(ptr, src_len, qz_sess);
-        break;
-    case LZ4_FH:
-        rc = isQATLZ4Processable(ptr, src_len, qz_sess);
-        break;
-    default:
-        rc = 0;
-        break;
-    }
-    return rc;
-}
-
 int qzGzipHeaderExt(const unsigned char *const ptr, QzGzH_T *hdr)
 {
     QzGzH_T *h;
@@ -352,26 +216,6 @@ void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res)
     ftr = (StdGzF_T *)ptr;
     ftr->crc32 = res->checksum;
     ftr->i_size = res->consumed;
-}
-
-inline void outputFooterGen(QzSess_T *qz_sess,
-                            CpaDcRqResults *res,
-                            DataFormatInternal_T data_fmt)
-{
-    unsigned char *ptr = qz_sess->next_dest;
-    switch (data_fmt) {
-    case DEFLATE_RAW:
-        break;
-    case LZ4_FH:
-    case LZ4S_FH:
-    case ZSTD_RAW:
-        qzLZ4FooterGen(ptr, res);
-        break;
-    case DEFLATE_GZIP_EXT:
-    default:
-        qzGzipFooterGen(ptr, res);
-        break;
-    }
 }
 
 void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr)

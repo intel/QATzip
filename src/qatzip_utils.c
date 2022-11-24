@@ -713,3 +713,132 @@ void qzGetParamsLZ4S(QzSessionParamsInternal_T *internal_params,
     params->qzCallback_external = internal_params->qzCallback_external;
     params->lz4s_mini_match = internal_params->lz4s_mini_match;
 }
+
+inline unsigned long outputFooterSz(DataFormatInternal_T data_fmt)
+{
+    unsigned long size = 0;
+    switch (data_fmt) {
+    case DEFLATE_4B:
+    /* fall through */
+    case DEFLATE_RAW:
+        size = 0;
+        break;
+    case LZ4_FH:
+    case LZ4S_FH:
+    case ZSTD_RAW:   //same as lz4 footer
+        size = qzLZ4FooterSz();
+        break;
+    case DEFLATE_GZIP_EXT:
+    default:
+        size = stdGzipFooterSz();
+        break;
+    }
+
+    return size;
+}
+
+unsigned long outputHeaderSz(DataFormatInternal_T data_fmt)
+{
+    unsigned long size = 0;
+
+    switch (data_fmt) {
+    case DEFLATE_4B:
+        size = qz4BHeaderSz();
+        break;
+    case DEFLATE_RAW:
+        break;
+    case DEFLATE_GZIP:
+        size = stdGzipHeaderSz();
+        break;
+    case LZ4_FH:
+        size = qzLZ4HeaderSz();
+        break;
+    case LZ4S_FH:
+    case ZSTD_RAW:
+        size = qzLZ4SHeaderSz();
+        break;
+    case DEFLATE_GZIP_EXT:
+    default:
+        size = qzGzipHeaderSz();
+        break;
+    }
+
+    return size;
+}
+
+void outputHeaderGen(unsigned char *ptr,
+                     CpaDcRqResults *res,
+                     DataFormatInternal_T data_fmt)
+{
+    QZ_DEBUG("Generate header\n");
+
+    switch (data_fmt) {
+    case DEFLATE_4B:
+        qz4BHeaderGen(ptr, res);
+        break;
+    case DEFLATE_RAW:
+        break;
+    case DEFLATE_GZIP:
+        stdGzipHeaderGen(ptr, res);
+        break;
+    case LZ4_FH:
+        qzLZ4HeaderGen(ptr, res);
+        break;
+    case LZ4S_FH:
+    case ZSTD_RAW:
+        qzLZ4SHeaderGen(ptr, res);
+        break;
+    case DEFLATE_GZIP_EXT:
+    default:
+        qzGzipHeaderGen(ptr, res);
+        break;
+    }
+}
+
+inline void outputFooterGen(QzSess_T *qz_sess,
+                            CpaDcRqResults *res,
+                            DataFormatInternal_T data_fmt)
+{
+    unsigned char *ptr = qz_sess->next_dest;
+    switch (data_fmt) {
+    case DEFLATE_RAW:
+        break;
+    case LZ4_FH:
+    case LZ4S_FH:
+    case ZSTD_RAW:
+        qzLZ4FooterGen(ptr, res);
+        break;
+    case DEFLATE_GZIP_EXT:
+    default:
+        qzGzipFooterGen(ptr, res);
+        break;
+    }
+}
+
+int isQATProcessable(const unsigned char *ptr,
+                     const unsigned int *const src_len,
+                     QzSess_T *const qz_sess)
+{
+    uint32_t rc = 0;
+    DataFormatInternal_T data_fmt;
+    assert(ptr != NULL);
+    assert(src_len != NULL);
+    assert(qz_sess != NULL);
+
+
+    data_fmt = qz_sess->sess_params.data_fmt;
+    switch (data_fmt) {
+    case DEFLATE_4B:
+    case DEFLATE_GZIP:
+    case DEFLATE_GZIP_EXT:
+        rc = isQATDeflateProcessable(ptr, src_len, qz_sess);
+        break;
+    case LZ4_FH:
+        rc = isQATLZ4Processable(ptr, src_len, qz_sess);
+        break;
+    default:
+        rc = 0;
+        break;
+    }
+    return rc;
+}
