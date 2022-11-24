@@ -487,6 +487,9 @@ int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len);
 int isQATLZ4Processable(const unsigned char *ptr,
                         const unsigned int *const src_len,
                         QzSess_T *const qz_sess);
+int isQATDeflateProcessable(const unsigned char *ptr,
+                            const unsigned int *const src_len,
+                            QzSess_T *const qz_sess);
 
 unsigned long qzLZ4SHeaderSz(void);
 void qzLZ4SHeaderGen(unsigned char *ptr, CpaDcRqResults *res);

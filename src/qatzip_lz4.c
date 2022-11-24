@@ -215,3 +215,30 @@ int isQATLZ4Processable(const unsigned char *ptr,
 
     return 1;
 }
+
+// LZ4S header should have the same size with LZ4.
+// Note: QAT HW compressed LZ4S block without block size at block beginning.
+//      Combind LZ4 frame header size and SW block size as LZ4S header size.
+inline unsigned long qzLZ4SHeaderSz(void)
+{
+    //Lz4 frame header size + block header size
+    return qzLZ4HeaderSz() + QZ_LZ4_BLK_HEADER_SIZE;
+}
+
+/* Because QAT HW generate LZ4S block without block size at block beginning.
+*  if just add LZ4 frame header and frame footer to those block, it's going
+*  to be very hard to find out where is block ending. so Append block size to
+*  every LZ4S block. it will make LZ4S frame have the same format just like
+*  LZ4 frame.
+*/
+void qzLZ4SHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
+{
+    assert(ptr != NULL);
+    assert(res != NULL);
+    //frame header contains content size
+    qzLZ4HeaderGen(ptr, res);
+
+    //block header contains block size
+    unsigned int *blk_size = (unsigned int *)(ptr + sizeof(QzLZ4H_T));
+    *blk_size = (unsigned int)res->produced;
+}
