@@ -102,11 +102,28 @@ extern"C" {
         CPA_DC_API_VERSION_NUM_MINOR >= minor))
 #endif
 
-#define QZ_4XXX_PCI_DEVICE_ID 0x4940
-#define QZ_4XXXIOV_PCI_DEVICE_ID 0x4941
+#define QZ_4XXX_PCI_DEVICE_A_ID 0x4940
+#define QZ_4XXXIOV_PCI_DEVICE_A_ID 0x4941
+#define QZ_4XXX_PCI_DEVICE_B_ID 0x4942
+#define QZ_4XXXIOV_PCI_DEVICE_B_ID 0x4943
+#define QZ_4XXX_PCI_DEVICE_C_ID 0x4944
+#define QZ_4XXXIOV_PCI_DEVICE_C_ID 0x4945
+#define QZ_4XXX_PCI_DEVICE_D_ID 0x4946
+#define QZ_4XXXIOV_PCI_DEVICE_D_ID 0x4947
+#define QZ_4XXX_PCI_DEVICE_E_ID 0x4948
+#define QZ_4XXXIOV_PCI_DEVICE_E_ID 0x4949
+
 #define IS_QAT_GEN4(device_id)                       \
-    (device_id == QZ_4XXX_PCI_DEVICE_ID ||           \
-     device_id == QZ_4XXXIOV_PCI_DEVICE_ID)
+    (device_id == QZ_4XXX_PCI_DEVICE_A_ID ||         \
+     device_id == QZ_4XXXIOV_PCI_DEVICE_A_ID ||      \
+     device_id == QZ_4XXX_PCI_DEVICE_B_ID ||         \
+     device_id == QZ_4XXXIOV_PCI_DEVICE_B_ID ||      \
+     device_id == QZ_4XXX_PCI_DEVICE_C_ID ||         \
+     device_id == QZ_4XXXIOV_PCI_DEVICE_C_ID ||      \
+     device_id == QZ_4XXX_PCI_DEVICE_D_ID ||         \
+     device_id == QZ_4XXXIOV_PCI_DEVICE_D_ID ||      \
+     device_id == QZ_4XXX_PCI_DEVICE_E_ID ||         \
+     device_id == QZ_4XXXIOV_PCI_DEVICE_E_ID)
 
 #define QZ_CEIL_DIV(x, y) (((x) + (y)-1) / (y))
 #define QZ_DEFLATE_SKID_PAD_GEN4_STATIC (1029)
