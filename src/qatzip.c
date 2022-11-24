@@ -2633,7 +2633,6 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
     QzPollingMode_T polling_mode = qz_sess->sess_params.polling_mode;
 
     QZ_DEBUG("mw>> function %s() called\n", __func__);
-    fflush(stdout);
     i = qz_sess->inst_hint;
     dest_avail_len = *qz_sess->dest_sz - qz_sess->qz_out_len;
 
