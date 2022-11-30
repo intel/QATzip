@@ -291,6 +291,10 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                       SRC_BUFF_LEN : src_file_size;
     if (is_compress) {
         dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
+        if (0 == dst_buffer_size) {
+            perror("During SW compression, src file size is less than HW size!\n");
+            exit(ERROR);
+        }
     } else { /* decompress */
         dst_buffer_size = src_buffer_size *
                           g_bufsz_expansion_ratio[ratio_idx++];
@@ -790,6 +794,10 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
     src_buffer_size = SRC_BUFF_LEN;
     if (is_compress) {
         dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
+        if (0 == dst_buffer_size) {
+            perror("During SW compression, src file size is less than HW size!\n");
+            exit(ERROR);
+        }
     } else { /* decompress */
         dst_buffer_size = src_buffer_size *
                           g_bufsz_expansion_ratio[ratio_idx++];
