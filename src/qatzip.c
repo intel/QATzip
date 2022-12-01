@@ -1403,7 +1403,7 @@ static void *doCompressIn(void *in)
         g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes = src_send_sz;
         if (dest_sz > DEST_SZ(qz_sess->sess_params.hw_buff_sz)) {
             g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
-                DEST_SZ(qz_sess->sess_params.hw_buff_sz) - outputHeaderSz(data_fmt);
+                DEST_SZ((unsigned long)(qz_sess->sess_params.hw_buff_sz)) - outputHeaderSz(data_fmt);
         } else {
             g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
                 dest_sz - outputHeaderSz(data_fmt);
@@ -1435,7 +1435,7 @@ static void *doCompressIn(void *in)
 
         g_process.qz_inst[i].stream[j].res.checksum = 0;
         do {
-            tag = (i << 16) | j;
+            tag = ((unsigned long)i << 16) | (unsigned long)j;
             QZ_DEBUG("Comp Sending %u bytes ,opData.flushFlag = %d, i = %ld j = %d seq = %ld tag = %ld\n",
                      g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes,
                      opData->flushFlag,
@@ -2339,7 +2339,7 @@ static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         return QZ_FAIL;
     }
 
-    if ((compressed_sz > DEST_SZ(qz_sess->sess_params.hw_buff_sz)) ||
+    if ((compressed_sz > DEST_SZ((long)(qz_sess->sess_params.hw_buff_sz))) ||
         (uncompressed_sz > qz_sess->sess_params.hw_buff_sz)) {
         if (1 == qz_sess->sess_params.sw_backup) {
             if (DEFLATE_GZIP == data_fmt &&
@@ -3242,15 +3242,15 @@ static unsigned int qzDeflateBoundGen4(unsigned int src_sz, QzSession_T *sess)
     last_chunk_sz = src_sz % chunk_sz;
 
     if (huffman_type == QZ_DYNAMIC_HDR) {
-        dest_sz = (QZ_CEIL_DIV(9 * chunk_sz, 8) +
+        dest_sz = (QZ_CEIL_DIV(9U * chunk_sz, 8U) +
                    QZ_DEFLATE_SKID_PAD_GEN4_DYN +
-                   (((8 * chunk_sz * 155) / 7) / (16 * 1024)) +
+                   (((8U * chunk_sz * 155) / 7) / (16 * 1024)) +
                    header_footer_sz) * chunk_cnt;
         if (last_chunk_sz) {
-            dest_sz += (QZ_CEIL_DIV(9 * last_chunk_sz, 8) +
+            dest_sz += (unsigned int)((QZ_CEIL_DIV(9U * last_chunk_sz, 8U) +
                         QZ_DEFLATE_SKID_PAD_GEN4_DYN +
-                        (((8 * last_chunk_sz * 155) / 7) / (16 * 1024)) +
-                        header_footer_sz);
+                        (((8U * last_chunk_sz * 155) / 7) / (16 * 1024)) +
+                        header_footer_sz));
         }
     } else {
         dest_sz = (QZ_CEIL_DIV(9 * chunk_sz, 8) +

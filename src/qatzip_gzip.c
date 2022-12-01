@@ -140,7 +140,7 @@ int isQATDeflateProcessable(const unsigned char *ptr,
     Qz4BH_T *h_4B;
     StdGzF_T *qzFooter = NULL;
     long buff_sz = (DEST_SZ(qz_sess->sess_params.hw_buff_sz) < *src_len ? DEST_SZ(
-                        qz_sess->sess_params.hw_buff_sz) : *src_len);
+                        (long)(qz_sess->sess_params.hw_buff_sz)) : *src_len);
 
     if (qz_sess->sess_params.data_fmt == DEFLATE_4B) {
         h_4B = (Qz4BH_T *)ptr;
@@ -157,7 +157,7 @@ int isQATDeflateProcessable(const unsigned char *ptr,
         h->std_hdr.flag == 0x00) {
         qzFooter = (StdGzF_T *)(findStdGzipFooter((const unsigned char *)h, buff_sz));
         if ((unsigned char *)qzFooter - ptr - stdGzipHeaderSz() > DEST_SZ(
-                qz_sess->sess_params.hw_buff_sz) ||
+                (unsigned long)(qz_sess->sess_params.hw_buff_sz)) ||
             qzFooter->i_size > qz_sess->sess_params.hw_buff_sz) {
             return 0;
         }

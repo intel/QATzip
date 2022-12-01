@@ -208,7 +208,7 @@ int isQATLZ4Processable(const unsigned char *ptr,
 
     footer = (QzLZ4F_T *)findLZ4Footer(ptr, *src_len);
     if (footer == NULL ||
-        ((unsigned char *)footer - ptr - QZ_LZ4_HEADER_SIZE) > DEST_SZ(
+        ((unsigned int)((unsigned char *)footer - ptr - QZ_LZ4_HEADER_SIZE)) > DEST_SZ(
             qz_sess->sess_params.hw_buff_sz)) {
         return 0;
     }
