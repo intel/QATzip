@@ -164,7 +164,7 @@ __thread ThreadData_T g_thread = {
 static int setInstance(unsigned int dev_id, QzInstanceList_T *new_instance,
                        QzHardware_T *qat_hw)
 {
-    if (dev_id > QAT_MAX_DEVICES ||
+    if (dev_id >= QAT_MAX_DEVICES ||
         NULL == new_instance ||
         NULL == qat_hw ||
         NULL != new_instance->next) {
@@ -191,7 +191,7 @@ static int setInstance(unsigned int dev_id, QzInstanceList_T *new_instance,
 
 static QzInstanceList_T *getInstance(unsigned int dev_id, QzHardware_T *qat_hw)
 {
-    if (dev_id > QAT_MAX_DEVICES || NULL == qat_hw) {
+    if (dev_id >= QAT_MAX_DEVICES || NULL == qat_hw) {
         return NULL;
     }
 
@@ -633,7 +633,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
 
     if (CPA_FALSE == g_process.qat_available) {
-        QZ_ERROR("Error no hardware, switch to SW if permitted\n", status);
+        QZ_ERROR("Error no hardware, switch to SW if permitted status = %d\n", status);
         BACKOUT(QZ_NOSW_NO_HW);
     }
 #endif
@@ -688,6 +688,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
                                        &new_inst->instance.instance_info);
         if (CPA_STATUS_SUCCESS != status) {
             QZ_ERROR("Error in cpaDcInstanceGetInfo2 status = %d\n", status);
+            free(new_inst);
             QZ_HW_BACKOUT(QZ_NOSW_NO_HW);
         }
 
@@ -695,6 +696,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
                                         &new_inst->instance.instance_cap);
         if (CPA_STATUS_SUCCESS != status) {
             QZ_ERROR("Error in cpaDcQueryCapabilities status = %d\n", status);
+            free(new_inst);
             QZ_HW_BACKOUT(QZ_NOSW_NO_HW);
         }
 
@@ -1365,7 +1367,7 @@ static void *doCompressIn(void *in)
     src_sz = qz_sess->sess_params.hw_buff_sz;
     dest_sz = *qz_sess->dest_sz;
     data_fmt = qz_sess->sess_params.data_fmt;
-    QZ_DEBUG("doCompressIn: Need to g_process %ld bytes\n", remaining);
+    QZ_DEBUG("doCompressIn: Need to g_process %u bytes\n", remaining);
 
     while (!done) {
         do {
@@ -1436,7 +1438,7 @@ static void *doCompressIn(void *in)
         g_process.qz_inst[i].stream[j].res.checksum = 0;
         do {
             tag = ((unsigned long)i << 16) | (unsigned long)j;
-            QZ_DEBUG("Comp Sending %u bytes ,opData.flushFlag = %d, i = %ld j = %d seq = %ld tag = %ld\n",
+            QZ_DEBUG("Comp Sending %u bytes ,opData.flushFlag = %d, i = %d j = %d seq = %ld tag = %ld\n",
                      g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes,
                      opData->flushFlag,
                      i, j, g_process.qz_inst[i].stream[j].seq, tag);
@@ -1542,7 +1544,7 @@ static int qzLZ4StoredBlocks(QzSess_T *qz_sess, const unsigned char *src,
     xxhash_state = XXH32_createState();
     if (!xxhash_state) {
         QZ_ERROR("qzLZ4StoredBlocks: XXH32_createState create state fail\n");
-	return QZ_FAIL;
+        return QZ_FAIL;
     }
     (void)XXH32_reset(xxhash_state, 0);
 
@@ -1740,7 +1742,7 @@ static void *doCompressOut(void *in)
 
                 good = 1;
                 QZ_DEBUG("doCompressOut: Processing seqnumber %2.2d "
-                         "%2.2d %4.4ld, PID: %p, TID: %p\n",
+                         "%2.2d %4.4ld, PID: %d, TID: %lu\n",
                          i, j, g_process.qz_inst[i].stream[j].seq,
                          getpid(), pthread_self());
 
@@ -1750,7 +1752,7 @@ static void *doCompressOut(void *in)
                 resl = &g_process.qz_inst[i].stream[j].res;
                 if (unlikely(CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status &&
                              CPA_DC_VERIFY_ERROR != resl->status)) {
-                    QZ_ERROR("Error(%d) in callback: %ld, %ld, ReqStatus: %d\n",
+                    QZ_ERROR("Error(%d) in callback: %d, %d, ReqStatus: %d\n",
                              g_process.qz_inst[i].stream[j].job_status, i, j,
                              g_process.qz_inst[i].stream[j].res.status);
                     RESTORE_CPASTREAM_BUFFER(i, j);
@@ -2101,7 +2103,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
 #endif
        ) {
         QZ_DEBUG("compression src_len=%u, sess_params.input_sz_thrshold = %u, "
-                 "process.qz_init_status = %d, sess->hw_session_stat = %d, "
+                 "process.qz_init_status = %d, sess->hw_session_stat = %ld, "
                  " switch to software.\n",
                  *src_len, qz_sess->sess_params.input_sz_thrshold,
                  g_process.qz_init_status, sess->hw_session_stat);
@@ -2269,12 +2271,12 @@ static void swapDataBuffer(unsigned long i, int j)
 }
 
 static int checkHeader(QzSess_T *qz_sess, unsigned char *src,
-                       long src_avail_len, long dest_avail_len,
+                       unsigned int src_avail_len, unsigned int dest_avail_len,
                        QzGzH_T *hdr)
 {
     unsigned char *src_ptr = src;
-    long compressed_sz = 0;
-    long uncompressed_sz = 0;
+    unsigned int compressed_sz = 0;
+    unsigned int uncompressed_sz = 0;
     StdGzF_T *qzFooter = NULL;
     int isEndWithFooter = 0;
     int ret = 0;
@@ -2378,8 +2380,8 @@ static void *doDecompressIn(void *in)
     unsigned int remaining;
     unsigned int src_send_sz = 0;
     unsigned int dest_receive_sz;
-    long src_avail_len, dest_avail_len;
-    long tmp_src_avail_len, tmp_dest_avail_len;
+    unsigned int src_avail_len, dest_avail_len;
+    unsigned int tmp_src_avail_len, tmp_dest_avail_len;
     unsigned char *src_ptr;
     unsigned char *dest_ptr;
     int src_mem_type = 0;
@@ -2402,7 +2404,7 @@ static void *doDecompressIn(void *in)
     remaining = *qz_sess->src_sz - qz_sess->qz_in_len;
     src_avail_len = remaining;
     dest_avail_len = (long)(*qz_sess->dest_sz - qz_sess->qz_out_len);
-    QZ_DEBUG("doDecompressIn: Need to g_process %ld bytes\n", remaining);
+    QZ_DEBUG("doDecompressIn: Need to g_process %d bytes\n", remaining);
     CpaBoolean need_cont_mem =
         g_process.qz_inst[i].instance_info.requiresPhysicallyContiguousMemory;
     if (!need_cont_mem) {
@@ -2410,7 +2412,7 @@ static void *doDecompressIn(void *in)
     }
     while (!done) {
 
-        QZ_DEBUG("src_avail_len is %ld, dest_avail_len is %ld\n",
+        QZ_DEBUG("src_avail_len is %u, dest_avail_len is %u\n",
                  src_avail_len, dest_avail_len);
         sess->thd_sess_stat = checkHeader(qz_sess,
                                           src_ptr,
@@ -2432,9 +2434,9 @@ static void *doDecompressIn(void *in)
             tmp_dest_avail_len = dest_avail_len;
             rc = qzSWDecompress(sess,
                                 src_ptr,
-                                (unsigned int *)&tmp_src_avail_len,
+                                &tmp_src_avail_len,
                                 dest_ptr,
-                                (unsigned int *)&tmp_dest_avail_len);
+                                &tmp_dest_avail_len);
             if (unlikely(rc != QZ_OK)) {
                 sess->thd_sess_stat = rc;
                 remaining = 0;
@@ -2489,13 +2491,13 @@ static void *doDecompressIn(void *in)
             g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes = src_send_sz;
             g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
                 dest_receive_sz;
-            QZ_DEBUG("doDecompressIn: Sending %ld bytes starting at 0x%lx\n",
+            QZ_DEBUG("doDecompressIn: Sending %u bytes starting at 0x%lx\n",
                      src_send_sz, (unsigned long)src_ptr);
 
             /*this buffer is in use*/
             g_process.qz_inst[i].stream[j].seq = qz_sess->seq;
             qz_sess->seq++;
-            QZ_DEBUG("sending seq number %d %d %ld\n", i, j, qz_sess->seq);
+            QZ_DEBUG("sending seq number %lu %d %ld\n", i, j, qz_sess->seq);
 
             if (DEFLATE_GZIP_EXT == data_fmt ||
                 DEFLATE_GZIP == data_fmt) {
@@ -2552,7 +2554,7 @@ static void *doDecompressIn(void *in)
                 }
 
                 if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
-                    QZ_ERROR("instance %d retry count:%d exceed the max count: %d\n",
+                    QZ_ERROR("instance %lu retry count:%d exceed the max count: %d\n",
                              i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
                     goto err_exit;
                 }
@@ -2584,7 +2586,7 @@ static void *doDecompressIn(void *in)
             remaining = 0;
         }
 
-        QZ_DEBUG("src_ptr is %p, remaining is %ld\n", src_ptr, remaining);
+        QZ_DEBUG("src_ptr is %p, remaining is %d\n", src_ptr, remaining);
         if (0 == remaining) {
             done = 1;
             qz_sess->last_submitted = 1;
@@ -2669,7 +2671,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                 qz_sess->seq_in++;
 
                 if (unlikely(CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status)) {
-                    QZ_ERROR("Error(%d) in callback: %ld, %ld, ReqStatus: %d\n",
+                    QZ_ERROR("Error(%d) in callback: %d, %d, ReqStatus: %d\n",
                              g_process.qz_inst[i].stream[j].job_status, i, j,
                              g_process.qz_inst[i].stream[j].res.status);
                     RESTORE_SWAP_CPASTREAM_BUFFER(i, j);
@@ -2685,7 +2687,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                 }
 
                 resl = &g_process.qz_inst[i].stream[j].res;
-                QZ_DEBUG("\tconsumed = %d, produced = %d, seq_in = %ld, src_send_sz = %ld\n",
+                QZ_DEBUG("\tconsumed = %d, produced = %d, seq_in = %ld, src_send_sz = %u\n",
                          resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq,
                          g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes);
 
@@ -2712,7 +2714,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                     if (unlikely(resl->checksum !=
                                  g_process.qz_inst[i].stream[j].checksum ||
                                  resl->produced != g_process.qz_inst[i].stream[j].orgdatalen)) {
-                        QZ_ERROR("Error in check footer, inst %ld, stream %ld\n", i, j);
+                        QZ_ERROR("Error in check footer, inst %d, stream %d\n", i, j);
                         QZ_DEBUG("resp checksum: %x data checksum %x\n",
                                  resl->checksum,
                                  g_process.qz_inst[i].stream[j].checksum);
@@ -2889,7 +2891,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         !(isQATProcessable(src, src_len, qz_sess))                      ||
         qz_sess->inflate_stat == InflateOK) {
         QZ_DEBUG("decompression src_len=%u, hdr->extra.qz_e.src_sz = %u, "
-                 "g_process.qz_init_status = %d, sess->hw_session_stat = %d, "
+                 "g_process.qz_init_status = %d, sess->hw_session_stat = %ld, "
                  "isQATProcessable = %d, switch to software.\n",
                  *src_len,  hdr->extra.qz_e.src_sz,
                  g_process.qz_init_status, sess->hw_session_stat,
@@ -2982,7 +2984,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
 
     qzReleaseInstance(i);
 
-    QZ_DEBUG("PRoduced %d bytes\n", sess->total_out);
+    QZ_DEBUG("PRoduced %lu bytes\n", sess->total_out);
     rc = checkSessionState(sess);
 
     sess->total_in += qz_sess->qz_in_len;

@@ -48,6 +48,7 @@
 #endif
 
 #include <stdlib.h>
+#include <assert.h>
 #include <qatzip.h>
 #include <qz_utils.h>
 #include <qatzip_internal.h>
@@ -170,14 +171,8 @@ void streamBufferCleanup()
 
 static void *getNodeBuffFromFreeList(size_t sz, int pinned)
 {
-    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_free.mutex))) {
-        QZ_ERROR("Failed to get Mutex Lock.\n");
-        return NULL;
-    }
-    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_used.mutex))) {
-        QZ_ERROR("Failed to get Mutex Lock.\n");
-        return NULL;
-    }
+    assert(!pthread_mutex_lock(&g_strm_buff_list_free.mutex));
+    assert(!pthread_mutex_lock(&g_strm_buff_list_used.mutex));
 
     void *retval  = NULL;
     StreamBuffNode_T *node;
@@ -199,14 +194,8 @@ static void *getNodeBuffFromFreeList(size_t sz, int pinned)
     }
 
 done:
-    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_used.mutex))) {
-        QZ_ERROR("Failed to release Mutex Lock.\n");
-        return NULL;
-    }
-    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_free.mutex))) {
-        QZ_ERROR("Failed to release Mutex Lock.\n");
-        return NULL;
-    }
+    assert(!pthread_mutex_unlock(&g_strm_buff_list_used.mutex));
+    assert(!pthread_mutex_unlock(&g_strm_buff_list_free.mutex));
     return retval;
 }
 
@@ -262,17 +251,10 @@ static void *streamBufferAlloc(size_t sz, int numa, int pinned)
 
 static void streamBufferFree(void *addr)
 {
-    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_free.mutex))) {
-        QZ_ERROR("Failed to get Mutex Lock.\n");
-        return;
-    }
-    if (unlikely(0 != pthread_mutex_lock(&g_strm_buff_list_used.mutex))) {
-        QZ_ERROR("Failed to get Mutex Lock.\n");
-        return;
-    }
-
     StreamBuffNode_T *node;
 
+    assert(!pthread_mutex_lock(&g_strm_buff_list_free.mutex));
+    assert(!pthread_mutex_lock(&g_strm_buff_list_used.mutex));
     for (node = g_strm_buff_list_used.head; node != NULL; node = node->next) {
         if (addr == node->buffer) {
             if (removeNodeFromList(node, &g_strm_buff_list_used) == FAILURE) {
@@ -291,14 +273,8 @@ static void streamBufferFree(void *addr)
     }
 
 done:
-    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_used.mutex))) {
-        QZ_ERROR("Failed to release Mutex Lock.\n");
-        return;
-    }
-    if (unlikely(0 != pthread_mutex_unlock(&g_strm_buff_list_free.mutex))) {
-        QZ_ERROR("Failed to release Mutex Lock.\n");
-        return;
-    }
+    assert(!pthread_mutex_unlock(&g_strm_buff_list_used.mutex));
+    assert(!pthread_mutex_unlock(&g_strm_buff_list_free.mutex));
 }
 
 int initStream(QzSession_T *sess, QzStream_T *strm)
@@ -410,7 +386,7 @@ static unsigned int copyStreamOutput(QzStream_T *strm, unsigned char *out)
     cpy_cnt = (strm->pending_out > avail_out) ? avail_out : strm->pending_out;
     QZ_MEMCPY(out, stream_buf->out_buf + stream_buf->out_offset, avail_out,
               cpy_cnt);
-    QZ_DEBUG("copy %ld to user output\n", cpy_cnt);
+    QZ_DEBUG("copy %u to user output\n", cpy_cnt);
 
     strm->out_sz -= cpy_cnt;
     strm->pending_out -= cpy_cnt;

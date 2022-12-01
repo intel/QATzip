@@ -136,7 +136,7 @@ static unsigned char readByte(FILE *fp)
 
 static void skipNByte(int n, FILE *fp)
 {
-    fseek(fp, n, SEEK_CUR);
+    assert(!fseek(fp, n, SEEK_CUR));
 }
 
 static uint32_t readCRC(FILE *fp)
@@ -465,9 +465,17 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
     unsigned int read_more = 0;
     int src_fd = -1;
+    uint64_t eheader_size;
+    uint32_t crc = 0;
+    uint32_t  start_crc = 0;
     uint64_t non_empty_number = 0;
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
     Qz7zSignatureHeader_T *sheader = NULL;
+    size_t  total_compressed_size = 0;
+    int is_last;
+    int n_part; // how much parts can the src file be splited
+    int n_part_i;
+
     if (!time_list_head) {
         QZ_DEBUG("malloc time_list_head error\n");
         ret = QZ7Z_ERR_OOM;
@@ -476,12 +484,6 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
     gettimeofday(&time_list_head->time_s, NULL);
     time_list_head->time_e = time_list_head->time_s;
     time_list_head->next = NULL;
-
-    size_t  total_compressed_size = 0;
-    int is_last;
-    int n_part; // how much parts can the src file be splited
-    int n_part_i;
-
 
     dst_file = fopen(dst_file_name, "w+");
     if (!dst_file) {
@@ -651,10 +653,10 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
             if (!cur_file->isSymLink) {
                 fclose(src_file);
                 src_file = NULL;
-		if(src_fd >= 0) {
+                if (src_fd >= 0) {
                     close(src_fd);
-		    src_fd = -1;
-		}
+                    src_fd = -1;
+                }
             }
         }// end for
 
@@ -669,8 +671,6 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
         goto exit;
     }
 
-    uint64_t eheader_size;
-    uint32_t crc = 0;
     eheader_size = writeEndHeader(eheader, dst_file, &crc);
     if (eheader_size == 0) {
         QZ_ERROR("Cannot write 7z end header\n");
@@ -683,7 +683,6 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
              "crc: %x\n",
              total_compressed_size, eheader_size, crc);
 
-    uint32_t  start_crc = 0;
     unsigned char start_header[24];
 
     memcpy(start_header + SIGNATUREHEADER_OFFSET_NEXTHEADER_OFFSET,
@@ -696,7 +695,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                       start_header + SIGNATUREHEADER_OFFSET_NEXTHEADER_OFFSET,
                       20);
     memcpy(start_header, &start_crc, sizeof(start_crc));
-    fseek(dst_file, SIGNATUREHEADER_OFFSET_BASE, SEEK_SET);
+    assert(!fseek(dst_file, SIGNATUREHEADER_OFFSET_BASE, SEEK_SET));
     fwrite(start_header, 1, sizeof(start_header), dst_file);
 
     displayStats(time_list_head, src_file_size, dst_file_size,
@@ -819,7 +818,7 @@ Qz7zArchiveProperty_T *resolveArchiveProperties(FILE *fp)
         QZ_ERROR("malloc property error\n");
         return NULL;
     }
-
+    uint64_t size;
     uint64_t  id = getU64FromBytes(fp);
 
     if ((id >> QZ7Z_DEVELOP_ID_PREFIX_SHIFT) != 0x3f /* 7z dev id prefix */) {
@@ -836,14 +835,14 @@ Qz7zArchiveProperty_T *resolveArchiveProperties(FILE *fp)
     }
 
     if ((id & 0xffff) != QZ7Z_DEVELOP_SUBID) {
-        QZ_ERROR("7z file ArchiveProperties develop subID(%u) error.\n"
+        QZ_ERROR("7z file ArchiveProperties develop subID(%lu) error.\n"
                  , id & 0xffff);
         goto error;
     }
 
     property->id = id;
 
-    uint64_t size = getU64FromBytes(fp);
+    size = getU64FromBytes(fp);
 
     skipNByte(size, fp);
 
@@ -1361,11 +1360,7 @@ error:
 
 Qz7zStreamsInfo_T *resolveMainStreamsInfo(FILE *fp)
 {
-    Qz7zStreamsInfo_T *streamsInfo = malloc(sizeof(Qz7zStreamsInfo_T));
-    if (!streamsInfo) {
-        QZ_ERROR("malloc error\n");
-        return NULL;
-    }
+
 
     unsigned char c;
     int end = 0;
@@ -1373,6 +1368,13 @@ Qz7zStreamsInfo_T *resolveMainStreamsInfo(FILE *fp)
     int coders_info_allocated = 0;
     int coders_info_resolved = 0;
     int substreams_info_resolved = 0;
+
+    Qz7zStreamsInfo_T *streamsInfo = malloc(sizeof(Qz7zStreamsInfo_T));
+    if (!streamsInfo) {
+        QZ_ERROR("malloc error\n");
+        return NULL;
+    }
+    memset(streamsInfo, 0, sizeof(Qz7zStreamsInfo_T));
 
     while (!end) {
 
@@ -1457,7 +1459,7 @@ Qz7zEndHeader_T *resolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader)
     int streams_info_resolved = 0;
     int files_info_resolved = 0;
 
-    fseek(fp, sheader->nextHeaderOffset + 0x20, SEEK_CUR);
+    assert(!fseek(fp, sheader->nextHeaderOffset + 0x20, SEEK_CUR));
 
     while (!end) {
 
@@ -1553,14 +1555,18 @@ int createDir(const char *newdir, int back)
     int ret;
     char *dirc, *basec;
     char pwd[PATH_MAX];
+    char dir_name[PATH_MAX + 1] = {0};
+    char base_name[PATH_MAX + 1] = {0};
 
     if (!getcwd(pwd, sizeof(pwd))) {
         return QZ7Z_ERR_GETCWD;
     }
     QZ_DEBUG("working directory: %s\n", pwd);
 
-    dirc = strdup(newdir);
-    dirc = dirname(dirc);
+    strncpy(dir_name, newdir, PATH_MAX);
+    strncpy(base_name, newdir, PATH_MAX);
+    dirc = dirname(dir_name);
+    basec = basename(base_name);
 
     if (!strcmp(dirc, ".")) {
         if (mkdir(newdir, 0755) < 0) {
@@ -1583,9 +1589,6 @@ int createDir(const char *newdir, int back)
 
         return QZ7Z_OK;
     }
-
-    basec = strdup(newdir);
-    basec = basename(basec);
 
     if ((ret = createDir(dirc, 0)) < 0) return ret;
     if ((ret = createDir(basec, 0)) < 0) return ret;
@@ -1627,7 +1630,7 @@ int checkHeaderCRC(Qz7zSignatureHeader_T *sh, FILE *fp)
     size_t n;
     unsigned char buf[4096];
     crc = 0;
-    fseek(fp, sh->nextHeaderOffset + 0x20, SEEK_SET);
+    assert(!fseek(fp, sh->nextHeaderOffset + 0x20, SEEK_SET));
     while ((n = fread(buf, 1, sizeof(buf), fp))) {
         crc = crc32(crc, buf, n);
     }
@@ -1635,7 +1638,7 @@ int checkHeaderCRC(Qz7zSignatureHeader_T *sh, FILE *fp)
         QZ_ERROR("End header CRC failed\n");
         return -1;
     }
-    fseek(fp, 0, SEEK_SET);
+    assert(!fseek(fp, 0, SEEK_SET));
     return 0;
 }
 
@@ -1772,13 +1775,18 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
     unsigned int read_more = 0;
     int src_fd = -1;
-
+    Qz7zFileItem_T *p = NULL;
+    uint64_t dir_num = 0;
+    uint64_t fil_num = 0;
+    uint64_t file_index = 0;
     int is_last;
     int n_part; // how much parts can the src file be splited
     int n_part_i;
     Qz7zSignatureHeader_T *sheader = NULL;
     Qz7zEndHeader_T *eheader = NULL;
     RunTimeList_T *run_time = NULL;
+    \
+    RunTimeList_T *time_node = NULL;
 
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
     if (!time_list_head) {
@@ -1790,7 +1798,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     time_list_head->time_e = time_list_head->time_s;
     time_list_head->next = NULL;
 
-    RunTimeList_T *time_node = time_list_head;
+    time_node = time_list_head;
     run_time = calloc(1, sizeof(RunTimeList_T));
     if (!run_time) {
         QZ_DEBUG("malloc RunTimeList_T error\n");
@@ -1837,13 +1845,12 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     src_file = NULL;
 
     // decode the dir
-    Qz7zFileItem_T *p = eheader->filesInfo_Dec->items;
-    uint64_t dir_num = eheader->filesInfo_Dec->dir_num;
-    uint64_t fil_num = eheader->filesInfo_Dec->file_num;
+    p = eheader->filesInfo_Dec->items;
+    dir_num = eheader->filesInfo_Dec->dir_num;
+    fil_num = eheader->filesInfo_Dec->file_num;
 
     decompressEmptyfilesAndDirectories(eheader->filesInfo_Dec);
 
-    uint64_t file_index = 0;
     // decode the content
     if (eheader->streamsInfo) {
 
@@ -1912,7 +1919,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
         }
 
         // skip the signature header
-        fseek(src_file, 32, SEEK_SET);
+        assert(!fseek(src_file, 32, SEEK_SET));
 
         int i = 0; // file index
 
@@ -2018,7 +2025,11 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
                             if (S_ISLNK(st_mode)) {
                                 QZ_DEBUG("open an broken soft-link file, "
                                          "need to delete it\n");
-                                remove(cur_file->fileName);
+                                if (!remove(cur_file->fileName)) {
+                                    QZ_DEBUG("remove file %s error\n", cur_file->fileName);
+                                    ret = ERROR;
+                                    goto exit;
+                                }
                                 dst_file = fopen(cur_file->fileName, "a");
                                 if (NULL == dst_file) {
                                     QZ_DEBUG("open file %s error\n", cur_file->fileName);
@@ -3134,8 +3145,9 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
     DIR *dirp = NULL;
     char *dirc = NULL;
     char *absolute_path;
+    char dir_name[PATH_MAX + 1] = {0};
     char path[PATH_MAX];
-    Qz7zItemList_T *res = malloc(sizeof(Qz7zItemList_T));
+    Qz7zItemList_T *res = calloc(1, sizeof(Qz7zItemList_T));
     if (!res) {
         QZ_ERROR("malloc error\n");
         return NULL;
@@ -3157,8 +3169,8 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
         if (NULL == absolute_path) {
             goto error;
         }
-        dirc = strdup(absolute_path);
-        dirc = dirname(dirc);
+        strncpy(dir_name, absolute_path, PATH_MAX);
+        dirc = dirname(dir_name);
 
         fi = fileItemCreate(absolute_path);
         if (!fi) {
@@ -3207,6 +3219,7 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
                             fileItemCreate(file_path);
                         if (!anotherfile) {
                             QZ_ERROR("Cannot create file\n");
+                            closedir(dirp);
                             goto error;
                         }
                         if (strcmp(dirc, "/")) {
@@ -3221,6 +3234,7 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
                             qzListAdd(files_head, (void **)&anotherfile);
                         }
                     }
+                    closedir(dirp);
                 }
                 dir_index++;
             }
@@ -3228,7 +3242,6 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
             qzListAdd(files_head, (void **)&fi);
         }
         optind++;
-        free(dirc);
     }// end for
 
     /* now the res->items has been resolved successfully */
@@ -3238,9 +3251,6 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
     return res;
 
 error:
-    if (dirp) {
-        closedir(dirp);
-    }
     if (fi) {
         free(fi);
     }
@@ -3292,7 +3302,7 @@ int check7zArchive(const char *archive)
 int checkDirectory(const char *filename)
 {
     struct stat buf;
-    stat(filename, &buf);
+    assert(!stat(filename, &buf));
     if (S_ISDIR(buf.st_mode)) {
         return 1;
     } else {

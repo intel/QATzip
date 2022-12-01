@@ -461,7 +461,7 @@ int decompressFile(int in_file, int out_file)
 
     do {
         bytes_read = read(in_file, src_buffer, src_buffer_size);
-        QZ_PRINT("Reading input file (%u Bytes)\n", bytes_read);
+        QZ_PRINT("Reading input file (%lu Bytes)\n", bytes_read);
         puts("Decompressing...");
 
         ZSTD_inBuffer input = { src_buffer, bytes_read, 0 };
@@ -507,7 +507,7 @@ done:
 void QzstdDisplayStats(double time, off_t insize, off_t outsize,
                        int is_compress)
 {
-    if (insize) {
+    if (insize && outsize) {
         assert(0 != time);
         double size = (is_compress) ? insize : outsize;
         double throughput = (size * CHAR_BIT) / time; /* in MB (megabytes) */

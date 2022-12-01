@@ -646,7 +646,7 @@ void *qzDecompressSwQz(void *arg)
                 goto done;
             }
 
-            QZ_DEBUG("thread %ld before Compressed %d bytes into %d\n", tid,
+            QZ_DEBUG("thread %ld before Compressed %lu bytes into %lu\n", tid,
                      src_sz, comp_out_sz);
 
             unsigned int last = 0;
@@ -658,11 +658,11 @@ void *qzDecompressSwQz(void *arg)
             }
 
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                          org_src_sz);
                 goto done;
             }
-            QZ_DEBUG("thread %ld after Compressed %d bytes into %d\n", tid, src_sz,
+            QZ_DEBUG("thread %ld after Compressed %lu bytes into %lu\n", tid, src_sz,
                      comp_out_sz);
             qzTeardownSession(&sess);
         }
@@ -671,12 +671,13 @@ void *qzDecompressSwQz(void *arg)
         {
             cus_params.hw_buff_sz = 32 * 1024; //32KB
             if (qzSetDefaults(&cus_params) != QZ_OK) {
-                QZ_ERROR("Err: set params fail with incorrect hw_buff_sz %d.\n",
+                QZ_ERROR("Err: set params fail with incorrect hw_buff_sz %u.\n",
                          cus_params.hw_buff_sz);
                 goto done;
             }
 
-            QZ_DEBUG("thread %ld before Decompressed %d bytes into %d\n", tid, comp_out_sz,
+            QZ_DEBUG("thread %ld before Decompressed %lu bytes into %lu\n", tid,
+                     comp_out_sz,
                      decomp_sw_out_sz);
             qzSetupSession(&sess, NULL);
             unsigned int tmp_comp_out_sz = GET_LOWER_32BITS(comp_out_sz);
@@ -688,11 +689,11 @@ void *qzDecompressSwQz(void *arg)
             }
 
             if (decomp_sw_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %d != org_src_sz: %d \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n!",
                          decomp_sw_out_sz, org_src_sz);
                 goto done;
             }
-            QZ_DEBUG("thread %ld after SW Decompressed %d bytes into %d\n", tid,
+            QZ_DEBUG("thread %ld after SW Decompressed %lu bytes into %lu\n", tid,
                      comp_out_sz, decomp_sw_out_sz);
             qzTeardownSession(&sess);
         }
@@ -702,12 +703,13 @@ void *qzDecompressSwQz(void *arg)
             //Reset default hwBufferSize to 64KB
             cus_params.hw_buff_sz = 64 * 1024;
             if (qzSetDefaults(&cus_params) != QZ_OK) {
-                QZ_ERROR("Err: set params fail with incorrect hw_buff_sz %d.\n",
+                QZ_ERROR("Err: set params fail with incorrect hw_buff_sz %u.\n",
                          cus_params.hw_buff_sz);
                 goto done;
             }
 
-            QZ_DEBUG("thread %ld before Decompressed %d bytes into %d\n", tid, comp_out_sz,
+            QZ_DEBUG("thread %ld before Decompressed %lu bytes into %lu\n", tid,
+                     comp_out_sz,
                      decomp_qz_out_sz);
             qzSetupSession(&sess, NULL);
             unsigned int tmp_comp_out_sz = GET_LOWER_32BITS(comp_out_sz);
@@ -719,11 +721,11 @@ void *qzDecompressSwQz(void *arg)
             }
 
             if (decomp_qz_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %d != org_src_sz: %d \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
                          decomp_qz_out_sz, org_src_sz);
                 goto done;
             }
-            QZ_DEBUG("thread %ld after QZ Decompressed %d bytes into %d\n", tid,
+            QZ_DEBUG("thread %ld after QZ Decompressed %lu bytes into %lu\n", tid,
                      comp_out_sz, decomp_qz_out_sz);
             qzTeardownSession(&sess);
         }
@@ -733,13 +735,13 @@ void *qzDecompressSwQz(void *arg)
         {
             QZ_DEBUG("verify data..\n");
             if (memcmp(src, decomp_sw_out, org_src_sz)) {
-                QZ_ERROR("ERROR: SW Decompression FAILED on thread %ld with size: %d \n!", tid,
+                QZ_ERROR("ERROR: SW Decompression FAILED on thread %ld with size: %lu \n!", tid,
                          src_sz);
                 goto done;
             }
 
             if (memcmp(src, decomp_qz_out, org_src_sz)) {
-                QZ_ERROR("ERROR: QZip Decompression FAILED on thread %ld with size: %d \n!",
+                QZ_ERROR("ERROR: QZip Decompression FAILED on thread %ld with size: %lu \n!",
                          tid, src_sz);
                 goto done;
             }
@@ -765,14 +767,14 @@ void *qzDecompressSwQz(void *arg)
     rate /= sec;// Gbps
     rc = pthread_mutex_lock(&g_lock_print);
     assert(0 == rc);
-    QZ_PRINT("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%lld, "
-             "bytes=%d, %Lf Gbps", tid, verify_data, count, el_m, org_src_sz, rate);
-    QZ_PRINT(", input_len=%d, comp_len=%d, ratio=%f%%",
+    QZ_PRINT("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
+             "bytes=%lu, %Lf Gbps", tid, verify_data, count, el_m, org_src_sz, rate);
+    QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%",
              org_src_sz, comp_out_sz,
              ((double)comp_out_sz / (double)org_src_sz) * 100);
-    QZ_PRINT(", comp_len=%d, sw_decomp_len=%d",
+    QZ_PRINT(", comp_len=%lu, sw_decomp_len=%lu",
              comp_out_sz, decomp_sw_out_sz);
-    QZ_PRINT(", comp_len=%d, qz_decomp_len=%d",
+    QZ_PRINT(", comp_len=%lu, qz_decomp_len=%lu",
              comp_out_sz, decomp_qz_out_sz);
     QZ_PRINT("\n");
     rc = pthread_mutex_unlock(&g_lock_print);
@@ -804,6 +806,9 @@ void *qzCompressDecompressWithFormatOption(void *arg)
     QzBlock_T *head, *blk;
     QzSession_T sess = {0};
 
+    if (!org_src_sz) {
+        pthread_exit((void *)"input size is 0");
+    }
     head = ((TestArg_T *)arg)->blks;
     if (head == NULL) {
         pthread_exit((void *)"No Input -F options or phrase options failed\n");
@@ -860,7 +865,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
         {
             comp_out_sz = org_comp_out_sz;
 
-            QZ_DEBUG("thread %ld before Compressed %d bytes into %d\n", tid,
+            QZ_DEBUG("thread %ld before Compressed %lu bytes into %lu\n", tid,
                      src_sz, comp_out_sz);
 
             unsigned int remaining = GET_LOWER_32BITS(src_sz), tmp_src_sz = 0, last = 0;
@@ -894,7 +899,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
                 comp_available_out -= tmp_comp_out_sz;
                 remaining -= tmp_src_sz;
 
-                QZ_DEBUG("[Thead%d] Compress: format is %4s, remaining %d, tmp_src_sz is %d\n",
+                QZ_DEBUG("[Thead%ld] Compress: format is %4s, remaining %u, tmp_src_sz is %u\n",
                          tid,
                          g_format_list[blk->fmt - 1].fmt_name, remaining, tmp_src_sz);
 
@@ -907,17 +912,18 @@ void *qzCompressDecompressWithFormatOption(void *arg)
             }
 
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n!", src_sz,
                          org_src_sz);
                 goto done;
             }
-            QZ_DEBUG("thread %ld after Compressed %d bytes into %d\n", tid, src_sz,
+            QZ_DEBUG("thread %ld after Compressed %lu bytes into %lu\n", tid, src_sz,
                      comp_out_sz);
         }
 
         //Decompress
         {
-            QZ_DEBUG("thread %ld before Decompressed %d bytes into %d\n", tid, comp_out_sz,
+            QZ_DEBUG("thread %ld before Decompressed %lu bytes into %lu\n", tid,
+                     comp_out_sz,
                      decomp_out_sz);
 
             unsigned int remaining = GET_LOWER_32BITS(comp_out_sz);
@@ -942,16 +948,16 @@ void *qzCompressDecompressWithFormatOption(void *arg)
                 remaining -= tmp_comp_out_sz;
                 decomp_available_out -= tmp_decomp_out_sz;
 
-                QZ_DEBUG("[Thead%d] Decompress: remaining %d, tmp_decomp_out_sz is %d\n",
+                QZ_DEBUG("[Thead%ld] Decompress: remaining %d, tmp_decomp_out_sz is %u\n",
                          tid, remaining, tmp_decomp_out_sz);
             }
 
             if (decomp_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %d != org_src_sz: %d \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %u != org_src_sz: %lu \n!",
                          decomp_out_sz, org_src_sz);
                 goto done;
             }
-            QZ_DEBUG("thread %ld after Decompressed %d bytes into %d\n", tid, comp_out_sz,
+            QZ_DEBUG("thread %ld after Decompressed %lu bytes into %u\n", tid, comp_out_sz,
                      decomp_out_sz);
         }
 
@@ -959,7 +965,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
 
         QZ_DEBUG("verify data..\n");
         if (memcmp(src, decomp_out, org_src_sz)) {
-            QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %d \n!", tid,
+            QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu \n!", tid,
                      src_sz);
             goto done;
         }
@@ -982,12 +988,12 @@ void *qzCompressDecompressWithFormatOption(void *arg)
     rate /= sec;// Gbps
     rc = pthread_mutex_lock(&g_lock_print);
     assert(0 == rc);
-    QZ_PRINT("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%lld, "
-             "bytes=%d, %Lf Gbps", tid, verify_data, count, el_m, org_src_sz, rate);
-    QZ_PRINT(", input_len=%d, comp_len=%d, ratio=%f%%",
+    QZ_PRINT("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
+             "bytes=%lu, %Lf Gbps", tid, verify_data, count, el_m, org_src_sz, rate);
+    QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%",
              org_src_sz, comp_out_sz,
              ((double)comp_out_sz / (double)org_src_sz) * 100);
-    QZ_PRINT(", comp_len=%d, decomp_len=%d",
+    QZ_PRINT(", comp_len=%lu, decomp_len=%lu",
              comp_out_sz, decomp_out_sz);
     QZ_PRINT("\n");
     rc = pthread_mutex_unlock(&g_lock_print);
@@ -1047,7 +1053,7 @@ void *qzSetupParamFuncTest(void *arg)
         QZ_ERROR("Err: fail to compress data with ret: %d\n", rc);
         goto end;
     }
-    QZ_PRINT("With default params, input_len:%d, output_len:%d.\n",
+    QZ_PRINT("With default params, input_len:%lu, output_len:%lu.\n",
              src_sz, test_dest_sz);
     test_dest_sz = dest_sz;
 
@@ -1185,7 +1191,7 @@ void *qzSetupParamFuncTest(void *arg)
         QZ_ERROR("Err: fail to compress data with ret: %d\n", rc);
         goto end;
     }
-    QZ_ERROR("With custom params, input_len:%d, output_len:%d.\n",
+    QZ_ERROR("With custom params, input_len:%lu, output_len:%lu.\n",
              src_sz, test_dest_sz);
 
 end:
@@ -1217,6 +1223,9 @@ void *qzCompressAndDecompress(void *arg)
     int thread_sleep = ((TestArg_T *)arg)->thread_sleep;
     QzSession_T sess = {0};
 
+    if (!org_src_sz) {
+        pthread_exit((void *)"input size is 0\n");
+    }
     src_sz = org_src_sz;
     comp_out_sz = org_comp_out_sz;
     decomp_out_sz = org_src_sz;
@@ -1302,7 +1311,7 @@ void *qzCompressAndDecompress(void *arg)
         src_sz = consumed;
         comp_out_sz = produced;
         if (src_sz != org_src_sz) {
-            QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %d \n!", src_sz,
                      org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -1343,7 +1352,7 @@ void *qzCompressAndDecompress(void *arg)
         (void)gettimeofday(&ts, NULL);
         if (DECOMP != service) {
             comp_out_sz = org_comp_out_sz;
-            QZ_DEBUG("thread %ld before Compressed %d bytes into %d\n", tid, src_sz,
+            QZ_DEBUG("thread %ld before Compressed %lu bytes into %lu\n", tid, src_sz,
                      comp_out_sz);
             consumed = 0;
             produced = 0;
@@ -1370,17 +1379,18 @@ void *qzCompressAndDecompress(void *arg)
             src_sz = consumed;
             comp_out_sz = produced;
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %d \n!", src_sz,
                          org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
             }
-            QZ_DEBUG("thread %ld after Compressed %d bytes into %d\n", tid, src_sz,
+            QZ_DEBUG("thread %ld after Compressed %lu bytes into %lu\n", tid, src_sz,
                      comp_out_sz);
         }
 
         if (COMP != service) {
-            QZ_DEBUG("thread %ld before Decompressed %d bytes into %d\n", tid, comp_out_sz,
+            QZ_DEBUG("thread %ld before Decompressed %lu bytes into %lu\n", tid,
+                     comp_out_sz,
                      decomp_out_sz);
             consumed = 0;
             produced = 0;
@@ -1401,12 +1411,12 @@ void *qzCompressAndDecompress(void *arg)
 
             decomp_out_sz = produced;
             if (decomp_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %d != org_src_sz: %d \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %d \n!",
                          decomp_out_sz, org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
             }
-            QZ_DEBUG("thread %ld after Decompressed %d bytes into %d\n", tid, comp_out_sz,
+            QZ_DEBUG("thread %ld after Decompressed %lu bytes into %lu\n", tid, comp_out_sz,
                      decomp_out_sz);
         }
 
@@ -1415,7 +1425,7 @@ void *qzCompressAndDecompress(void *arg)
         if (verify_data && COMP != service) {
             QZ_DEBUG("verify data..\n");
             if (memcmp(src, decomp_out, org_src_sz)) {
-                QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %d \n!", tid,
+                QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu \n!", tid,
                          src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -1459,16 +1469,16 @@ void *qzCompressAndDecompress(void *arg)
         pthread_mutex_unlock(&g_lock_print);
         goto done;
     }
-    QZ_PRINT(", tid=%ld, verify=%d, count=%d, msec=%lld, "
+    QZ_PRINT(", tid=%ld, verify=%d, count=%d, msec=%llu, "
              "bytes=%d, %Lf Gbps",
              tid, verify_data, count, el_m, org_src_sz, rate);
     if (DECOMP != service) {
-        QZ_PRINT(", input_len=%d, comp_len=%d, ratio=%f%%",
+        QZ_PRINT(", input_len=%d, comp_len=%lu, ratio=%f%%",
                  org_src_sz, comp_out_sz,
                  ((double)comp_out_sz / (double)org_src_sz) * 100);
     }
     if (COMP != service) {
-        QZ_PRINT(", comp_len=%d, decomp_len=%d",
+        QZ_PRINT(", comp_len=%lu, decomp_len=%lu",
                  comp_out_sz, decomp_out_sz);
     }
     QZ_PRINT("\n");
@@ -1573,7 +1583,7 @@ int qzCompressDecompressWithParams(const TestArg_T *arg,
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                  orig_sz);
         goto done;
     }
@@ -1616,6 +1626,7 @@ void *qzCompressStreamAndDecompress(void *arg)
     unsigned int input_left = 0, last = 0;
     unsigned int decomp_out_sz = 0;
     int org_in_sz;
+    int offset = 0;
 
     TestArg_T *test_arg = (TestArg_T *) arg;
 
@@ -1720,7 +1731,7 @@ void *qzCompressStreamAndDecompress(void *arg)
 
 
     if (memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Decompression FAILED with size: %d \n!", orig_sz);
+        QZ_ERROR("ERROR: Decompression FAILED with size: %lu \n!", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpOutputData(comp_sz, comp_src, "comp_out");
         dumpOutputData(decomp_sz, decomp_src, "decomp_out");
@@ -1763,11 +1774,11 @@ void *qzCompressStreamAndDecompress(void *arg)
         }
     }
 
-    QZ_DEBUG("Total consumed: %d produced: %d\n", consumed, produced);
-    QZ_DEBUG("verify data of size %d ...\n", orig_sz);
+    QZ_DEBUG("Total consumed: %u produced: %u\n", consumed, produced);
+    QZ_DEBUG("verify data of size %lu ...\n", orig_sz);
     if (produced != orig_sz || consumed != decomp_out_sz ||
         memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Memory compare FAILED with size: %d \n!", orig_sz);
+        QZ_ERROR("ERROR: Memory compare FAILED with size: %lu \n!", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpInputData(orig_sz, decomp_src);
         goto exit;
@@ -1783,7 +1794,6 @@ void *qzCompressStreamAndDecompress(void *arg)
     produced = 0;
     memset(decomp_src, 0, orig_sz);
     QzGzH_T hdr;
-    int offset = 0;
 
     while (!done) {
         if (QZ_OK != qzGzipHeaderExt(comp_src + offset, &hdr)) {
@@ -1812,11 +1822,11 @@ void *qzCompressStreamAndDecompress(void *arg)
         }
     }
 
-    QZ_DEBUG("Total consumed: %d produced: %d\n", consumed, produced);
-    QZ_DEBUG("verify data of size %d ...\n", orig_sz);
+    QZ_DEBUG("Total consumed: %u produced: %u\n", consumed, produced);
+    QZ_DEBUG("verify data of size %lu ...\n", orig_sz);
     if (produced != orig_sz || consumed != decomp_out_sz ||
         memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Decompression FAILED with size: %d \n!", orig_sz);
+        QZ_ERROR("ERROR: Decompression FAILED with size: %lu \n!", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpInputData(orig_sz, decomp_src);
 
@@ -1852,8 +1862,8 @@ test_2_end:
         consumed += comp_strm.in_sz;
         produced += comp_strm.out_sz;
 
-        QZ_DEBUG("consumed: %d produced: %d input_left: %d last: %d, pending_in: %d, pending_out: %d "
-                 "org_in_sz: %d in_sz: %d\n",
+        QZ_DEBUG("consumed: %u produced: %u input_left: %u last: %u, pending_in: %u, pending_out: %u "
+                 "org_in_sz: %d in_sz: %u\n",
                  consumed, produced, input_left, last, comp_strm.pending_in,
                  comp_strm.pending_out,
                  org_in_sz, comp_strm.in_sz);
@@ -1865,11 +1875,11 @@ test_2_end:
         }
     }
 
-    QZ_DEBUG("Total consumed: %d produced: %d\n", consumed, produced);
-    QZ_DEBUG("verify data of size %d ...\n", orig_sz);
+    QZ_DEBUG("Total consumed: %u produced: %u\n", consumed, produced);
+    QZ_DEBUG("verify data of size %lu ...\n", orig_sz);
     if (produced != orig_sz || consumed != decomp_out_sz ||
         memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Memory compare FAILED with size: %d \n!", orig_sz);
+        QZ_ERROR("ERROR: Memory compare FAILED with size: %lu \n!", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpInputData(orig_sz, decomp_src);
         goto exit;
@@ -1901,8 +1911,8 @@ test_3_end:
         consumed += comp_strm.in_sz;
         produced += comp_strm.out_sz;
 
-        QZ_DEBUG("consumed: %d produced: %d input_left: %d last: %d, pending_in: %d, pending_out: %d "
-                 "org_in_sz: %d in_sz: %d\n",
+        QZ_DEBUG("consumed: %u produced: %u input_left: %u last: %u, pending_in: %u, pending_out: %u "
+                 "org_in_sz: %d in_sz: %u\n",
                  consumed, produced, input_left, last, comp_strm.pending_in,
                  comp_strm.pending_out,
                  org_in_sz, comp_strm.in_sz);
@@ -1914,11 +1924,11 @@ test_3_end:
         }
     }
 
-    QZ_DEBUG("Total consumed: %d produced: %d\n", consumed, produced);
-    QZ_DEBUG("verify data of size %d ...\n", orig_sz);
+    QZ_DEBUG("Total consumed: %u produced: %u\n", consumed, produced);
+    QZ_DEBUG("verify data of size %lu ...\n", orig_sz);
     if (produced != orig_sz || consumed != decomp_out_sz ||
         memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Memory compare FAILED with size: %d \n!", orig_sz);
+        QZ_ERROR("ERROR: Memory compare FAILED with size: %lu \n!", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpInputData(orig_sz, decomp_src);
         goto exit;
@@ -1963,7 +1973,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     const long tid = test_arg->thd_id;
     QzSession_T sess = {0};
 
-    QZ_DEBUG("Hello from qzCompressStreamOnCommonMem id %d\n", tid);
+    QZ_DEBUG("Hello from qzCompressStreamOnCommonMem id %ld\n", tid);
 
     timeCheck(0, tid);
 
@@ -2038,7 +2048,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
             goto done;
         }
         (void)gettimeofday(&te, NULL);
-        QZ_DEBUG("Compressed %d bytes into %d\n", src_sz, dest_sz);
+        QZ_DEBUG("Compressed %u bytes into %u\n", src_sz, dest_sz);
 
         ts_m = (ts.tv_sec * 1000000) + ts.tv_usec;
         te_m = (te.tv_sec * 1000000) + te.tv_usec;
@@ -2051,7 +2061,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     rate = src_sz * test_arg->count * 8; // bits
     rate = rate / 1000000000.0; // gigbits
     rate = rate / sec;// Gbps
-    QZ_PRINT("[%ld] elasped microsec = %lld bytes = %d rate = %Lf Gbps\n",
+    QZ_PRINT("[%ld] elasped microsec = %llu bytes = %u rate = %Lf Gbps\n",
              tid, el_m, src_sz, rate);
 
 done:
@@ -2200,7 +2210,7 @@ void *qzDecompressStreamInput(void *thd_arg)
     const int gen_data = test_arg->gen_data;
     QzSession_T sess = {0};
 
-    QZ_DEBUG("Hello from qzDecompressStreamInput%d\n");
+    QZ_DEBUG("Hello from qzDecompressStreamInput\n");
 
     rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_FAIL(rc)) {
@@ -2289,7 +2299,7 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
     const long tid = test_arg->thd_id;
     QzSession_T sess = {0};
 
-    QZ_PRINT("Hello from qzCompressStreamInvalidChunkSize id %d\n", tid);
+    QZ_PRINT("Hello from qzCompressStreamInvalidChunkSize id %ld\n", tid);
 
     timeCheck(0, tid);
 
@@ -2299,7 +2309,7 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    qzGetDefaults(&params);
+    assert(!qzGetDefaults(&params));
     params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
     if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
@@ -2347,7 +2357,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     const long tid = test_arg->thd_id;
     QzSession_T sess = {0};
 
-    QZ_PRINT("Hello from qzCompressStreamInvalidQzStreamParam id %d\n", tid);
+    QZ_PRINT("Hello from qzCompressStreamInvalidQzStreamParam id %ld\n", tid);
 
     rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_HW_FAIL(rc)) {
@@ -2355,7 +2365,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    qzGetDefaults(&params);
+    assert(!qzGetDefaults(&params));
     params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
     if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
@@ -2457,7 +2467,7 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
     comp_src = malloc(comp_sz);
     decomp_src = calloc(orig_sz, 1);
 
-    qzGetDefaults(&comp_params);
+    assert(!qzGetDefaults(&comp_params));
 
     slice_sz = comp_params.hw_buff_sz / 4;
 
@@ -2528,7 +2538,7 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
 
 
     if (memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Decompression FAILED with size: %d \n!", orig_sz);
+        QZ_ERROR("ERROR: Decompression FAILED with size: %lu \n!", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpOutputData(comp_sz, comp_src, "comp_out");
         dumpOutputData(decomp_sz, decomp_src, "decomp_out");
@@ -2628,7 +2638,7 @@ void *testqzEndStreamInvalidParam(void *arg, int test_no)
     comp_src = malloc(comp_sz);
     decomp_src = calloc(orig_sz, 1);
 
-    qzGetDefaults(&comp_params);
+    assert(!qzGetDefaults(&comp_params));
 
     slice_sz = comp_params.hw_buff_sz / 4;
 
@@ -2915,7 +2925,7 @@ int qzDecompressFailedAtUnknownGzipHeader(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                  orig_sz);
         goto done;
     }
@@ -2970,7 +2980,7 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
         goto done;
     }
 
-    qzGetDefaults(&params);
+    assert(!qzGetDefaults(&params));
     params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
     rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
@@ -2985,7 +2995,7 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                  orig_sz);
         goto done;
     }
@@ -3056,7 +3066,7 @@ int qzDecompressHWFailedAtUnknownGzipBlock(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                  orig_sz);
         goto done;
     }
@@ -3128,7 +3138,7 @@ int qzDecompressForceSW(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                  orig_sz);
         goto done;
     }
@@ -3230,7 +3240,7 @@ int qzDecompressStandalone(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                  orig_sz);
         goto done;
     }
@@ -3240,8 +3250,9 @@ int qzDecompressStandalone(void)
     if (rc != QZ_OK          ||
         decomp_sz != orig_sz ||
         memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Decompression failed, orig_sc:%u != decomp_src:%u\n", orig_sz,
-                 decomp_src);
+        QZ_ERROR("ERROR: Decompression failed, orig_sc:%lu != decomp_src:%lu\n",
+                 orig_sz,
+                 decomp_sz);
         goto done;
     }
     rc = 0;
@@ -3337,7 +3348,7 @@ int doQzCompressCrcCheck(size_t orig_sz)
     }
 
     if (crc_sw != crc_qz) {
-        QZ_ERROR("ERROR: Compression fail on CRC check: SW CRC %u, QATzip CRC %u\n",
+        QZ_ERROR("ERROR: Compression fail on CRC check: SW CRC %lu, QATzip CRC %lu\n",
                  crc_sw, crc_qz);
         rc = QZ_FAIL;
     }
@@ -3409,7 +3420,7 @@ int qzCompressSWL9DecompressHW(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %d != org_src_sz: %d \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                  orig_sz);
         goto done;
     }
@@ -3866,8 +3877,8 @@ int main(int argc, char *argv[])
     void *p_rc;
     int thread_count = 1, test = 0;
     ServiceType_T service = COMP;
-    pthread_t threads[100];
-    TestArg_T test_arg[100];
+    pthread_t threads[100] = {0};
+    TestArg_T test_arg[100] = {0};
     struct sigaction s1;
     int block_size = -1;
     PinMem_T compress_buf_type = COMMON_MEM;
@@ -4243,7 +4254,7 @@ int main(int argc, char *argv[])
         test_arg[i].thread_sleep = thread_sleep;
         test_arg[i].block_size = block_size;
         if (!test_arg[i].comp_out || !test_arg[i].decomp_out) {
-            QZ_ERROR("ERROR: fail to create memory for thread %ld\n", i);
+            QZ_ERROR("ERROR: fail to create memory for thread %d\n", i);
             goto done;
         }
     }
@@ -4272,6 +4283,7 @@ int main(int argc, char *argv[])
         while (g_ready_thread_count < thread_count) {
             ret = pthread_cond_wait(&g_ready_cond, &g_cond_mutex);
             if (ret != 0) {
+                pthread_mutex_unlock(&g_cond_mutex);
                 QZ_ERROR("Failure calling pthread_cond_wait, status = %d\n", ret);
                 goto done;
             }
@@ -4279,6 +4291,7 @@ int main(int argc, char *argv[])
         g_ready_to_start = 1;
         ret = pthread_cond_broadcast(&g_start_cond);
         if (ret != 0) {
+            pthread_mutex_unlock(&g_cond_mutex);
             QZ_ERROR("Failure calling pthread_cond_broadcast, status = %d\n", ret);
             goto done;
         }
@@ -4298,7 +4311,7 @@ int main(int argc, char *argv[])
             break;
         }
         if (NULL != p_rc) {
-            QZ_ERROR("Error from pthread_exit %s\n", p_rc);
+            QZ_ERROR("Error from pthread_exit %s\n", (char *)p_rc);
             ret = -1;
         }
     }

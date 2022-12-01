@@ -54,7 +54,7 @@ void usage()
 
 int main(int argc, char *argv[])
 {
-    unsigned int i, j, rc, rc2, d_len, s_len, s2_len, src_sz, dest_sz;
+    unsigned int i, j, rc, d_len, s_len, s2_len, src_sz, dest_sz;
 
     unsigned char *src, *dest, *src2;
     QzSession_T sess = {0};
@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
     int skip = 1;
     int end = DEFAULT_BUF_LEN;
     int corpus = 0; // 0 = iterative, 1 = random
-    srand((int)time(NULL));
+    srand((time(NULL) & 0xffffffff));
 
     while ((c = getopt(argc, argv, "fS:s:E:c:")) != -1) {
         switch (c) {
@@ -144,32 +144,36 @@ int main(int argc, char *argv[])
             } else {
                 s2_len = DEFAULT_BUF_LEN;
             }
-            rc2 = qzDecompress(&sess, dest, &d_len, src2, &s2_len);
+            rc = qzDecompress(&sess, dest, &d_len, src2, &s2_len);
             // printf( "rc2 = %d, src = %d, dest = %d\n",
             //  rc2, d_len, s2_len );
-            if (rc2 == 0) {
+            if (rc == 0) {
                 if (s2_len != s_len) {
                     printf("mismatch orig\t%d\tcomp %d\tdec %d\t %d\n",
                            s_len, d_len, s2_len, (s_len - s2_len));
                     printf("\t\t%d\t%d\t%d\n", (s_len % (64 * 1024)),
                            (d_len % (64 * 1024)), (s2_len % (64 * 1024)));
-                    return -1;
+                    goto error;
                 }
                 if (memcmp(src, src2, s_len) != 0) {
                     printf("memcmp mismatch - len = %d\t%d\n", s_len,
                            (s_len % (64 * 1024)));
-                    return -1;
+                    goto error;
                 }
             } else {
-                printf("return from decomress is %d\t len = %d\t%d\n", rc2,
+                printf("return from decomress is %d\t len = %d\t%d\n", rc,
                        s_len, (s_len % (64 * 1024)));
-                return -1;
+                goto error;
             }
         } else {
-            return -1;
+            goto error;
         }
     }
-
     return 0;
-
+error:
+    qzTeardownSession(&sess);
+    qzFree(src);
+    qzFree(dest);
+    qzFree(src2);
+    return rc;
 }
