@@ -92,7 +92,7 @@ extern"C" {
 
 #define likely(x)   __builtin_expect (!!(x), 1)
 #define unlikely(x) __builtin_expect (!!(x), 0)
-#define DEST_SZ(src_sz)           (((9 * (src_sz)) / 8) + 1024)
+#define DEST_SZ(src_sz)           (((9U * (src_sz)) / 8U) + 1024U)
 
 /* The minimal supported CAP_DC API version */
 #ifndef CPA_DC_API_VERSION_AT_LEAST
@@ -125,7 +125,7 @@ extern"C" {
      device_id == QZ_4XXX_PCI_DEVICE_E_ID ||         \
      device_id == QZ_4XXXIOV_PCI_DEVICE_E_ID)
 
-#define QZ_CEIL_DIV(x, y) (((x) + (y)-1) / (y))
+#define QZ_CEIL_DIV(x, y) (((x) + (y)-1U) / (y))
 #define QZ_DEFLATE_SKID_PAD_GEN4_STATIC (1029)
 #define QZ_DEFLATE_SKID_PAD_GEN4_DYN (512)
 #define QZ_LZ4_SKID_PAD_GEN4 (1024)
