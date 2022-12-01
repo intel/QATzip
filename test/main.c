@@ -3817,7 +3817,7 @@ done:
     "    -v                    verify, disabled by default\n"                   \
     "    -e init engine        enable | disable. enabled by default\n"          \
     "    -s init session       enable | disable. enabled by default\n"          \
-    "    -A comp_algorithm     deflate\n"                                       \
+    "    -A comp_algorithm     deflate | lz4 | lz4s\n"                          \
     "    -B swBack             0 means disable sw\n"                            \
     "                          1 means enable sw\n"                             \
     "    -C hw_buff_sz         default 64K\n"                                   \
@@ -3940,6 +3940,10 @@ int main(int argc, char *argv[])
         case 'A':
             if (strcmp(optarg, "deflate") == 0) {
                 args.comp_algorithm = QZ_DEFLATE;
+            } else if (strcmp(optarg, "lz4") == 0) {
+                args.comp_algorithm = QZ_LZ4;
+            } else if (strcmp(optarg, "lz4s") == 0) {
+                args.comp_algorithm = QZ_LZ4s;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;

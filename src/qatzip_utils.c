@@ -444,6 +444,11 @@ int qzCheckParamsDeflate(QzSessionParamsDeflate_T *params)
         return QZ_PARAMS;
     }
 
+    if (params->common_params.comp_algorithm != QZ_DEFLATE) {
+        QZ_ERROR("Invalid comp_algorithm value\n");
+        return QZ_PARAMS;
+    }
+
     if (params->huffman_hdr > QZ_STATIC_HDR) {
         QZ_ERROR("Invalid huffman_hdr value\n");
         return QZ_PARAMS;
@@ -471,6 +476,11 @@ int qzCheckParamsLZ4(QzSessionParamsLZ4_T *params)
         return QZ_PARAMS;
     }
 
+    if (params->common_params.comp_algorithm != QZ_LZ4) {
+        QZ_ERROR("Invalid comp_algorithm value\n");
+        return QZ_PARAMS;
+    }
+
     if ((params->common_params.comp_lvl < QZ_LZS_COMP_LVL_MINIMUM) ||
         (params->common_params.comp_lvl > QZ_LZS_COMP_LVL_MAXIMUM)) {
         QZ_ERROR("Invalid comp_lvl value\n");
@@ -485,6 +495,11 @@ int qzCheckParamsLZ4S(QzSessionParamsLZ4S_T *params)
     assert(params);
 
     if (qzCheckParamsCommon(&params->common_params) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    if (params->common_params.comp_algorithm != QZ_LZ4s) {
+        QZ_ERROR("Invalid comp_algorithm value\n");
         return QZ_PARAMS;
     }
 
