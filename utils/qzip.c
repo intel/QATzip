@@ -713,6 +713,7 @@ void processDir(QzSession_T *sess, const char *in_name,
 
         processFile(sess, inpath, out_name, is_compress);
     }
+    closedir(dir);
 }
 
 void processFile(QzSession_T *sess, const char *in_name,

@@ -114,7 +114,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
 
     if (DeflateNull == qz_sess->deflate_stat) {
         if (NULL == stream) {
-            stream = malloc(sizeof(z_stream));
+            stream = calloc(1, sizeof(z_stream));
             if (NULL == stream) {
                 return QZ_FAIL;
             }
@@ -272,7 +272,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
     data_fmt = qz_sess->sess_params.data_fmt;
 
     if (NULL == stream) {
-        stream = malloc(sizeof(z_stream));
+        stream = calloc(1, sizeof(z_stream));
         if (NULL == stream) {
             *src_len = 0;
             *dest_len = 0;
@@ -363,7 +363,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
     *src_len = GET_LOWER_32BITS(stream->total_in - total_in + qz4B_header_len);
 
 done:
-    QZ_DEBUG("Exit qzSWDecompress total_in: %u total_out: %u "
+    QZ_DEBUG("Exit qzSWDecompress total_in: %lu total_out: %lu "
              "avail_in: %u avail_out: %u msg: %s "
              "src_len: %u dest_len: %u\n",
              stream->total_in, stream->total_out,
