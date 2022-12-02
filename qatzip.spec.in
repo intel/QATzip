@@ -85,6 +85,9 @@ rm -vf %{buildroot}%{_mandir}/*.pdf
 %{_libdir}/libqatzip.so
 
 %changelog
+* Fri Dec 9 2022 Chengfei Zhu <chengfei.zhu@intel.com> - 1.1.1-1
+- Update to qatzip 1.1.1
+
 * Fri Jul 22 2022 Fedora Release Engineering <releng@fedoraproject.org> - 1.0.7-2
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_37_Mass_Rebuild
 

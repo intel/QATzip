@@ -3839,7 +3839,7 @@ done:
     "                          svm mode. When set to svm, all memory will\n"    \
     "                          be allocated with malloc instead of qzMalloc\n"  \
     "                          This option is only applied to test case 4\n"    \
-    "    -p compress_buf_type  pinnned | common, default is common\n" \
+    "    -p compress_buf_type  pinned | common, default is common\n" \
     "                          This option is only applied to file compression test in case 4\n"    \
     "                          If set common, memory of compress buffer will be allocated through malloc\n" \
     "                          If set pinned, memory of compress buffer will be allocated in huge page, the\n" \

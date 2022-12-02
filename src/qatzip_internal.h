@@ -52,7 +52,7 @@ extern"C" {
 /**
  *  define release version
  */
-#define QATZIP_VERSION "1.1.0"
+#define QATZIP_VERSION "1.1.1"
 
 #define SUCCESS              1
 #define FAILURE              0
