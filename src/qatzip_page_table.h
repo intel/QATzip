@@ -84,8 +84,10 @@ static inline void *nextLevel(QzPageTable_T *volatile *ptr)
                    MAP_PRIVATE | MAP_ANONYMOUS,
                    -1,
                    0);
-    if ((void *) - 1 == new_ptr)
+    if ((void *) - 1 == new_ptr) {
+        QZ_ERROR("nextLevel: mmap error\n");
         return NULL;
+    }
 
     if (!__sync_bool_compare_and_swap(ptr, NULL, new_ptr))
         munmap(new_ptr, sizeof(QzPageTable_T));
@@ -117,7 +119,7 @@ static inline void freePageTable(QzPageTable_T *const table)
     qzMemSet(table, 0, sizeof(QzPageTable_T));
 }
 
-static inline void storeAddr(QzPageTable_T *level,
+static inline int storeAddr(QzPageTable_T *level,
                              uintptr_t virt,
                              uint64_t type)
 {
@@ -126,21 +128,25 @@ static inline void storeAddr(QzPageTable_T *level,
     id.addr = virt;
 
     level = nextLevel(&level->next[id.pg_entry.idxl3].pt);
-    if (NULL == level)
-        return;
+    if (NULL == level) {
+        return -1;
+    }
 
     level = nextLevel(&level->next[id.pg_entry.idxl2].pt);
-    if (NULL == level)
-        return;
+    if (NULL == level) {
+        return -1;
+    }
 
     level = nextLevel(&level->next[id.pg_entry.idxl1].pt);
-    if (NULL == level)
-        return;
+    if (NULL == level) {
+        return -1;
+    }
 
     level->next[id.pg_entry.idxl0].mt = type;
+    return 0;
 }
 
-static inline void storeMmapRange(QzPageTable_T *p_level,
+static inline int storeMmapRange(QzPageTable_T *p_level,
                                   void *p_virt,
                                   uint64_t type,
                                   size_t p_size)
@@ -150,8 +156,12 @@ static inline void storeMmapRange(QzPageTable_T *p_level,
     const uintptr_t virt = (uintptr_t)p_virt;
 
     for (offset = 0; offset < p_size; offset += page_size) {
-        storeAddr(p_level, virt + offset, type);
+        if(0 != storeAddr(p_level, virt + offset, type)) {
+            return -1;
+	}
     }
+
+    return 0;
 }
 
 static inline uint64_t loadAddr(QzPageTable_T *level, void *virt)

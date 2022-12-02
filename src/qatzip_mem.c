@@ -117,19 +117,20 @@ static void qzMemUnRegAddr(unsigned char *a)
     return;
 }
 
-static void qzMemRegAddr(unsigned char *a, size_t sz)
+static int qzMemRegAddr(unsigned char *a, size_t sz)
 {
+    int rc;
     unsigned long al, b;
 
     if (0 != pthread_mutex_lock(&g_qz_table_lock)) {
-        return;
+        return -1;
     }
 
     /*addr already registered*/
     if ((1 == qzMemFindAddr(a)) &&
         (1 == qzMemFindAddr(a + sz - 1))) {
         pthread_mutex_unlock(&g_qz_table_lock);
-        return;
+        return 0;
     }
 
     al = (unsigned long)a;
@@ -138,9 +139,11 @@ static void qzMemRegAddr(unsigned char *a, size_t sz)
     QZ_DEBUG("4 KB page is 0x%lx\n", b);
 
     QZ_DEBUG("Inserting 0x%lx size %lx to page table\n", b, sz);
-    storeMmapRange(&g_qz_page_table, (void *)b, PINNED, sz);
+    rc = storeMmapRange(&g_qz_page_table, (void *)b, PINNED, sz);
 
     pthread_mutex_unlock(&g_qz_table_lock);
+
+    return rc;
 }
 
 void qzMemDestory(void)
@@ -197,7 +200,10 @@ void *qzMalloc(size_t sz, int numa, int pinned)
             g_a = malloc(sz);
         }
     } else {
-        qzMemRegAddr(g_a, sz);
+        if(0 != qzMemRegAddr(g_a, sz)) {
+            qaeMemFreeNUMA((void **)&g_a);
+            return NULL;
+	}
     }
 
     return g_a;
