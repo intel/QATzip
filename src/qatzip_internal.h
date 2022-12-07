@@ -245,12 +245,8 @@ typedef enum DataFormatInternal_E {
     /**< Data is in raw deflate format */
     LZ4_FH,
     /**< Data is in LZ4 format with frame headers */
-    LZ4S_FH,
-    /**< Data is in LZ4s format with frame headers */
-    LZ4S_PP,
-    /**< Data is in LZ4s format and has been post processed */
-    ZSTD_RAW
-    /**< Data is in raw zStandard format */
+    LZ4S_BK,
+    /**< Data is in LZ4s sequences with block header, it's only for post processed */
 } DataFormatInternal_T;
 
 // Include all support session parameters
@@ -491,9 +487,8 @@ int isQATDeflateProcessable(const unsigned char *ptr,
                             const unsigned int *const src_len,
                             QzSess_T *const qz_sess);
 
-unsigned long qzLZ4SHeaderSz(void);
-void qzLZ4SHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
-
+unsigned long qzLZ4SBlockHeaderSz(void);
+void qzLZ4SBlockHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
 
 int qzSetupSessionInternal(QzSession_T *sess);
 
