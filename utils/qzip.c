@@ -519,7 +519,7 @@ int qatzipSetup(QzSession_T *sess, QzipParams_T *params)
             QZ_ERROR("qzipSetupSessionLZ4 fail with error: %d\n", status);
         }
         break;
-    case QZIP_LZ4S_FH:
+    case QZIP_LZ4S_BK:
         status = qzipSetupSessionLZ4S(sess, params);
         if (status != OK) {
             QZ_ERROR("qzipSetupSessionLZ4S fail with error: %d\n", status);
@@ -572,7 +572,7 @@ bool hasSuffix(const char *fname)
             return 1;
         }
         break;
-    case QZIP_LZ4S_FH:
+    case QZIP_LZ4S_BK:
         if (len >= strlen(SUFFIX_LZ4S) &&
             !strcmp(fname + (len - strlen(SUFFIX_LZ4S)), SUFFIX_LZ4S)) {
             return 1;
@@ -648,7 +648,7 @@ int makeOutName(const char *in_name, const char *out_name,
         if (g_params_th.data_fmt == QZIP_LZ4_FH) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4);
-        } else if (g_params_th.data_fmt == QZIP_LZ4S_FH) {
+        } else if (g_params_th.data_fmt == QZIP_LZ4S_BK) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4S);
         } else if (g_params_th.data_fmt == QZIP_DEFLATE_RAW) {

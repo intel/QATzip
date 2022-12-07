@@ -299,8 +299,7 @@ static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
         return QZ_FAIL;
 #endif
         break;
-    case LZ4S_FH:
-    case ZSTD_RAW:
+    case LZ4S_BK:
 #if CPA_DC_API_VERSION_AT_LEAST(3,1)
         if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
             if (!inst_cap->checksumXXHash32 ||
@@ -1775,7 +1774,7 @@ static void *doCompressOut(void *in)
                     // for lz4s data format, it does not support stored block,
                     // we need polling out all response in the ring before
                     // exiting this funciton.
-                    if (LZ4S_FH == data_fmt) {
+                    if (LZ4S_BK == data_fmt) {
                         QZ_ERROR("doCompressOut: lz4s does not support stored block\n");
                         RESTORE_CPASTREAM_BUFFER(i, j);
                         sess->thd_sess_stat = QZ_FAIL;
@@ -2064,7 +2063,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         if (g_sess_params_internal_default.data_fmt == LZ4_FH) {
             rc = qzSetupSessionLZ4(sess, NULL);
-        } else if (g_sess_params_internal_default.data_fmt == LZ4S_FH) {
+        } else if (g_sess_params_internal_default.data_fmt == LZ4S_BK) {
             rc = qzSetupSessionLZ4S(sess, NULL);
         } else {
             rc = qzSetupSessionDeflate(sess, NULL);
@@ -2084,7 +2083,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
                  data_fmt != DEFLATE_GZIP &&
                  data_fmt != DEFLATE_GZIP_EXT &&
                  data_fmt != LZ4_FH &&
-                 data_fmt != LZ4S_FH)) {
+                 data_fmt != LZ4S_BK)) {
         QZ_ERROR("Unknown data format: %d\n", data_fmt);
         *src_len = 0;
         *dest_len = 0;
@@ -2215,7 +2214,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     assert(*dest_len == sess->total_out);
 
     //trigger post-processing
-    if (data_fmt == LZ4S_FH && qz_sess->sess_params.qzCallback) {
+    if (data_fmt == LZ4S_BK && qz_sess->sess_params.qzCallback) {
         if (sess->thd_sess_stat == QZ_OK ||
             (sess->thd_sess_stat == QZ_BUF_ERROR && 0 != *src_len)) {
             int error_code = 0;
@@ -2856,7 +2855,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         if (g_sess_params_internal_default.data_fmt == LZ4_FH) {
             rc = qzSetupSessionLZ4(sess, NULL);
-        } else if (g_sess_params_internal_default.data_fmt == LZ4S_FH) {
+        } else if (g_sess_params_internal_default.data_fmt == LZ4S_BK) {
             rc = qzSetupSessionLZ4S(sess, NULL);
         } else {
             rc = qzSetupSessionDeflate(sess, NULL);
@@ -3301,7 +3300,7 @@ static unsigned int qzLZ4SBound(unsigned int src_sz, QzSession_T *sess)
     assert(sess);
     assert(sess->internal);
 
-    header_footer_sz = qzLZ4SHeaderSz() + qzLZ4FooterSz();
+    header_footer_sz = qzLZ4SBlockHeaderSz();
 
     /* if input size is 0, return min length */
     if (!src_sz) {
@@ -3391,10 +3390,7 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
     case LZ4_FH:
         dest_sz = qzLZ4Bound(src_sz, sess);
         break;
-    case LZ4S_FH:
-        dest_sz = qzLZ4SBound(src_sz, sess);
-        break;
-    case ZSTD_RAW:
+    case LZ4S_BK:
         dest_sz = qzLZ4SBound(src_sz, sess);
         break;
     default:

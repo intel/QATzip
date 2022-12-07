@@ -114,7 +114,7 @@ int main(int argc, char **argv)
             } else if (strcmp(optarg, "lz4") == 0) {
                 g_params_th.data_fmt = QZIP_LZ4_FH;
             } else if (strcmp(optarg, "lz4s") == 0) {
-                g_params_th.data_fmt = QZIP_LZ4S_FH;
+                g_params_th.data_fmt = QZIP_LZ4S_BK;
             } else {
                 QZ_ERROR("Error gzip header format arg: %s\n", optarg);
                 return -1;
@@ -173,7 +173,7 @@ int main(int argc, char **argv)
     }
 
     if (g_decompress) {
-        if (g_params_th.data_fmt == QZIP_LZ4S_FH) {
+        if (g_params_th.data_fmt == QZIP_LZ4S_BK) {
             QZ_ERROR("Don't support lz4s decompression.\n");
             exit(ERROR);
         }

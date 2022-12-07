@@ -229,20 +229,22 @@ int zstdCallBack(void *external, const unsigned char *src,
 
     unsigned int produced = 0;
     unsigned int consumed = 0;
-    unsigned int cnt_sz = 0, blk_sz = 0;    //conten size and block size
+    unsigned int cnt_sz = 0, blk_sz = 0;    //content size and block size
     unsigned int dec_offset = 0;
     while (cur < end && *dest_len > 0) {
-        //decode frame header and get content size
-        cnt_sz = getContentSize(cur);
-        assert(cnt_sz <= MAX_BLOCK_SIZE);
-        cur += getLz4FrameHeaderSz();
+        //decode block header and get block size
         blk_sz = getBlockSize(cur);
         cur += getLz4BlkHeaderSz();
 
-        //decode lz4s block into zstd sequences
+        //decode lz4s sequences into zstd sequences
         decLz4Block(cur, blk_sz, zstd_seqs, &dec_offset);
         cur += blk_sz;
-        cur += getLZ4FooterSz();
+
+        cnt_sz = 0;
+        for(unsigned int i = 0; i < dec_offset + 1 ; i++){
+            cnt_sz += (zstd_seqs[i].litLength + zstd_seqs[i].matchLength) ;
+        }
+        assert(cnt_sz <= MAX_BLOCK_SIZE);
 
         // compress sequence to zstd frame
         int compressed_sz = ZSTD_compressSequences(zc,

@@ -231,8 +231,7 @@ static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
         QZ_ERROR("QAT driver does not support lz4 algorithm\n");
         return QZ_UNSUPPORTED_FMT;
 #endif
-    case LZ4S_FH:
-    case ZSTD_RAW:
+    case LZ4S_BK:
 #if CPA_DC_API_VERSION_AT_LEAST(3,0)
         if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
             session_setup_data->compType = CPA_DC_LZ4S;
@@ -615,7 +614,7 @@ void qzSetParamsLZ4S(QzSessionParamsLZ4S_T *params,
     assert(internal_params);
 
     qzSetParamsCommon(&params->common_params, internal_params);
-    internal_params->data_fmt = LZ4S_FH;
+    internal_params->data_fmt = LZ4S_BK;
     internal_params->qzCallback = params->qzCallback;
     internal_params->qzCallback_external = params->qzCallback_external;
     internal_params->lz4s_mini_match = params->lz4s_mini_match;
@@ -739,9 +738,10 @@ inline unsigned long outputFooterSz(DataFormatInternal_T data_fmt)
         size = 0;
         break;
     case LZ4_FH:
-    case LZ4S_FH:
-    case ZSTD_RAW:   //same as lz4 footer
         size = qzLZ4FooterSz();
+        break;
+    case LZ4S_BK:
+        size = 0;
         break;
     case DEFLATE_GZIP_EXT:
     default:
@@ -768,9 +768,8 @@ unsigned long outputHeaderSz(DataFormatInternal_T data_fmt)
     case LZ4_FH:
         size = qzLZ4HeaderSz();
         break;
-    case LZ4S_FH:
-    case ZSTD_RAW:
-        size = qzLZ4SHeaderSz();
+    case LZ4S_BK:
+        size = qzLZ4SBlockHeaderSz();
         break;
     case DEFLATE_GZIP_EXT:
     default:
@@ -799,9 +798,8 @@ void outputHeaderGen(unsigned char *ptr,
     case LZ4_FH:
         qzLZ4HeaderGen(ptr, res);
         break;
-    case LZ4S_FH:
-    case ZSTD_RAW:
-        qzLZ4SHeaderGen(ptr, res);
+    case LZ4S_BK:
+        qzLZ4SBlockHeaderGen(ptr, res);
         break;
     case DEFLATE_GZIP_EXT:
     default:
@@ -819,9 +817,9 @@ inline void outputFooterGen(QzSess_T *qz_sess,
     case DEFLATE_RAW:
         break;
     case LZ4_FH:
-    case LZ4S_FH:
-    case ZSTD_RAW:
         qzLZ4FooterGen(ptr, res);
+        break;
+    case LZ4S_BK:
         break;
     case DEFLATE_GZIP_EXT:
     default:
