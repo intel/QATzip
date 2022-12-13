@@ -354,6 +354,12 @@ typedef enum QzSoftwareComponentType_E {
 /**< Not using SW: QAT device does not support data format */
 #define QZ_POST_PROCESS_ERROR   (-117)
 /**< Using post process: post process callback encountered an error */
+#define QZ_METADATA_OVERFLOW    (-118)
+/**< Insufficent memory allocated for metadata */
+#define QZ_OUT_OF_RANGE         (-119)
+/**< Metadata block_num specified is out of range */
+#define QZ_NOT_SUPPORTED        (-200)
+/**< Request not supported */
 
 #define QZ_MAX_ALGORITHMS  ((int)255)
 #define QZ_DEFLATE         ((unsigned char)8)
@@ -746,6 +752,16 @@ typedef struct QzCrc64Config_S {
     /**< Defaults to 0x0000000000000000 */
 } QzCrc64Config_T;
 
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      QATzip pointer to opaque metadata.
+ *
+ * @description
+ *      The opaque pointer to metadata.
+ *
+ *****************************************************************************/
+typedef void* QzMetadataBlob_T;
 
 /**
  *****************************************************************************
@@ -1099,6 +1115,117 @@ QATZIP_API int qzCompressCrc64Ext(QzSession_T *sess,
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      Compress a buffer and write metadata for each compressed block into
+ *      the opaque metadata structure.
+ *
+ * @description
+ *      This function will compress a buffer if either a hardware based
+ *      session or a software based session is available. If no session has
+ *      been established - as indicated by the contents of *sess - then this
+ *      function will attempt to set up a session using qzInit and
+ *      qzSetupSession.
+ *
+ *      This function will place completed compression blocks in the output
+ *      buffer.
+ *
+ *      The caller must check the updated src_len. This value will be the
+ *      number of consumed bytes on exit. The calling API may have to
+ *      process the destination buffer and call again.
+ *
+ *      The parameter dest_len will be set to the number of bytes produced in
+ *      the destination buffer. This value may be zero if no data was produced
+ *      which may occur if the consumed data is retained internally. A
+ *      possible reason for this may be small amounts of data in the src
+ *      buffer.
+ *
+ *      The metadata for each compressed block will be written into the opaque
+ *      metadata structure specified as function param metadata.
+ *
+ *      comp_thrshold specifies compression threshold of a block.
+ *      If compressed size of the block is > comp_thrshold, the
+ *      compression function shall copy the uncompressed data to the output
+ *      buffer and set the size of the block in the metadata to the size of the
+ *      uncompressed block. If the compressed size of the block is <=
+ *      comp_thrshold, the compressed data will be copied to the output buffer
+ *      and the compressed size will be set in the metadata.
+ *
+ *      hw_buff_sz_override specifies the data size to be used for the each
+ *      compression operation. It overrides the hw_buff_sz parameter specified
+ *      at session creation. If 0 is provided for this parameter, then the
+ *      hw_buff_sz specified at session creation will be used. Memory for the
+ *      opaque metadata structure should be allocated based on the hw_buff_sz
+ *      or the hw_buff_sz_override that is used for the compression operation.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess                Session handle
+ *                                      (pointer to opaque instance and
+ *                                      session data)
+ * @param[in]       src                 Point to source buffer.
+ * @param[in,out]   src_len             Length of source buffer. Modified to
+ *                                      number of bytes consumed.
+ * @param[in]       dest                Point to destination buffer.
+ * @param[in,out]   dest_len            Length of destination buffer. Modified
+ *                                      to length of compressed data when
+ *                                      function returns.
+ * @param[in]       last                1 for 'No more data to be compressed'
+ *                                      0 for 'More data to be compressed'
+ * @param[in,out]   ext_rc              If not NULL, ext_rc point to a location
+ *                                      where extended return codes may be
+ *                                      returned. See extended return code
+ *                                      section for details. if NULL, no
+ *                                      extended information will be provided.
+ * @param[in,out]   metadata            Pointer to opaque metadata.
+ * @param[in]       hw_buff_sz_override Data size to be used for compression.
+ * @param[in]       comp_thrshold       Compressed block threshold.
+ *
+ * @retval QZ_OK                        Function executed successfully
+ * @retval QZ_FAIL                      Function did not succeed
+ * @retval QZ_PARAMS                    *sess or *metadata is NULL or Member of
+ *                                      params is invalid, hw_buff_sz_override
+ *                                      is invalid data size.
+ * @retval QZ_METADATA_OVERFLOW         Unable to populate metadata due to
+ *                                      insufficient memory allocated.
+ * @retval QZ_NOT_SUPPORTED             Compression with metadata is not
+ *                                      supported with given algorithm
+ *                                      or format.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzCompressWithMetadataExt(QzSession_T *sess,
+                                         const unsigned char *src,
+                                         unsigned int *src_len,
+                                         unsigned char *dest,
+                                         unsigned int *dest_len,
+                                         unsigned int last,
+                                         uint64_t *ext_rc,
+                                         QzMetadataBlob_T *metadata,
+                                         uint32_t hw_buff_sz_override,
+                                         uint32_t comp_thrshold);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      Decompress a buffer
  *
  * @description
@@ -1251,6 +1378,92 @@ QATZIP_API int qzDecompressCrc64Ext(QzSession_T *sess,
                                     unsigned int *dest_len,
                                     uint64_t *crc,
                                     uint64_t *ext_rc);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Decompress a buffer with metadata.
+ *
+ * @description
+ *      This function will decompress a buffer if either a hardware based
+ *      session or a software based session is available.
+ *      If no session has been established - as indicated by the content
+ *      of *sess - then this function will attempt to set up a session using
+ *      qzInit and qzSetupSession.
+ *
+ *      The metadata function parameter specifies metadata of compressed file
+ *      which can be used for regular or parallel decompression.
+ *
+ *      hw_buff_sz_override specifies the data size to be used for the each
+ *      decompression operation. It overrides the hw_buff_sz parameter specified
+ *      at session creation. If 0 is provided for this parameter, then the
+ *      hw_buff_sz specified at session creation will be used. Memory for the
+ *      opaque metadata structure should be allocated based on the hw_buff_sz
+ *      or the hw_buff_sz_override that is used for the compression operation.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess                Session handle
+ *                                      (pointer to opaque instance and session
+ data)
+ * @param[in]       src                 Point to source buffer
+ * @param[in]       src_len             Length of source buffer. Modified to
+ *                                      length of processed compressed data
+ *                                      when function returns
+ * @param[in]       dest                Point to destination buffer
+ * @param[in,out]   dest_len            Length of destination buffer. Modified
+ *                                      to length of decompressed data when
+ *                                      function returns
+ * @param[in,out]   ext_rc              If not NULL, ext_rc points to a location
+ *                                      where extended return codes may be
+ *                                      returned. See extended return code
+ *                                      section for details.
+ *                                      if NULL, no extended information will be
+ *                                      provided.
+ * @param[in]       metadata            Pointer to opaque metadata.
+ * @param[in]       hw_buff_sz_override Expected size of decompressed block.
+ *
+ * @retval QZ_OK                        Function executed successfully.
+ * @retval QZ_FAIL                      Function did not succeed.
+ * @retval QZ_PARAMS                    *sess or *metadata is NULL or Member of
+ *                                      params is invalid, hw_buff_sz_override
+ *                                      is invalid data size.
+ * @retval QZ_METADATA_OVERFLOW         Unable to populate metadata due to
+ *                                      insufficient memory allocated.
+ * @retval QZ_NOT_SUPPORTED             Decompression with metadata is not
+ *                                      supported with given algorithm
+ *                                      or format.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzDecompressWithMetadataExt(QzSession_T *sess,
+                                           const unsigned char *src,
+                                           unsigned int *src_len,
+                                           unsigned char *dest,
+                                           unsigned int *dest_len,
+                                           uint64_t *ext_rc,
+                                           QzMetadataBlob_T *metadata,
+                                           uint32_t hw_buff_sz_override);
 
 /**
  *****************************************************************************
@@ -1618,6 +1831,53 @@ QATZIP_API void *qzMalloc(size_t sz, int numa, int force_pinned);
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      Allocate memory for metadata.
+ *
+ * @description
+ *      Allocate memory for metadata. The function takes the size of entire
+ *      input buffer and the data size at which individual block will be
+ *      compressed. These parameters will be used to calculate and allocate
+ *      required memory for metadata.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in, out]       metadata       Pointer to opaque metadata.
+ * @param[in]            data_size      Size of uncompressed buffer.
+ * @param[in]            hw_buff_sz     Data size at which individual block
+ *                                      will be compressed.
+ *
+ * @retval QZ_OK                        Function executed successfully
+ * @retval QZ_FAIL                      Function did not succeed
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzAllocateMetadata(QzMetadataBlob_T *metadata,
+                                  size_t data_size,
+                                  uint32_t hw_buff_sz);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      Free allocated memory
  *
  * @description
@@ -1650,6 +1910,45 @@ QATZIP_API void *qzMalloc(size_t sz, int numa, int force_pinned);
  *
  *****************************************************************************/
 QATZIP_API void qzFree(void *m);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Free memory allocated for metadata.
+ *
+ * @description
+ *      Free memory allocated for metadata.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       metadata    Pointer to opaque metadata.
+ *
+ * @retval QZ_OK                Function executed successfully.
+ * @retval QZ_FAIL              Function did not succeed.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzFreeMetadata(QzMetadataBlob_T *metadata);
 
 /**
  *****************************************************************************
@@ -2113,6 +2412,146 @@ QATZIP_API int qzGetSessionCrc64Config(QzSession_T *sess,
 *****************************************************************************/
 QATZIP_API int qzSetSessionCrc64Config(QzSession_T *sess,
                                        QzCrc64Config_T *crc64_config);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Read metadata parameters.
+ *
+ * @description
+ *      This function reads metadata information for the block specified by the
+ *      function param block_num.
+ *
+ *      block_offset returns offset value in bytes from the previous compressed
+ *      block of the compressed data.
+ *
+ *      block_size returns the block size in bytes of the compressed block.
+ *      Some blocks may be uncompressed if size > threshold as specified during
+ *      compression and the size returned will reflect the same.
+ *
+ *      block_flags returns the value 1 if the data is compressed and 0 if the
+ *      data is not compressed.
+ *
+ *      block_hash returns the xxHash value of the plain text of the hw_buff_sz
+ *      payload sent for compression operation.
+ *
+ *      If NULL is specified for any of the metadata parameters (block_offset,
+ *      block_size, block_flags, block_hash) reading the parameter value
+ *      will be ignored.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]            block_num      Block number of which metadata
+ *                                      information should be read.
+ * @param[in]            metadata       Pointer to opaque metadata.
+ * @param[in, out]       block_offset   Pointer to the block offset value.
+ * @param[in, out]       block_size     Pointer to the block size value.
+ * @param[in, out]       block_flags    Pointer to the block flags value.
+ * @param[in, out]       block_hash     Pointer to the block xxHash value.
+ *
+ * @retval QZ_OK                        Function executed successfully.
+ * @retval QZ_FAIL                      Function did not succeed.
+ * @retval QZ_PARAMS                    Metadata is NULL.
+ * @retval QZ_OUT_OF_RANGE              block_num specified is out of range.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzMetadataBlockRead(uint32_t block_num,
+                                   QzMetadataBlob_T *metadata,
+                                   uint32_t *block_offset,
+                                   uint32_t *block_size,
+                                   uint32_t *block_flags,
+                                   uint32_t *block_hash);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Write metadata parameters.
+ *
+ * @description
+ *      This function writes metadata information for the block specified by the
+ *      function param block_num.
+ *
+ *      block_offset writes offset value in bytes from the previous compressed
+ *      block of the compressed data.
+ *
+ *      block_size writes the block size in bytes of the compressed block.
+ *
+ *      block_flags causes the metadata to indicate the data is compressed if
+ *      passed a value of 1 and indicates uncompressed if value
+ *      passed is zero (0).
+ *
+ *      block_hash writes the xxHash value of the plain text of the hw_buff_sz
+ *      payload sent for compression operation.
+ *
+ *      If NULL is specified for any of the metadata parameters (block_offset,
+ *      block_size, block_flags, block_hash) writing the parameter value
+ *      into metadata will be ignored.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       block_num      Block number into which metadata information
+ *                                 should be written.
+ * @param[in, out]  metadata       Pointer to opaque metadata.
+ * @param[in]       block_offset   Pointer to the block offset value.
+ * @param[in]       block_size     Pointer to the block size value.
+ * @param[in]       block_flags    Pointer to the block flags value.
+ * @param[in]       block_hash     Pointer to the block xxHash value.
+ *
+ * @retval QZ_OK                   Function executed successfully.
+ * @retval QZ_FAIL                 Function did not succeed.
+ * @retval QZ_PARAMS               Metadata is NULL.
+ * @retval QZ_OUT_OF_RANGE         block_num specified is out of range.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      Only a synchronous version of this function is provided.
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzMetadataBlockWrite(uint32_t block_num,
+                                    QzMetadataBlob_T *metadata,
+                                    uint32_t *block_offset,
+                                    uint32_t *block_size,
+                                    uint32_t *block_flags,
+                                    uint32_t *block_hash);
+
 #ifdef __cplusplus
 }
 #endif
