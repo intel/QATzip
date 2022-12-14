@@ -129,7 +129,12 @@ The compression level in QATzip could be mapped to standard zlib\* as below:
 * For 7z format, the header compression is not supported.
 * For lz4(s) compression, QATzip only supports 32KB history buffer.
 * For zstd format compression, qzstd only supprots `hw_buffer_sz` which is less than 128KB.
-* Stream APIs do not support deflate_4B compression/decompression now.
+* Stream APIs only support "DEFLATE_GZIP", "DEFLATE_GZIP_EXT", "DEFLATE_RAW" for compression
+  and "DEFLATE_GZIP", "DEFLATE_GZIP_EXT" for decompression now.
+* For compression(not stream), QATZip HW only support data format including "DEFLATE_4B", "DEFLATE_GZIP",
+  "DEFLATE_GZIP_EXT", "DEFLATE_RAW", "LZ4". Otherwise it will fallback to sw.
+* For decompression(not stream), QATZip HW only support data format including "DEFLATE_GZIP", "DEFLATE_4B",
+  "DEFLATE_GZIP_EXT", "LZ4". Otherwise it will fallback to sw.
 
 ## Installation Instructions
 
@@ -163,7 +168,7 @@ These instructions can be found on the 01.org website in the following section:
 ```bash
     echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
-    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=16
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=48
 ```
 
 **Compile and install QATzip**
@@ -180,10 +185,24 @@ For more configure options, please run "./configure -h" for help
 
 **Update configuration files**
 
-The Intel&reg; QATzip comes with some example conf files to use with the Intel&reg; QAT Driver.
-The Intel&reg; QATzip will not function with the default Intel&reg; QAT Driver conf file because
-the default conf does not contain a [SHIM] section which the Intel&reg; QATzip requires by default.
-The default section name in the QATzip can be modified if required by setting the environment
+___Have to update those file, Otherwise QATzip will be Unavailable.___
+
+QAT's the programmer’s guide which provides information on the architecture of the software
+and usage guidelines. it allows customization of runtime operation.
+
+* [Intel&reg; linux Programmer's Guide][4]
+
+[4]:https://www.intel.com/content/www/us/en/content-details/710060/intel-quickassist-technology-software-for-linux-programmer-s-guide-hw-version-1-7.html
+
+The Intel&reg; QATzip comes with some tuning example conf files to use. you can replace the
+old conf file(under /etc/) by them. The detailed info about Configurable options, please
+refer Programmer's Guide mannual.
+
+The process section name(in configuration file) is the key change for QATzip.
+there are two way to change:
+* QAT Driver default conf file does not contain a [SHIM] section which the Intel&reg; QATzip
+  requires by default. you can follow below step to replace them.
+* The default section name in the QATzip can be modified if required by setting the environment
 variable "QAT_SECTION_NAME".
 
 To update the configuration file, copy the configure file(s) from directory of
@@ -233,7 +252,7 @@ To set 500MB add a line like this in /etc/security/limits.conf:
 ```bash
     echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     rmmod usdm_drv
-    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=16
+    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=48
 ```
 
 **Update the configuration files as root user**
