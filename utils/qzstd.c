@@ -248,8 +248,13 @@ int zstdCallBack(void *external, const unsigned char *src,
 
         // compress sequence to zstd frame
         int compressed_sz = ZSTD_compressSequences(zc,
-                            dest + produced,
-                            *dest_len, zstd_seqs, dec_offset + 1, src + consumed, cnt_sz);
+                                                   dest + produced,
+                                                   ZSTD_compressBound(cnt_sz),
+                                                   zstd_seqs,
+                                                   dec_offset + 1,
+                                                   src + consumed,
+                                                   cnt_sz);
+
         if (compressed_sz < 0) {
             ret = QZ_POST_PROCESS_ERROR;
             *ExtStatus = compressed_sz;
