@@ -1404,7 +1404,8 @@ static void *doCompressIn(void *in)
         g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes = src_send_sz;
         if (dest_sz > DEST_SZ(qz_sess->sess_params.hw_buff_sz)) {
             g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
-                DEST_SZ((unsigned long)(qz_sess->sess_params.hw_buff_sz)) - outputHeaderSz(data_fmt);
+                DEST_SZ((unsigned long)(qz_sess->sess_params.hw_buff_sz)) - outputHeaderSz(
+                    data_fmt);
         } else {
             g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
                 dest_sz - outputHeaderSz(data_fmt);
@@ -3249,9 +3250,9 @@ static unsigned int qzDeflateBoundGen4(unsigned int src_sz, QzSession_T *sess)
                    header_footer_sz) * chunk_cnt;
         if (last_chunk_sz) {
             dest_sz += (unsigned int)((QZ_CEIL_DIV(9U * last_chunk_sz, 8U) +
-                        QZ_DEFLATE_SKID_PAD_GEN4_DYN +
-                        (((8U * last_chunk_sz * 155) / 7) / (16 * 1024)) +
-                        header_footer_sz));
+                                       QZ_DEFLATE_SKID_PAD_GEN4_DYN +
+                                       (((8U * last_chunk_sz * 155) / 7) / (16 * 1024)) +
+                                       header_footer_sz));
         }
     } else {
         dest_sz = (QZ_CEIL_DIV(9 * chunk_sz, 8) +

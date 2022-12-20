@@ -120,8 +120,8 @@ static inline void freePageTable(QzPageTable_T *const table)
 }
 
 static inline int storeAddr(QzPageTable_T *level,
-                             uintptr_t virt,
-                             uint64_t type)
+                            uintptr_t virt,
+                            uint64_t type)
 {
     QzPageIndex_T id;
 
@@ -147,18 +147,18 @@ static inline int storeAddr(QzPageTable_T *level,
 }
 
 static inline int storeMmapRange(QzPageTable_T *p_level,
-                                  void *p_virt,
-                                  uint64_t type,
-                                  size_t p_size)
+                                 void *p_virt,
+                                 uint64_t type,
+                                 size_t p_size)
 {
     size_t offset;
     size_t page_size = PAGE_SIZE;
     const uintptr_t virt = (uintptr_t)p_virt;
 
     for (offset = 0; offset < p_size; offset += page_size) {
-        if(0 != storeAddr(p_level, virt + offset, type)) {
+        if (0 != storeAddr(p_level, virt + offset, type)) {
             return -1;
-	}
+        }
     }
 
     return 0;

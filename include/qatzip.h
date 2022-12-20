@@ -761,7 +761,7 @@ typedef struct QzCrc64Config_S {
  *      The opaque pointer to metadata.
  *
  *****************************************************************************/
-typedef void* QzMetadataBlob_T;
+typedef void *QzMetadataBlob_T;
 
 /**
  *****************************************************************************
@@ -1213,15 +1213,15 @@ QATZIP_API int qzCompressCrc64Ext(QzSession_T *sess,
  *
  *****************************************************************************/
 QATZIP_API int qzCompressWithMetadataExt(QzSession_T *sess,
-                                         const unsigned char *src,
-                                         unsigned int *src_len,
-                                         unsigned char *dest,
-                                         unsigned int *dest_len,
-                                         unsigned int last,
-                                         uint64_t *ext_rc,
-                                         QzMetadataBlob_T *metadata,
-                                         uint32_t hw_buff_sz_override,
-                                         uint32_t comp_thrshold);
+        const unsigned char *src,
+        unsigned int *src_len,
+        unsigned char *dest,
+        unsigned int *dest_len,
+        unsigned int last,
+        uint64_t *ext_rc,
+        QzMetadataBlob_T *metadata,
+        uint32_t hw_buff_sz_override,
+        uint32_t comp_thrshold);
 
 /**
  *****************************************************************************
@@ -1457,13 +1457,13 @@ QATZIP_API int qzDecompressCrc64Ext(QzSession_T *sess,
  *
  *****************************************************************************/
 QATZIP_API int qzDecompressWithMetadataExt(QzSession_T *sess,
-                                           const unsigned char *src,
-                                           unsigned int *src_len,
-                                           unsigned char *dest,
-                                           unsigned int *dest_len,
-                                           uint64_t *ext_rc,
-                                           QzMetadataBlob_T *metadata,
-                                           uint32_t hw_buff_sz_override);
+        const unsigned char *src,
+        unsigned int *src_len,
+        unsigned char *dest,
+        unsigned int *dest_len,
+        uint64_t *ext_rc,
+        QzMetadataBlob_T *metadata,
+        uint32_t hw_buff_sz_override);
 
 /**
  *****************************************************************************
