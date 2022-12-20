@@ -200,10 +200,10 @@ void *qzMalloc(size_t sz, int numa, int pinned)
             g_a = malloc(sz);
         }
     } else {
-        if(0 != qzMemRegAddr(g_a, sz)) {
+        if (0 != qzMemRegAddr(g_a, sz)) {
             qaeMemFreeNUMA((void **)&g_a);
             return NULL;
-	}
+        }
     }
 
     return g_a;

@@ -241,19 +241,19 @@ int zstdCallBack(void *external, const unsigned char *src,
         cur += blk_sz;
 
         cnt_sz = 0;
-        for(unsigned int i = 0; i < dec_offset + 1 ; i++){
+        for (unsigned int i = 0; i < dec_offset + 1 ; i++) {
             cnt_sz += (zstd_seqs[i].litLength + zstd_seqs[i].matchLength) ;
         }
         assert(cnt_sz <= MAX_BLOCK_SIZE);
 
         // compress sequence to zstd frame
         int compressed_sz = ZSTD_compressSequences(zc,
-                                                   dest + produced,
-                                                   ZSTD_compressBound(cnt_sz),
-                                                   zstd_seqs,
-                                                   dec_offset + 1,
-                                                   src + consumed,
-                                                   cnt_sz);
+                            dest + produced,
+                            ZSTD_compressBound(cnt_sz),
+                            zstd_seqs,
+                            dec_offset + 1,
+                            src + consumed,
+                            cnt_sz);
 
         if (compressed_sz < 0) {
             ret = QZ_POST_PROCESS_ERROR;
