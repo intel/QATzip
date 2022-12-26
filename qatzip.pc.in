@@ -1,0 +1,12 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: qatzip
+Description: Higher level library provides access to Intel QAT compression
+URL: https://github.com/intel/QATzip
+Version: @VERSION@
+Libs: -L${libdir} -lqatzip
+Cflags: -I${includedir}
+Requires: zlib, liblz4
