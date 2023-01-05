@@ -1859,7 +1859,9 @@ QATZIP_API void *qzMalloc(size_t sz, int numa, int force_pinned);
  *
  * @retval QZ_OK                        Function executed successfully
  * @retval QZ_FAIL                      Function did not succeed
- *
+ * @retval QZ_PARAMS                    *metadata is NULL, or data_size is 0,
+ *                                      or data_size is greater than 1GB, or
+ *                                      incorrect hw_buff_sz.
  * @pre
  *      None
  * @post
@@ -1936,6 +1938,7 @@ QATZIP_API void qzFree(void *m);
  *
  * @retval QZ_OK                Function executed successfully.
  * @retval QZ_FAIL              Function did not succeed.
+ * @retval QZ_PARAMS            *metadata is NULL.
  *
  * @pre
  *      None
