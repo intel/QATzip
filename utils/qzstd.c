@@ -323,6 +323,12 @@ int compressFile(int in_file, int out_file)
     * should be 3. if mini match is 3, then LZ4MINMATCH should be 2*/
     LZ4MINMATCH = g_sess_params.lz4s_mini_match == 4 ? 3 : 2;
 
+    /* Align zstd minmatch to the QAT minmatch */
+    ZSTD_CCtx_setParameter(
+        zc, ZSTD_c_minMatch,
+        g_sess_params.lz4s_mini_match >= 4 ? 4 : 3
+    );
+
     //setup session
     int ret = qzInit(&qzstd_g_sess, g_sess_params.common_params.sw_backup);
     if (ret != QZ_OK && ret != QZ_DUPLICATE) {
