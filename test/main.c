@@ -151,9 +151,9 @@ typedef struct {
     int count;
     int verify_data;
     int debug;
-    int src_sz;
-    int comp_out_sz;
-    int decomp_out_sz;
+    size_t src_sz;
+    size_t comp_out_sz;
+    size_t decomp_out_sz;
     int max_forks;
     unsigned char *src;
     unsigned char *comp_out;
@@ -1213,8 +1213,8 @@ void *qzCompressAndDecompress(void *arg)
     struct timeval ts, te;
     unsigned long long ts_m, te_m, el_m;
     long double sec, rate;
-    const int org_src_sz = ((TestArg_T *)arg)->src_sz;
-    const int org_comp_out_sz = ((TestArg_T *)arg)->comp_out_sz;
+    const size_t org_src_sz = ((TestArg_T *)arg)->src_sz;
+    const size_t org_comp_out_sz = ((TestArg_T *)arg)->comp_out_sz;
     const long tid = ((TestArg_T *)arg)->thd_id;
     const ServiceType_T service = ((TestArg_T *)arg)->service;
     const int verify_data = ((TestArg_T *)arg)->verify_data;
@@ -1961,7 +1961,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
 {
     int rc, k;
     unsigned char *src = NULL, *dest = NULL;
-    unsigned int src_sz, dest_sz, avail_dest_sz;
+    size_t src_sz, dest_sz, avail_dest_sz;
     struct timeval ts, te;
     unsigned long long ts_m, te_m, el_m;
     long double sec, rate;
@@ -2079,7 +2079,7 @@ void *qzCompressStreamOutput(void *thd_arg)
 {
     int rc;
     unsigned char *src = NULL, *dest = NULL;
-    unsigned int src_sz, dest_sz;
+    size_t src_sz, dest_sz;
     QzStream_T comp_strm = {0};
     QzSessionParams_T params = {0};
     unsigned int last = 0;
@@ -2200,7 +2200,7 @@ void *qzDecompressStreamInput(void *thd_arg)
 {
     int rc;
     unsigned char *src = NULL, *dest = NULL;
-    unsigned int src_sz, dest_sz;
+    size_t src_sz, dest_sz;
     unsigned int consumed, done;
     QzStream_T decomp_strm = {0};
     QzSessionParams_T params = {0};
@@ -2347,7 +2347,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
 {
     int rc;
     unsigned char *src = NULL, *dest = NULL;
-    unsigned int src_sz, dest_sz;
+    size_t src_sz, dest_sz;
     QzStream_T comp_strm = {0};
     QzSessionParams_T params = {0};
     unsigned int last = 0;
@@ -2739,7 +2739,7 @@ void *qzInitPcieCountCheck(void *thd_arg)
 {
     int rc;
     unsigned char *src = NULL, *dest = NULL;
-    unsigned int src_sz, dest_sz;
+    size_t src_sz, dest_sz;
     unsigned int consumed, done;
     QzStream_T decomp_strm = {0};
     QzSessionParams_T params = {0};
@@ -3502,7 +3502,7 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
 {
     int rc;
     unsigned char *src = NULL, *dest = NULL;
-    unsigned int src_sz, dest_sz;
+    size_t src_sz, dest_sz;
     QzStream_T comp_strm = {0};
     QzSessionParams_T params = {0};
     unsigned int last = 0;
@@ -3718,7 +3718,7 @@ void *qzDecompressStreamWithBufferError(void *thd_arg)
 {
     int rc;
     unsigned char *src = NULL, *dest = NULL;
-    unsigned int src_sz, dest_sz;
+    size_t src_sz, dest_sz;
     QzStream_T decomp_strm = {0};
     QzSessionParams_T params = {0};
     unsigned int last = 1;
