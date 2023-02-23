@@ -60,10 +60,10 @@ extern"C" {
 #define NODE_0               0
 #define NUM_BUFF             (32)
 /**
- * For Gen4, 8K hardware buffer size need more inflight buffers
+ * For less than 8K hardware buffer size, it needs more inflight buffers
  * to reach peak performance
  */
-#define NUM_BUFF_8K_GEN4     (128)
+#define NUM_BUFF_8K          (128)
 #define MAX_NUM_RETRY        ((int)500)
 #define MAX_BUFFERS          ((int)100)
 #define MAX_THREAD_TMR       ((int)100)
@@ -102,34 +102,7 @@ extern"C" {
         CPA_DC_API_VERSION_NUM_MINOR >= minor))
 #endif
 
-#define QZ_4XXX_PCI_DEVICE_A_ID 0x4940
-#define QZ_4XXXIOV_PCI_DEVICE_A_ID 0x4941
-#define QZ_4XXX_PCI_DEVICE_B_ID 0x4942
-#define QZ_4XXXIOV_PCI_DEVICE_B_ID 0x4943
-#define QZ_4XXX_PCI_DEVICE_C_ID 0x4944
-#define QZ_4XXXIOV_PCI_DEVICE_C_ID 0x4945
-#define QZ_4XXX_PCI_DEVICE_D_ID 0x4946
-#define QZ_4XXXIOV_PCI_DEVICE_D_ID 0x4947
-#define QZ_4XXX_PCI_DEVICE_E_ID 0x4948
-#define QZ_4XXXIOV_PCI_DEVICE_E_ID 0x4949
-
-#define IS_QAT_GEN4(device_id)                       \
-    (device_id == QZ_4XXX_PCI_DEVICE_A_ID ||         \
-     device_id == QZ_4XXXIOV_PCI_DEVICE_A_ID ||      \
-     device_id == QZ_4XXX_PCI_DEVICE_B_ID ||         \
-     device_id == QZ_4XXXIOV_PCI_DEVICE_B_ID ||      \
-     device_id == QZ_4XXX_PCI_DEVICE_C_ID ||         \
-     device_id == QZ_4XXXIOV_PCI_DEVICE_C_ID ||      \
-     device_id == QZ_4XXX_PCI_DEVICE_D_ID ||         \
-     device_id == QZ_4XXXIOV_PCI_DEVICE_D_ID ||      \
-     device_id == QZ_4XXX_PCI_DEVICE_E_ID ||         \
-     device_id == QZ_4XXXIOV_PCI_DEVICE_E_ID)
-
-#define QZ_CEIL_DIV(x, y) (((x) + (y)-1U) / (y))
-#define QZ_DEFLATE_SKID_PAD_GEN4_STATIC (1029)
-#define QZ_DEFLATE_SKID_PAD_GEN4_DYN (512)
-#define QZ_LZ4_SKID_PAD_GEN4 (1024)
-#define QZ_LZ4S_SKID_PAD_GEN4 (1024)
+#define QZ_CEIL_DIV(x, y) (((x) + (y)-1) / (y))
 
 /* macros for lz4 */
 #define QZ_LZ4_MAGIC         0x184D2204U
@@ -217,7 +190,6 @@ typedef struct ProccesData_S {
     QzInstance_T *qz_inst;
     Cpa16U num_instances;
     atomic_char qat_available;
-    CpaDeviceInfo device_info;
 } processData_T;
 
 typedef enum {

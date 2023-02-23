@@ -273,8 +273,8 @@ done:
 
 /*
  * Check the capabilities of instance to ensure that it
- * supports the data format. For LZ4 or LZ4s with
- * QAT API Version < 3.1, just return QZ_FAIL.
+ * supports the data format. For LZ4 or LZ4s if
+ * QAT API Version is less than 3.1, will return QZ_FAIL.
  */
 static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
                                  DataFormatInternal_T data_fmt)
@@ -283,15 +283,10 @@ static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
 
     switch (data_fmt) {
     case LZ4_FH:
-#if CPA_DC_API_VERSION_AT_LEAST(3,1)
-        if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
-            if (!inst_cap->statelessLZ4Compression ||
-                !inst_cap->statelessLZ4Decompression ||
-                !inst_cap->checksumXXHash32) {
-                return QZ_FAIL;
-            }
-        } else {
-            QZ_ERROR("QAT Device does not support lz4 algorithm\n");
+#if CPA_DC_API_VERSION_AT_LEAST(3, 1)
+        if (!inst_cap->statelessLZ4Compression ||
+            !inst_cap->statelessLZ4Decompression ||
+            !inst_cap->checksumXXHash32) {
             return QZ_FAIL;
         }
 #else
@@ -300,14 +295,9 @@ static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
 #endif
         break;
     case LZ4S_BK:
-#if CPA_DC_API_VERSION_AT_LEAST(3,1)
-        if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
-            if (!inst_cap->checksumXXHash32 ||
-                !inst_cap->statelessLZ4SCompression) {
-                return QZ_FAIL;
-            }
-        } else {
-            QZ_ERROR("QAT Device does not support lz4s algorithm\n");
+#if CPA_DC_API_VERSION_AT_LEAST(3, 1)
+        if (!inst_cap->checksumXXHash32 ||
+            !inst_cap->statelessLZ4SCompression) {
             return QZ_FAIL;
         }
 #else
@@ -728,18 +718,6 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         instance_found++;
     }
 
-    /* Get the device info by the device id,
-     * assume there is only one QAT device type.
-     * If want to support multiple device types later,
-     * need to refactor this part of the codes. */
-    dev_id = g_process.qz_inst[0].instance_info.physInstId.packageId;
-    status = cpaGetDeviceInfo(dev_id,
-                              &g_process.device_info);
-    if (CPA_STATUS_SUCCESS != status) {
-        QZ_ERROR("Error in cpaGetDeviceInfo status = %d\n", status);
-        QZ_HW_BACKOUT(QZ_NOSW_NO_INST_ATTACH);
-    }
-
     clearDevices(qat_hw);
     free(qat_hw);
 
@@ -919,18 +897,11 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
             inter_sz;
     }
 
-    if (IS_QAT_GEN4(g_process.device_info.deviceId) &&
-        src_sz < 16384) {
-        /* For QAT gen4, it has higher perfomance than gen2, shorter processing
-         * time for a single request, especially the small block data.
-         * Setting the src_count and dest_count to 128(NUM_BUFF_8K_GEN4) to improve
-         * 8k decompression performance.
-        */
-        g_process.qz_inst[i].src_count = NUM_BUFF_8K_GEN4;
-        g_process.qz_inst[i].dest_count = NUM_BUFF_8K_GEN4;
-    } else {
-        g_process.qz_inst[i].src_count = NUM_BUFF;
-        g_process.qz_inst[i].dest_count = NUM_BUFF;
+    g_process.qz_inst[i].src_count = NUM_BUFF;
+    g_process.qz_inst[i].dest_count = NUM_BUFF;
+    if (params->hw_buff_sz <= 8 * 1024) {
+        g_process.qz_inst[i].src_count = NUM_BUFF_8K;
+        g_process.qz_inst[i].dest_count = NUM_BUFF_8K;
     }
 
     g_process.qz_inst[i].src_buffers = calloc(1, (size_t)(
@@ -1961,38 +1932,6 @@ unsigned char getSwBackup(QzSession_T *sess)
     }
 }
 
-/*
- * Check the destination buffer size is valid for QAT device.
- * For QAT Gen2, the min out buffer size is 64. For QAT Gen4,
- * dynamic compression is 512, and static compression is 1024.
- */
-static int qzCheckDestBufferSize(QzSession_T *sess, unsigned int dest_len)
-{
-    QzSess_T *qz_sess;
-    QzHuffmanHdr_T huffman_hdr;
-
-    assert(sess);
-    assert(sess->internal);
-
-    /*
-     * Ensure that the destination buffer size is greater or equal
-     * to devices min output buff size.
-     */
-    if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
-        qz_sess = (QzSess_T *)sess->internal;
-        huffman_hdr = qz_sess->sess_params.huffman_hdr;
-        if (huffman_hdr == QZ_DYNAMIC_HDR && dest_len < 512) {
-            return QZ_FAIL;
-        } else if (huffman_hdr == QZ_STATIC_HDR && dest_len < 1024) {
-            return QZ_FAIL;
-        }
-    } else if (dest_len < 64) {
-        return QZ_FAIL;
-    }
-
-    return QZ_OK;
-}
-
 /* The QATzip compression API */
 int qzCompress(QzSession_T *sess, const unsigned char *src,
                unsigned int *src_len, unsigned char *dest,
@@ -2113,12 +2052,6 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
         *src_len = 0;
         *dest_len = 0;
         return sess->hw_session_stat;
-    }
-
-
-    if (QZ_OK != qzCheckDestBufferSize(sess, *dest_len)) {
-        QZ_DEBUG("qzCheckDestBufferSize failed, switch to software.\n");
-        goto sw_compression;
     }
 
     i = qzGrabInstance(qz_sess->inst_hint, data_fmt);
@@ -3172,158 +3105,49 @@ int qzGetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults)
     return QZ_OK;
 }
 
-static unsigned int qzDeflateBoundGen2(unsigned int src_sz, QzSession_T *sess)
-{
-    unsigned int dest_sz = 0;
-    unsigned int qz_header_footer_sz = qzGzipHeaderSz() + stdGzipFooterSz();
-    QzSess_T *qz_sess = NULL;
-    signed long int chunk_sz = 0;
-    unsigned int chunk_cnt = 0;
-    unsigned int max_chunk_sz = 0;
-    unsigned int last_chunk_sz = 0;
-
-    if (NULL == sess || NULL == sess->internal) {
-        chunk_sz = QZ_HW_BUFF_SZ;
-    } else {
-        qz_sess = (QzSess_T *)sess->internal;
-        chunk_sz = qz_sess->sess_params.hw_buff_sz;
-    }
-
-    chunk_cnt = src_sz / chunk_sz;
-    max_chunk_sz = ((9 * chunk_sz + 7) / 8) + QZ_SKID_PAD_SZ +
-                   qz_header_footer_sz;
-    dest_sz =  max_chunk_sz * chunk_cnt;
-    last_chunk_sz = src_sz % chunk_sz;
-
-    if (last_chunk_sz) {
-        dest_sz += ((9 * last_chunk_sz + 7) / 8) + QZ_SKID_PAD_SZ + qz_header_footer_sz;
-    }
-
-    if (0 == src_sz) {
-        dest_sz = QZ_COMPRESSED_SZ_OF_EMPTY_FILE;
-    }
-
-    if (dest_sz <= src_sz) {
-        dest_sz = 0;
-    }
-
-    return dest_sz;
-}
-
-static unsigned int qzDeflateBoundGen4(unsigned int src_sz, QzSession_T *sess)
-{
-    unsigned long dest_sz = 0;
-    unsigned int header_footer_sz = 0;
-    unsigned int chunk_cnt = 0;
-    unsigned long chunk_sz = 0;
-    unsigned int last_chunk_sz = 0;
-    DataFormatInternal_T data_fmt;
-    QzHuffmanHdr_T huffman_type;
-    QzSess_T *qz_sess = NULL;
-
-    assert(sess);
-    assert(sess->internal);
-
-    qz_sess = (QzSess_T *)sess->internal;
-    chunk_sz = qz_sess->sess_params.hw_buff_sz;
-    data_fmt = qz_sess->sess_params.data_fmt;
-    huffman_type = qz_sess->sess_params.huffman_hdr;
-    header_footer_sz = outputHeaderSz(data_fmt) +
-                       outputFooterSz(data_fmt);
-
-    /* if input size is 0, return min length */
-    if (!src_sz) {
-        if (huffman_type == QZ_DYNAMIC_HDR) {
-            return (QZ_DEFLATE_SKID_PAD_GEN4_DYN + header_footer_sz);
-        } else {
-            return (QZ_DEFLATE_SKID_PAD_GEN4_STATIC + header_footer_sz);
-        }
-    }
-
-    chunk_cnt = src_sz / chunk_sz;
-    last_chunk_sz = src_sz % chunk_sz;
-
-    if (huffman_type == QZ_DYNAMIC_HDR) {
-        dest_sz = (QZ_CEIL_DIV(9U * chunk_sz, 8U) +
-                   QZ_DEFLATE_SKID_PAD_GEN4_DYN +
-                   (((8U * chunk_sz * 155) / 7) / (16 * 1024)) +
-                   header_footer_sz) * chunk_cnt;
-        if (last_chunk_sz) {
-            dest_sz += (unsigned int)((QZ_CEIL_DIV(9U * last_chunk_sz, 8U) +
-                                       QZ_DEFLATE_SKID_PAD_GEN4_DYN +
-                                       (((8U * last_chunk_sz * 155) / 7) / (16 * 1024)) +
-                                       header_footer_sz));
-        }
-    } else {
-        dest_sz = (QZ_CEIL_DIV(9 * chunk_sz, 8) +
-                   QZ_DEFLATE_SKID_PAD_GEN4_STATIC +
-                   header_footer_sz) * chunk_cnt;
-        if (last_chunk_sz) {
-            dest_sz += (QZ_CEIL_DIV(last_chunk_sz, 8) +
-                        QZ_DEFLATE_SKID_PAD_GEN4_STATIC +
-                        header_footer_sz);
-        }
-    }
-
-    /* If output size overflow, set dest_sz to 0 */
-    if (dest_sz & 0xffffffff00000000UL) {
-        dest_sz = 0;
-    }
-
-    return dest_sz;
-}
-
 static unsigned int qzDeflateBound(unsigned int src_sz, QzSession_T *sess)
 {
     unsigned int dest_sz = 0;
+    unsigned int chunk_cnt = 0;
+    unsigned int hw_buffer_sz = 0;
+    QzSess_T *qz_sess = NULL;
+    CpaDcHuffType huffman_type;
+    CpaStatus status = CPA_STATUS_SUCCESS;
 
-    assert(sess);
-    assert(sess->internal);
+    qz_sess = (QzSess_T *)sess->internal;
 
-    if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
-        dest_sz = qzDeflateBoundGen4(src_sz, sess);
+    /* Get the Huffman Tree type. */
+    if (qz_sess->sess_params.huffman_hdr == QZ_DYNAMIC_HDR) {
+        huffman_type = CPA_DC_HT_FULL_DYNAMIC;
     } else {
-        dest_sz = qzDeflateBoundGen2(src_sz, sess);
+        huffman_type = CPA_DC_HT_STATIC;
     }
+    status = cpaDcDeflateCompressBound(NULL, huffman_type, src_sz, &dest_sz);
+    if (status != CPA_STATUS_SUCCESS) {
+        return 0;
+    }
+    hw_buffer_sz = qz_sess->sess_params.hw_buff_sz;
+
+    /* cpaDcDeflateCompressBound only provides the maximum output size of deflate blocks,
+     * it does not include gzip/gzip-ext header and footer size, so we need to update dest_sz
+     * for header and footer size.
+     */
+    /* Calculate how many gzip/gzip-ext headers and footers will be generated. */
+    chunk_cnt = src_sz / hw_buffer_sz + src_sz %
+                hw_buffer_sz ? 1 : 0;
+    dest_sz += chunk_cnt * (qzGzipHeaderSz() + stdGzipFooterSz());
 
     return dest_sz;
 }
 
 static unsigned int qzLZ4SBound(unsigned int src_sz, QzSession_T *sess)
 {
-    unsigned long dest_sz = 0;
-    unsigned int header_footer_sz = 0;
-    unsigned int chunk_cnt = 0;
-    unsigned long chunk_sz = 0;
-    unsigned int last_chunk_sz = 0;
-    QzSess_T *qz_sess = NULL;
+    unsigned int dest_sz = 0;
+    CpaStatus status = CPA_STATUS_SUCCESS;
 
-    assert(sess);
-    assert(sess->internal);
-
-    header_footer_sz = qzLZ4SBlockHeaderSz();
-
-    /* if input size is 0, return min length */
-    if (!src_sz) {
-        return (QZ_LZ4S_SKID_PAD_GEN4 + header_footer_sz);
-    }
-
-    qz_sess = (QzSess_T *)sess->internal;
-    chunk_sz = qz_sess->sess_params.hw_buff_sz;
-    chunk_cnt = src_sz / chunk_sz;
-    last_chunk_sz = src_sz % chunk_sz;
-
-    dest_sz = (chunk_sz + QZ_CEIL_DIV(chunk_sz, 2000) * 11 +
-               QZ_LZ4S_SKID_PAD_GEN4 + header_footer_sz) * chunk_cnt;
-
-    if (last_chunk_sz) {
-        dest_sz += (last_chunk_sz + QZ_CEIL_DIV(last_chunk_sz, 2000) * 11 +
-                    QZ_LZ4S_SKID_PAD_GEN4 + header_footer_sz);
-    }
-
-    /* If output size overflow, set dest_sz to 0 */
-    if (dest_sz & 0xffffffff00000000UL) {
-        dest_sz = 0;
+    status = cpaDcLZ4SCompressBound(NULL, src_sz, &dest_sz);
+    if (status != CPA_STATUS_SUCCESS) {
+        return 0;
     }
 
     return dest_sz;
@@ -3331,40 +3155,29 @@ static unsigned int qzLZ4SBound(unsigned int src_sz, QzSession_T *sess)
 
 static unsigned int qzLZ4Bound(unsigned int src_sz, QzSession_T *sess)
 {
-    unsigned long dest_sz = 0;
-    unsigned int header_footer_sz = 0;
+    unsigned int dest_sz = 0;
     unsigned int chunk_cnt = 0;
-    unsigned long chunk_sz = 0;
-    unsigned int last_chunk_sz = 0;
     QzSess_T *qz_sess = NULL;
+    CpaStatus status = CPA_STATUS_SUCCESS;
 
     assert(sess);
     assert(sess->internal);
 
-    header_footer_sz = qzLZ4HeaderSz() + qzLZ4FooterSz();
-
-    /* if input size is 0, return min length */
-    if (!src_sz) {
-        return (QZ_LZ4_SKID_PAD_GEN4 + header_footer_sz);
+    status = cpaDcLZ4CompressBound(NULL, src_sz, &dest_sz);
+    if (status != CPA_STATUS_SUCCESS) {
+        return 0;
     }
 
+    /* cpaDcLZ4CompressBound only provides the maximum output size of lz4 blocks,
+     * it does not include lz4 frames header and footer size, so we need to update dest_sz
+     * for header and footer size.
+     */
+    /* Calculate how many frames header and footer will be generated */
     qz_sess = (QzSess_T *)sess->internal;
-    chunk_sz = qz_sess->sess_params.hw_buff_sz;
-    chunk_cnt = src_sz / chunk_sz;
-    last_chunk_sz = src_sz % chunk_sz;
-
-    dest_sz = (chunk_sz + QZ_CEIL_DIV(chunk_sz, 1520) * 13 +
-               QZ_LZ4_SKID_PAD_GEN4 + header_footer_sz) * chunk_cnt;
-
-    if (last_chunk_sz) {
-        dest_sz += (last_chunk_sz + QZ_CEIL_DIV(last_chunk_sz, 1520) * 13 +
-                    QZ_LZ4_SKID_PAD_GEN4 + header_footer_sz);
-    }
-
-    /* If output size overflow, set dest_sz to 0 */
-    if (dest_sz & 0xffffffff00000000UL) {
-        dest_sz = 0;
-    }
+    chunk_cnt = src_sz / qz_sess->sess_params.hw_buff_sz + src_sz %
+                qz_sess->sess_params.hw_buff_sz ? 1 : 0;
+    dest_sz += chunk_cnt * outputHeaderSz(qz_sess->sess_params.data_fmt) +
+               chunk_cnt * outputFooterSz(qz_sess->sess_params.data_fmt);
 
     return dest_sz;
 }
@@ -3372,12 +3185,24 @@ static unsigned int qzLZ4Bound(unsigned int src_sz, QzSession_T *sess)
 unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
 {
     unsigned int dest_sz = 0;
+    unsigned int chunk_cnt = 0;
+
     QzSess_T *qz_sess = NULL;
 
-    if (NULL == sess ||
-        NULL == sess->internal ||
-        QZ_OK != sess->hw_session_stat) {
-        return qzDeflateBoundGen2(src_sz, sess);
+    if (sess == NULL || sess->internal == NULL || sess->hw_session_stat != QZ_OK) {
+        uint64_t in_sz = src_sz;
+        uint64_t out_sz = 0;
+        if (in_sz == 0) {
+            return QZ_COMPRESSED_SZ_OF_EMPTY_FILE;
+        }
+        out_sz = QZ_CEIL_DIV(9 * in_sz, 8) + QZ_SKID_PAD_SZ;
+        chunk_cnt = in_sz / QZ_HW_BUFF_SZ + in_sz %
+                    QZ_HW_BUFF_SZ ? 1 : 0;
+        out_sz += chunk_cnt * (qzGzipHeaderSz() + stdGzipFooterSz());
+        if (out_sz & 0xffffffff00000000UL)
+            return 0;
+        dest_sz = (unsigned int)out_sz;
+        return dest_sz;
     }
 
     qz_sess = (QzSess_T *)sess->internal;
@@ -3399,7 +3224,7 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
         break;
     }
 
-    QZ_DEBUG("src_sz is %u, dest_sz is %u\n", src_sz, (unsigned int)dest_sz);
+    QZ_DEBUG("src_sz is %u, dest_sz is %u\n", src_sz, dest_sz);
     return dest_sz;
 }
 
