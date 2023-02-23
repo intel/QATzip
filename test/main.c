@@ -89,7 +89,7 @@
                                    (QZ_OK != rc         || \
                                    QZ_NO_HW == g_process.qz_init_status))
 
-#if CPA_DC_API_VERSION_AT_LEAST(3,0)
+#if CPA_DC_API_VERSION_AT_LEAST(3, 1)
 #define COMP_LVL_MAXIMUM QZ_LZS_COMP_LVL_MAXIMUM
 #else
 #define COMP_LVL_MAXIMUM QZ_DEFLATE_COMP_LVL_MAXIMUM

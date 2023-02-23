@@ -193,11 +193,6 @@ static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
     assert(session_setup_data);
     assert(params);
 
-    if (!IS_QAT_GEN4(g_process.device_info.deviceId) &&
-        (params->comp_lvl > QZ_DEFLATE_COMP_LVL_MAXIMUM)) {
-        QZ_ERROR("Invalid comp_lvl value\n");
-        return QZ_PARAMS;
-    }
     session_setup_data->compLevel = params->comp_lvl;
 
     switch (params->data_fmt) {
@@ -216,34 +211,24 @@ static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
         }
         break;
     case LZ4_FH:
-#if CPA_DC_API_VERSION_AT_LEAST(3,0)
-        if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
-            session_setup_data->compType = CPA_DC_LZ4;
-            session_setup_data->checksum = CPA_DC_XXHASH32;
-            session_setup_data->lz4BlockChecksum = 0;
-            session_setup_data->lz4BlockMaxSize = CPA_DC_LZ4_MAX_BLOCK_SIZE_64K;
-        } else {
-            QZ_ERROR("QAT Device does not support lz4 algorithm\n");
-            return QZ_UNSUPPORTED_FMT;
-        }
+#if CPA_DC_API_VERSION_AT_LEAST(3, 1)
+        session_setup_data->compType = CPA_DC_LZ4;
+        session_setup_data->checksum = CPA_DC_XXHASH32;
+        session_setup_data->lz4BlockChecksum = 0;
+        session_setup_data->lz4BlockMaxSize = CPA_DC_LZ4_MAX_BLOCK_SIZE_64K;
         break;
 #else
         QZ_ERROR("QAT driver does not support lz4 algorithm\n");
         return QZ_UNSUPPORTED_FMT;
 #endif
     case LZ4S_BK:
-#if CPA_DC_API_VERSION_AT_LEAST(3,0)
-        if (IS_QAT_GEN4(g_process.device_info.deviceId)) {
-            session_setup_data->compType = CPA_DC_LZ4S;
-            session_setup_data->checksum = CPA_DC_XXHASH32;
-            if (params->lz4s_mini_match == 4) {
-                session_setup_data->minMatch = CPA_DC_MIN_4_BYTE_MATCH;
-            } else {
-                session_setup_data->minMatch = CPA_DC_MIN_3_BYTE_MATCH;
-            }
+#if CPA_DC_API_VERSION_AT_LEAST(3, 1)
+        session_setup_data->compType = CPA_DC_LZ4S;
+        session_setup_data->checksum = CPA_DC_XXHASH32;
+        if (params->lz4s_mini_match == 4) {
+            session_setup_data->minMatch = CPA_DC_MIN_4_BYTE_MATCH;
         } else {
-            QZ_ERROR("QAT Device does not support lz4s algorithm\n");
-            return QZ_UNSUPPORTED_FMT;
+            session_setup_data->minMatch = CPA_DC_MIN_3_BYTE_MATCH;
         }
         break;
 #else
@@ -266,7 +251,7 @@ static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
     }
 
     session_setup_data->sessState = CPA_DC_STATELESS;
-#if CPA_DC_API_VERSION_AT_LEAST(3,0)
+#if CPA_DC_API_VERSION_AT_LEAST(3, 1)
     session_setup_data->windowSize = (Cpa32U)7;
 #else
     session_setup_data->deflateWindowSize = (Cpa32U)7;
