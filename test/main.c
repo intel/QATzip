@@ -1311,7 +1311,7 @@ void *qzCompressAndDecompress(void *arg)
         src_sz = consumed;
         comp_out_sz = produced;
         if (src_sz != org_src_sz) {
-            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %d \n!", src_sz,
+            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                      org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -1379,7 +1379,7 @@ void *qzCompressAndDecompress(void *arg)
             src_sz = consumed;
             comp_out_sz = produced;
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %d \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
                          org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -1411,7 +1411,7 @@ void *qzCompressAndDecompress(void *arg)
 
             decomp_out_sz = produced;
             if (decomp_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %d \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
                          decomp_out_sz, org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -1470,10 +1470,10 @@ void *qzCompressAndDecompress(void *arg)
         goto done;
     }
     QZ_PRINT(", tid=%ld, verify=%d, count=%d, msec=%llu, "
-             "bytes=%d, %Lf Gbps",
+             "bytes=%lu, %Lf Gbps",
              tid, verify_data, count, el_m, org_src_sz, rate);
     if (DECOMP != service) {
-        QZ_PRINT(", input_len=%d, comp_len=%lu, ratio=%f%%",
+        QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%",
                  org_src_sz, comp_out_sz,
                  ((double)comp_out_sz / (double)org_src_sz) * 100);
     }
@@ -2048,7 +2048,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
             goto done;
         }
         (void)gettimeofday(&te, NULL);
-        QZ_DEBUG("Compressed %u bytes into %u\n", src_sz, dest_sz);
+        QZ_DEBUG("Compressed %lu bytes into %lu\n", src_sz, dest_sz);
 
         ts_m = (ts.tv_sec * 1000000) + ts.tv_usec;
         te_m = (te.tv_sec * 1000000) + te.tv_usec;
@@ -2061,7 +2061,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     rate = src_sz * test_arg->count * 8; // bits
     rate = rate / 1000000000.0; // gigbits
     rate = rate / sec;// Gbps
-    QZ_PRINT("[%ld] elasped microsec = %llu bytes = %u rate = %Lf Gbps\n",
+    QZ_PRINT("[%ld] elasped microsec = %llu bytes = %lu rate = %Lf Gbps\n",
              tid, el_m, src_sz, rate);
 
 done:
@@ -2169,7 +2169,7 @@ void *qzCompressStreamOutput(void *thd_arg)
             QZ_ERROR("qzCompressStream FAILED, return: %d", rc);
             goto done;
         }
-        QZ_DEBUG("Compressed %d bytes into %d\n", src_sz, dest_sz);
+        QZ_DEBUG("Compressed %lu bytes into %lu\n", src_sz, dest_sz);
 
         // Add tailer for Deflate raw data.
         if (params.data_fmt == QZ_DEFLATE_RAW) {
@@ -2267,7 +2267,7 @@ void *qzDecompressStreamInput(void *thd_arg)
                 goto done;
             }
 
-            QZ_DEBUG("Decompressed %d bytes into %d\n", src_sz, dest_sz);
+            QZ_DEBUG("Decompressed %lu bytes into %lu\n", src_sz, dest_sz);
             dumpDecompressedData(decomp_strm.out_sz, decomp_strm.out, filename);
             consumed += decomp_strm.in_sz;
 
@@ -2417,7 +2417,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
             QZ_ERROR("qzCompressStream FAILED, return: %d\n", rc);
             goto done;
         }
-        QZ_DEBUG("Compressed %d bytes into %d\n", src_sz, dest_sz);
+        QZ_DEBUG("Compressed %lu bytes into %lu\n", src_sz, dest_sz);
 
         /*case 2: set strm in, our ptr to NULL, but in_sz, out_sz not zero*/
         memset(&comp_strm, 0, sizeof(QzStream_T));
@@ -2821,7 +2821,7 @@ void *qzInitPcieCountCheck(void *thd_arg)
                 goto done;
             }
 
-            QZ_DEBUG("Decompressed %d bytes into %d\n", src_sz, dest_sz);
+            QZ_DEBUG("Decompressed %lu bytes into %lu\n", src_sz, dest_sz);
             dumpDecompressedData(decomp_strm.out_sz, decomp_strm.out, filename);
             consumed += decomp_strm.in_sz;
 
