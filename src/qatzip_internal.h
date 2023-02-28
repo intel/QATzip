@@ -56,6 +56,7 @@ extern"C" {
 
 #define SUCCESS              1
 #define FAILURE              0
+#define QZ_WAIT_SW_PENDING   10
 
 #define NODE_0               0
 #define NUM_BUFF             (32)
@@ -129,6 +130,10 @@ extern"C" {
 #define QZ_LZ4_STORED_HEADER_SIZE 4
 
 #define DATA_FORMAT_DEFAULT     DEFLATE_GZIP_EXT
+#define IS_DEFLATE_RAW(fmt)  (DEFLATE_RAW == (fmt))
+#define IS_DEFLATE(fmt) \
+        (DEFLATE_RAW == (fmt) || DEFLATE_GZIP == (fmt) || \
+        DEFLATE_GZIP_EXT == (fmt) || DEFLATE_4B == (fmt))
 
 typedef struct QzCpaStream_S {
     signed long seq;
@@ -162,7 +167,8 @@ typedef struct QzInstance_S {
     QzCpaStream_T *stream;
 
     unsigned int lock;
-    time_t heartbeat;
+    /*heartbeat represent device status, which will be changed by polling events thread*/
+    CpaStatus heartbeat;
     unsigned char mem_setup;
     unsigned char cpa_sess_setup;
     CpaStatus inst_start_status;
@@ -190,6 +196,8 @@ typedef struct ProccesData_S {
     QzInstance_T *qz_inst;
     Cpa16U num_instances;
     atomic_char qat_available;
+    /* this thread handler is for keep polling device fatal events.*/
+    pthread_t t_poll_heartbeat;
 } processData_T;
 
 typedef enum {
@@ -485,4 +493,79 @@ void qzSetParamsDeflate(QzSessionParamsDeflate_T *params,
                         QzSessionParamsInternal_T *internal_params);
 void qzSetParams(QzSessionParams_T *params,
                  QzSessionParamsInternal_T *internal_params);
+
+/*  SW Fallback for HW request offload failed or
+    HW respond in Error status
+ */
+int compInSWFallback(int i, int j, QzSession_T *sess,
+                     unsigned char *src_ptr,
+                     unsigned int src_send_sz);
+int compOutSWFallback(int i, int j, QzSession_T *sess,
+                      long *dest_avail_len);
+int decompInSWFallback(int i, int j, QzSession_T *sess,
+                       unsigned char *src_ptr,
+                       unsigned char *dest_ptr,
+                       unsigned int *tmp_src_avail_len,
+                       unsigned int *tmp_dest_avail_len);
+int decompOutSWFallback(int i, int j, QzSession_T *sess,
+                        unsigned int *dest_avail_len);
+
+/*  Stream pData may need reset, which is caused by driver API
+    params limitaion, when setup buffer, may feed pinned pointer
+    or common pointer to pBuffer.
+*/
+void RestoreDestCpastreamBuffer(int i, int j);
+void RestoreSrcCpastreamBuffer(int i, int j);
+void ResetCpastreamSink(int i, int j);
+
+/*  compression stream/src/dest buffer setup, and cleanup
+*/
+void compBufferSetup(int i, int j, QzSess_T *qz_sess,
+                     unsigned char *src_ptr, unsigned int src_remaining,
+                     unsigned int hw_buff_sz, unsigned int src_send_sz);
+void compInBufferCleanUp(int i, int j);
+void compOutSrcBufferCleanUp(int i, int j);
+void compOutErrorDestBufferCleanUp(int i, int j);
+void compOutValidDestBufferCleanUp(int i, int j, QzSess_T *qz_sess,
+                                   unsigned int dest_receive_sz);
+
+/*  docompressOut successful respond process,
+    or error respond process
+*/
+void compOutProcessedRespond(int i, int j, QzSess_T *qz_sess);
+void compOutSkipErrorRespond(int i, int j, QzSess_T *qz_sess);
+int compOutCheckDestLen(int i, int j, QzSession_T *sess,
+                        long *dest_avail_len, long dest_receive_sz);
+
+int checkHeader(QzSess_T *qz_sess, unsigned char *src,
+                unsigned int src_avail_len,
+                unsigned int dest_avail_len,
+                QzGzH_T *hdr);
+
+/*  decompression stream/src/dest buffer setup, and cleanup
+*/
+void swapDataBuffer(unsigned long i, int j);
+void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
+                       unsigned char *src_ptr,
+                       unsigned char *dest_ptr,
+                       unsigned int src_avail_len,
+                       QzGzH_T *hdr,
+                       unsigned int *tmp_src_avail_len,
+                       unsigned int *tmp_dest_avail_len);
+void decompInBufferCleanUp(int i, int j);
+void decompOutSrcBufferCleanUp(int i, int j);
+void decompOutErrorDestBufferCleanUp(int i, int j);
+void decompOutValidDestBufferCleanUp(int i, int j, QzSess_T *qz_sess,
+                                     CpaDcRqResults *resl,
+                                     unsigned int dest_avail_len);
+
+/*  dodecompressOut successful respond process,
+    or error respond process
+*/
+void decompOutProcessedRespond(int i, int j, QzSess_T *qz_sess);
+void decompOutSkipErrorRespond(int i, int j, QzSess_T *qz_sess);
+int decompOutCheckSum(int i, int j, QzSession_T *sess,
+                      CpaDcRqResults *resl);
+
+
 #endif //_QATZIPP_H

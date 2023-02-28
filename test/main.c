@@ -2904,6 +2904,7 @@ int qzDecompressFailedAtUnknownGzipHeader(void)
     QzSession_T sess = {0};
     uint8_t *orig_src, *comp_src, *decomp_src;
     size_t orig_sz, src_sz, comp_sz, decomp_sz;
+    QzSessionParams_T params = {0};
 
     orig_sz = comp_sz = decomp_sz = 64 * 1024; /*64K*/
     orig_src = qzMalloc(orig_sz, 0, PINNED_MEM);
@@ -2915,6 +2916,20 @@ int qzDecompressFailedAtUnknownGzipHeader(void)
         decomp_src == NULL) {
         QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
         return -1;
+    }
+
+    rc = qzInit(&sess, 1);
+    if (QZ_INIT_HW_FAIL(rc)) {
+        QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
+        goto done;
+    }
+
+    assert(!qzGetDefaults(&params));
+    params.sw_backup = 0;
+    rc = qzSetupSession(&sess, &params);
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
+        QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
+        goto done;
     }
 
     genRandomData(orig_src, orig_sz);
@@ -3043,6 +3058,7 @@ int qzDecompressHWFailedAtUnknownGzipBlock(void)
     int rc = 0;
     QzGzH_T *hdr = NULL;
     QzSession_T sess = {0};
+    QzSessionParams_T params = {0};
     uint8_t *orig_src, *comp_src, *decomp_src;
     size_t orig_sz, src_sz, comp_sz, decomp_sz;
     uint32_t produce;
@@ -3056,6 +3072,20 @@ int qzDecompressHWFailedAtUnknownGzipBlock(void)
         comp_src == NULL ||
         decomp_src == NULL) {
         QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
+        goto done;
+    }
+
+    rc = qzInit(&sess, 0);
+    if (QZ_INIT_HW_FAIL(rc)) {
+        QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
+        goto done;
+    }
+
+    assert(!qzGetDefaults(&params));
+    params.sw_backup = 0;
+    rc = qzSetupSession(&sess, &params);
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
+        QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
 
@@ -3080,7 +3110,7 @@ int qzDecompressHWFailedAtUnknownGzipBlock(void)
     /*do Decompress Data*/
     rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
                       (uint32_t *)(&decomp_sz));
-    if (rc != QZ_FAIL) {
+    if (rc != QZ_FAIL && rc != QZ_DATA_ERROR) {
         QZ_ERROR("FAILED: Decompression success with Error Unknown Gzip block\n");
         goto done;
     }
@@ -3123,7 +3153,7 @@ int qzDecompressForceSW(void)
         goto done;
     }
 
-    qzGetDefaults(&params);
+    assert(!qzGetDefaults(&params));
     params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
     rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
@@ -3223,15 +3253,17 @@ int qzDecompressStandalone(void)
         goto done;
     }
 
-    if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: get params fail with incorrect compress params.\n");
+    rc = qzInit(&sess, 1);
+    if (QZ_INIT_HW_FAIL(rc)) {
+        QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
 
-    /*compression output 4 blocks*/
+    assert(!qzGetDefaults(&params));
     params.hw_buff_sz = 1 * KB;
-    if (qzSetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: set params fail with incorrect compress params.\n");
+    rc = qzSetupSession(&sess, &params);
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
+        QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
 
@@ -3270,6 +3302,7 @@ int qzCompressFailedAtBufferOverflow(void)
 {
     int rc = QZ_BUF_ERROR;
     QzSession_T sess = {0};
+    QzSessionParams_T params = {0};
     uint8_t *src, *low_comp, *comp, *low_decomp;
     size_t orig_sz = 64 * KB, low_comp_sz = 1 * KB, comp_sz = orig_sz,
            low_decomp_sz = 1 * KB;
@@ -3280,6 +3313,20 @@ int qzCompressFailedAtBufferOverflow(void)
     low_decomp = calloc(1, low_decomp_sz);
 
     if (NULL == src || NULL == low_comp || NULL == comp || NULL == low_decomp) {
+        goto done;
+    }
+
+    rc = qzInit(&sess, 1);
+    if (QZ_INIT_HW_FAIL(rc)) {
+        QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
+        goto done;
+    }
+
+    assert(!qzGetDefaults(&params));
+    params.hw_buff_sz = 1 * KB;
+    rc = qzSetupSession(&sess, &params);
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
+        QZ_ERROR("qzSetupSession for testing %s error, return: %d\n", __func__, rc);
         goto done;
     }
 
@@ -3404,7 +3451,7 @@ int qzCompressSWL9DecompressHW(void)
         goto done;
     }
 
-    qzGetDefaults(&params);
+    assert(!qzGetDefaults(&params));
     params.input_sz_thrshold = orig_sz + 1;
     params.comp_lvl = QZ_DEFLATE_COMP_LVL_MAXIMUM;
     rc = qzSetupSession(&sess, &params);
@@ -3739,6 +3786,7 @@ void *qzDecompressStreamWithBufferError(void *thd_arg)
         goto done;
     }
     params.strm_buff_sz = QZ_STRM_BUFF_SZ_DEFAULT - 1;
+    params.sw_backup = 0;
     if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
         goto done;
