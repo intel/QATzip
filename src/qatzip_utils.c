@@ -839,3 +839,451 @@ int isQATProcessable(const unsigned char *ptr,
     }
     return rc;
 }
+
+void RestoreDestCpastreamBuffer(int i, int j)
+{
+    if (g_process.qz_inst[i].stream[j].dest_need_reset) {
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
+            g_process.qz_inst[i].stream[j].orig_dest;
+        g_process.qz_inst[i].stream[j].dest_need_reset = 0;
+    }
+}
+
+void RestoreSrcCpastreamBuffer(int i, int j)
+{
+    if (g_process.qz_inst[i].stream[j].src_need_reset) {
+        g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
+            g_process.qz_inst[i].stream[j].orig_src;
+        g_process.qz_inst[i].stream[j].src_need_reset = 0;
+    }
+}
+
+void ResetCpastreamSink(int i, int j)
+{
+    g_process.qz_inst[i].stream[j].src1 = 0;
+    g_process.qz_inst[i].stream[j].src2 = 0;
+    g_process.qz_inst[i].stream[j].sink1 = 0;
+    g_process.qz_inst[i].stream[j].sink2 = 0;
+}
+
+/*  This setup function will always match with buffer clean up function
+*   during error offload flow.
+*/
+void compBufferSetup(int i, int j, QzSess_T *qz_sess,
+                     unsigned char *src_ptr, unsigned int src_remaining,
+                     unsigned int hw_buff_sz, unsigned int src_send_sz)
+{
+    unsigned int dest_receive_sz = 0;
+    /* Get the qz_sess status of this request */
+    CpaDcOpData *opData = NULL;
+    CpaBoolean need_cont_mem =
+        g_process.qz_inst[i].instance_info.requiresPhysicallyContiguousMemory;
+    DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
+    /* setup stream buffer */
+    g_process.qz_inst[i].stream[j].seq = qz_sess->seq; /*update stream seq*/
+    g_process.qz_inst[i].stream[j].res.checksum = 0;
+
+    /* setup opData */
+    opData = &g_process.qz_inst[i].stream[j].opData;
+    opData->inputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
+    opData->outputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
+    opData->compressAndVerify = CPA_TRUE;
+    if (IS_DEFLATE_RAW(data_fmt) && (1 != qz_sess->last ||
+                                     src_remaining > hw_buff_sz)) {
+        opData->flushFlag = CPA_DC_FLUSH_FULL;
+    } else {
+        opData->flushFlag = CPA_DC_FLUSH_FINAL;
+    }
+
+    QZ_DEBUG("sending seq number %d %d %ld, opData.flushFlag %d\n", i, j,
+             qz_sess->seq, opData->flushFlag);
+    /*Get feed src/dest buffer size*/
+    dest_receive_sz = *qz_sess->dest_sz > DEST_SZ(src_send_sz) ?
+                      DEST_SZ(src_send_sz) - outputHeaderSz(data_fmt) :
+                      *qz_sess->dest_sz - outputHeaderSz(data_fmt);
+
+    g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes = src_send_sz;
+    g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
+        dest_receive_sz;
+
+    if (!need_cont_mem) {
+        QZ_DEBUG("Compress SVM Enabled in doCompressIn\n");
+    }
+
+    /*Feed src/dest buffer*/
+    if ((COMMON_MEM == qzMemFindAddr(src_ptr)) && need_cont_mem) {
+        QZ_MEMCPY(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData,
+                  src_ptr,
+                  src_send_sz,
+                  src_remaining);
+        g_process.qz_inst[i].stream[j].src_need_reset = 0;
+    } else {
+        g_process.qz_inst[i].src_buffers[j]->pBuffers->pData = src_ptr;
+        g_process.qz_inst[i].stream[j].src_need_reset = 1;
+    }
+
+    /*using zerocopy for the first request while dest buffer is pinned*/
+    if (unlikely((0 == g_process.qz_inst[i].stream[j].seq) &&
+                 (!need_cont_mem || qzMemFindAddr(qz_sess->next_dest)))) {
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
+            qz_sess->next_dest + outputHeaderSz(data_fmt);
+        g_process.qz_inst[i].stream[j].dest_need_reset = 1;
+    }
+}
+
+/*  when offload request failed after setup the buffer.
+*   use this function to cleanup setup buffer.
+*/
+void compInBufferCleanUp(int i, int j)
+{
+    RestoreDestCpastreamBuffer(i, j);
+    RestoreSrcCpastreamBuffer(i, j);
+    g_process.qz_inst[i].stream[j].src1 -= 1;
+    g_process.qz_inst[i].stream[j].src2 -= 1;
+}
+
+/*  when offload request successfully, Using below functions to process
+*   clean up work during compressOut. There are clean up buffer function
+*   in correct process flow or error process flow.
+*/
+void compOutSrcBufferCleanUp(int i, int j)
+{
+    RestoreSrcCpastreamBuffer(i, j);
+}
+
+void compOutErrorDestBufferCleanUp(int i, int j)
+{
+    RestoreDestCpastreamBuffer(i, j);
+}
+
+void compOutValidDestBufferCleanUp(int i, int j, QzSess_T *qz_sess,
+                                   unsigned int dest_receive_sz)
+{
+    CpaBoolean need_cont_mem =
+        g_process.qz_inst[i].instance_info.requiresPhysicallyContiguousMemory;
+
+    if (!need_cont_mem) {
+        QZ_DEBUG("Compress SVM Enabled in doCompressOut\n");
+    }
+
+    if (g_process.qz_inst[i].stream[j].dest_need_reset) {
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
+            g_process.qz_inst[i].stream[j].orig_dest;
+        g_process.qz_inst[i].stream[j].dest_need_reset = 0;
+    } else {
+        QZ_MEMCPY(qz_sess->next_dest,
+                  g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData,
+                  *qz_sess->dest_sz - qz_sess->qz_out_len,
+                  dest_receive_sz);
+    }
+}
+
+/*  Process respond means to reset or update sess status
+*   And clean up buffer.
+*/
+void compOutProcessedRespond(int i, int j, QzSess_T *qz_sess)
+{
+    compOutSrcBufferCleanUp(i, j);
+    /* Update the seq_in and process, clean buffer */
+    assert(g_process.qz_inst[i].stream[j].seq == qz_sess->seq_in);
+    g_process.qz_inst[i].stream[j].sink2++;
+    qz_sess->processed++;
+    qz_sess->seq_in++;
+}
+
+void compOutSkipErrorRespond(int i, int j, QzSess_T *qz_sess)
+{
+    compOutErrorDestBufferCleanUp(i, j);
+    compOutProcessedRespond(i, j, qz_sess);
+}
+
+int compOutCheckDestLen(int i, int j, QzSession_T *sess,
+                        long *dest_avail_len, long dest_receive_sz)
+{
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    *dest_avail_len -= dest_receive_sz;
+    if (unlikely(*dest_avail_len < 0)) {
+        QZ_ERROR("doCompressOut: inadequate output buffer length: %ld, outlen: %ld\n",
+                 (long)(*qz_sess->dest_sz), qz_sess->qz_out_len);
+        compOutSkipErrorRespond(i, j, qz_sess);
+        qz_sess->stop_submitting = 1;
+        sess->thd_sess_stat = QZ_BUF_ERROR;
+        return sess->thd_sess_stat;
+    }
+    return QZ_OK;
+}
+
+/*To handle compression expansion*/
+void swapDataBuffer(unsigned long i, int j)
+{
+    Cpa8U *p_tmp_data;
+
+    p_tmp_data = g_process.qz_inst[i].src_buffers[j]->pBuffers->pData;
+    g_process.qz_inst[i].src_buffers[j]->pBuffers->pData =
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData;
+    g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData = p_tmp_data;
+
+    p_tmp_data = g_process.qz_inst[i].stream[j].orig_src;
+    g_process.qz_inst[i].stream[j].orig_src =
+        g_process.qz_inst[i].stream[j].orig_dest;
+    g_process.qz_inst[i].stream[j].orig_dest = p_tmp_data;
+}
+
+/* Note:
+* CheckHeader return value
+* @retval QZ_OK                    Function executed successfully
+* @retval QZ_FAIL                  Decompress stop, Fatal error
+* @retval QZ_FORCE_SW              Decompress fallback sw
+* @retval QZ_BUF_ERROR             Return to decompress API
+* @retval QZ_DATA_ERROR            Return to decompress API
+*/
+int checkHeader(QzSess_T *qz_sess, unsigned char *src,
+                unsigned int src_avail_len, unsigned int dest_avail_len,
+                QzGzH_T *hdr)
+{
+    unsigned char *src_ptr = src;
+    unsigned int compressed_sz = 0;
+    unsigned int uncompressed_sz = 0;
+    StdGzF_T *qzFooter = NULL;
+    int isEndWithFooter = 0;
+    int ret = 0;
+    QzLZ4H_T *qzLZ4Header = NULL;
+    QzLZ4F_T *lz4Footer = NULL;
+    DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
+
+    if ((src_avail_len <= 0) || (dest_avail_len <= 0)) {
+        QZ_DEBUG("checkHeader: insufficient %s buffer length\n",
+                 (dest_avail_len <= 0) ? "destation" : "source");
+        return QZ_BUF_ERROR;
+    }
+
+    if (src_avail_len < outputHeaderSz(data_fmt)) {
+        QZ_DEBUG("checkHeader: incomplete source buffer\n");
+        return QZ_DATA_ERROR;
+    }
+
+    if (1 == qz_sess->force_sw) {
+        return QZ_FORCE_SW;
+    }
+
+    switch (data_fmt) {
+    case DEFLATE_GZIP:
+        qzFooter = (StdGzF_T *)(findStdGzipFooter(src_ptr, src_avail_len));
+
+        compressed_sz = (unsigned char *)qzFooter - src_ptr - stdGzipHeaderSz();
+        uncompressed_sz = qzFooter->i_size;
+        if ((unsigned char *)qzFooter == src_ptr + src_avail_len - stdGzipFooterSz()) {
+            isEndWithFooter = 1;
+        }
+        break;
+    case DEFLATE_GZIP_EXT:
+        if (QZ_OK != qzGzipHeaderExt(src_ptr, hdr)) {
+            return QZ_FAIL;
+        }
+        compressed_sz = (long)(hdr->extra.qz_e.dest_sz);
+        uncompressed_sz = (long)(hdr->extra.qz_e.src_sz);
+        break;
+    case DEFLATE_4B:
+        compressed_sz = *(int *)src_ptr;
+        uncompressed_sz = (qz_sess->sess_params.hw_buff_sz > dest_avail_len) ?
+                          dest_avail_len : qz_sess->sess_params.hw_buff_sz;
+        break;
+    case LZ4_FH:
+        ret = qzVerifyLZ4FrameHeader(src_ptr, src_avail_len);
+        if (ret != QZ_OK) {
+            return ret;
+        }
+
+        lz4Footer = (QzLZ4F_T *)findLZ4Footer(src_ptr, src_avail_len);
+        if (NULL == lz4Footer) {
+            QZ_DEBUG("checkHeader: incomplete source buffer\n");
+            return QZ_DATA_ERROR;
+        }
+        qzLZ4Header = (QzLZ4H_T *)src_ptr;
+        compressed_sz = (unsigned char *)lz4Footer - src_ptr - qzLZ4HeaderSz();
+        uncompressed_sz = qzLZ4Header->cnt_size;
+        break;
+    default:
+        return QZ_FAIL;
+    }
+
+    if ((compressed_sz > DEST_SZ((long)(qz_sess->sess_params.hw_buff_sz))) ||
+        (uncompressed_sz > qz_sess->sess_params.hw_buff_sz)) {
+        if (1 == qz_sess->sess_params.sw_backup) {
+            if (DEFLATE_GZIP == data_fmt &&
+                1 == isEndWithFooter) {
+                return QZ_FORCE_SW;
+            }
+            qz_sess->force_sw = 1;
+            return QZ_FORCE_SW;
+        } else {
+            return QZ_FAIL;
+        }
+    }
+
+    if (compressed_sz + outputHeaderSz(data_fmt) + outputFooterSz(data_fmt) >
+        src_avail_len) {
+        QZ_DEBUG("checkHeader: incomplete source buffer\n");
+        return QZ_DATA_ERROR;
+    } else if (uncompressed_sz > dest_avail_len) {
+        QZ_DEBUG("checkHeader: insufficient destination buffer length\n");
+        return QZ_BUF_ERROR;
+    }
+    hdr->extra.qz_e.dest_sz = compressed_sz;
+    hdr->extra.qz_e.src_sz = uncompressed_sz;
+    return QZ_OK;
+}
+
+/*  Below Buffer and respond process function is exact same means with
+*   Compression
+*/
+void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
+                       unsigned char *src_ptr,
+                       unsigned char *dest_ptr,
+                       unsigned int src_avail_len,
+                       QzGzH_T *hdr,
+                       unsigned int *tmp_src_avail_len,
+                       unsigned int *tmp_dest_avail_len)
+{
+    StdGzF_T *qzFooter = NULL;
+    QzLZ4F_T *lz4Footer = NULL;
+    unsigned int src_send_sz = 0;
+    unsigned int dest_receive_sz = 0;
+    int src_mem_type = qzMemFindAddr(src_ptr);
+    int dest_mem_type = qzMemFindAddr(dest_ptr);
+    DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
+    CpaBoolean need_cont_mem =
+        g_process.qz_inst[i].instance_info.requiresPhysicallyContiguousMemory;
+    if (!need_cont_mem) {
+        QZ_DEBUG("Decompress SVM Enabled in doDecompressIn\n");
+    }
+
+    g_process.qz_inst[i].stream[j].seq = qz_sess->seq;
+    g_process.qz_inst[i].stream[j].res.checksum = 0;
+
+    swapDataBuffer(i, j);
+    src_ptr += outputHeaderSz(data_fmt);
+
+    src_send_sz = hdr->extra.qz_e.dest_sz;
+    dest_receive_sz = hdr->extra.qz_e.src_sz;
+    g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes = src_send_sz;
+    g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
+        dest_receive_sz;
+
+    QZ_DEBUG("doDecompressIn: Sending %u bytes starting at 0x%lx\n",
+             src_send_sz, (unsigned long)src_ptr);
+    QZ_DEBUG("sending seq number %lu %d %ld\n", i, j, qz_sess->seq);
+
+    if (DEFLATE_GZIP_EXT == data_fmt ||
+        DEFLATE_GZIP == data_fmt) {
+        qzFooter = (StdGzF_T *)(src_ptr + src_send_sz);
+        g_process.qz_inst[i].stream[j].checksum = qzFooter->crc32;
+        g_process.qz_inst[i].stream[j].orgdatalen = qzFooter->i_size;
+    } else if (LZ4_FH == data_fmt) {
+        lz4Footer = (QzLZ4F_T *)(src_ptr + src_send_sz); //TODO
+        g_process.qz_inst[i].stream[j].checksum = lz4Footer->cnt_cksum;
+        g_process.qz_inst[i].stream[j].orgdatalen = hdr->extra.qz_e.src_sz;
+    }
+
+    /*set up src dest buffers*/
+    if ((COMMON_MEM == src_mem_type) && need_cont_mem) {
+        QZ_DEBUG("memory copy in doDecompressIn\n");
+        QZ_MEMCPY(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData,
+                  src_ptr,
+                  src_avail_len,
+                  src_send_sz);
+        g_process.qz_inst[i].stream[j].src_need_reset = 0;
+    } else {
+        g_process.qz_inst[i].src_buffers[j]->pBuffers->pData = src_ptr;
+        g_process.qz_inst[i].stream[j].src_need_reset = 1;
+    }
+
+    if ((COMMON_MEM == dest_mem_type) && need_cont_mem) {
+        g_process.qz_inst[i].stream[j].dest_need_reset = 0;
+    } else {
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData = dest_ptr;
+        g_process.qz_inst[i].stream[j].dest_need_reset = 1;
+    }
+
+    *tmp_src_avail_len = (outputHeaderSz(data_fmt) + src_send_sz + outputFooterSz(
+                              data_fmt));
+    *tmp_dest_avail_len = dest_receive_sz;
+}
+
+void decompInBufferCleanUp(int i, int j)
+{
+    /*clean stream buffer*/
+    g_process.qz_inst[i].stream[j].src1 -= 1;
+    g_process.qz_inst[i].stream[j].src2 -= 1;
+    RestoreDestCpastreamBuffer(i, j);
+    RestoreSrcCpastreamBuffer(i, j);
+    swapDataBuffer(i, j);
+}
+
+void decompOutSrcBufferCleanUp(int i, int j)
+{
+    RestoreSrcCpastreamBuffer(i, j);
+}
+
+void decompOutErrorDestBufferCleanUp(int i, int j)
+{
+    RestoreDestCpastreamBuffer(i, j);
+}
+
+void decompOutValidDestBufferCleanUp(int i, int j, QzSess_T *qz_sess,
+                                     CpaDcRqResults *resl,
+                                     unsigned int dest_avail_len)
+{
+    if (!g_process.qz_inst[i].stream[j].dest_need_reset) {
+        QZ_DEBUG("memory copy in doDecompressOut\n");
+        QZ_MEMCPY(qz_sess->next_dest,
+                  g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData,
+                  dest_avail_len,
+                  resl->produced);
+    } else {
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
+            g_process.qz_inst[i].stream[j].orig_dest;
+        g_process.qz_inst[i].stream[j].dest_need_reset = 0;
+    }
+}
+
+
+void decompOutProcessedRespond(int i, int j, QzSess_T *qz_sess)
+{
+    decompOutSrcBufferCleanUp(i, j);
+    swapDataBuffer(i, j); /*swap pdata back after decompress*/
+    assert(g_process.qz_inst[i].stream[j].seq == qz_sess->seq_in);
+    g_process.qz_inst[i].stream[j].sink2++;
+    qz_sess->seq_in++;
+    qz_sess->processed++;
+}
+
+void decompOutSkipErrorRespond(int i, int j, QzSess_T *qz_sess)
+{
+    decompOutErrorDestBufferCleanUp(i, j);
+    decompOutProcessedRespond(i, j, qz_sess);
+}
+
+int decompOutCheckSum(int i, int j, QzSession_T *sess,
+                      CpaDcRqResults *resl)
+{
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    if ((qz_sess->sess_params.data_fmt != DEFLATE_4B) &&
+        unlikely(resl->checksum !=
+                 g_process.qz_inst[i].stream[j].checksum ||
+                 resl->produced != g_process.qz_inst[i].stream[j].orgdatalen)) {
+        QZ_ERROR("Error in check footer, inst %d, stream %d\n", i, j);
+        QZ_DEBUG("resp checksum: %x data checksum %x\n",
+                 resl->checksum,
+                 g_process.qz_inst[i].stream[j].checksum);
+        QZ_DEBUG("resp produced :%d data produced: %d\n",
+                 resl->produced,
+                 g_process.qz_inst[i].stream[j].orgdatalen);
+
+        decompOutProcessedRespond(i, j, qz_sess);
+        qz_sess->stop_submitting = 1;
+        sess->thd_sess_stat = QZ_DATA_ERROR;
+        return sess->thd_sess_stat;
+    }
+    return QZ_OK;
+}

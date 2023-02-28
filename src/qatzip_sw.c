@@ -56,6 +56,7 @@
 #include "qz_utils.h"
 
 #define GZIP_WRAPPER 16
+extern processData_T g_process;
 
 static const QzExtraField_T g_extra_field = {
     .st1 = 'Q',
@@ -666,4 +667,198 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
         break;
     }
     return ret;
+}
+
+int compInSWFallback(int i, int j, QzSession_T *sess,
+                     unsigned char *src_ptr, unsigned int src_send_sz)
+{
+    int rc;
+    unsigned int dest_receive_sz = DEST_SZ(src_send_sz);
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+
+    if (!qz_sess->sess_params.sw_backup) {
+        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, compressIn fatal ERROR!\n",
+                 i);
+        return QZ_FAIL;
+    }
+
+    if (qz_sess->single_thread) {
+        QZ_ERROR("The instance %d failure, single_thread, compressIn fatal ERROR!\n",
+                 i);
+        return QZ_FAIL;
+    }
+
+    if (qz_sess->stop_submitting) {
+        QZ_ERROR("compInSWFallback stop submit\n");
+        return QZ_FAIL;
+    }
+
+    if (qz_sess->seq != qz_sess->seq_in) {
+        return QZ_WAIT_SW_PENDING;
+    }
+
+    QZ_DEBUG("SW CompIn Sending %u bytes, seq = %ld, instance = %d\n", src_send_sz,
+             qz_sess->seq, i);
+    /* sw fallback here */
+    rc = qzSWCompress(sess, src_ptr, &src_send_sz, qz_sess->next_dest,
+                      &dest_receive_sz,
+                      qz_sess->last);
+
+    QZ_DEBUG("SW CompIn src_ptr %p, dst_ptr %p, Sending %u bytes, seq = %ld\n",
+             src_ptr, qz_sess->next_dest, src_send_sz, qz_sess->seq);
+
+    if (unlikely(QZ_OK != rc)) {
+        QZ_ERROR("SW CompIn fallback failure! compress fatal ERROR!\n");
+        return QZ_FAIL;
+    }
+
+    /* For SW compress, have to update ComputeOut status first */
+    qz_sess->next_dest += dest_receive_sz;
+    qz_sess->qz_in_len += src_send_sz;
+    qz_sess->qz_out_len += dest_receive_sz;
+    qz_sess->seq_in++;
+    qz_sess->processed++;
+    return QZ_OK;
+}
+
+int compOutSWFallback(int i, int j, QzSession_T *sess,
+                      long *dest_avail_len)
+{
+    int rc;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    unsigned int src_send_sz =
+        g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
+    /* sw dest buffer is align with the inst hw buffer size */
+    unsigned int dest_receive_sz = outputHeaderSz(qz_sess->sess_params.data_fmt) +
+                                   g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes;
+    unsigned char *src_ptr = g_process.qz_inst[i].src_buffers[j]->pBuffers->pData;
+    unsigned char *dest_ptr = g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData;
+
+    if (!qz_sess->sess_params.sw_backup) {
+        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, compressOut fatal ERROR!\n",
+                 i);
+        return QZ_FAIL;
+    }
+
+    QZ_DEBUG("The request get dummy emty respond, offload to software!\n");
+    QZ_DEBUG("SW CompOut src_ptr %p, dst_ptr %p, Sending %u bytes, seq = %ld\n",
+             src_ptr, dest_ptr, src_send_sz, g_process.qz_inst[i].stream[j].seq);
+
+    rc = qzSWCompress(sess, src_ptr, &src_send_sz, dest_ptr, &dest_receive_sz,
+                      qz_sess->last);
+    if (QZ_OK != rc) {
+        QZ_ERROR("SW CompOut fallback failure! compress fatal ERROR!\n");
+        return QZ_FAIL;
+    }
+
+    rc = compOutCheckDestLen(i, j, sess, dest_avail_len, dest_receive_sz);
+    if (QZ_OK != rc) {
+        return rc;
+    }
+
+    /* Update qz_sess info and clean dest buffer */
+    compOutValidDestBufferCleanUp(i, j, qz_sess, dest_receive_sz);
+    qz_sess->next_dest += dest_receive_sz;
+    qz_sess->qz_in_len += src_send_sz;
+    qz_sess->qz_out_len += dest_receive_sz;
+    return rc;
+}
+
+int decompInSWFallback(int i, int j, QzSession_T *sess,
+                       unsigned char *src_ptr,
+                       unsigned char *dest_ptr,
+                       unsigned int *tmp_src_avail_len,
+                       unsigned int *tmp_dest_avail_len)
+{
+    int rc;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+
+    if (!qz_sess->sess_params.sw_backup) {
+        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, decompressIn fatal ERROR!\n",
+                 i);
+        sess->thd_sess_stat = QZ_FAIL;
+        return QZ_FAIL;
+    }
+
+    if (qz_sess->single_thread) {
+        QZ_ERROR("The instance %d failure, single thread, decompressIn fatal ERROR!\n",
+                 i);
+        sess->thd_sess_stat = QZ_FAIL;
+        return QZ_FAIL;
+    }
+
+    if (qz_sess->stop_submitting) {
+        QZ_ERROR("decompInSWFallback stop submit\n");
+        return QZ_FAIL;
+    }
+
+    if (qz_sess->seq != qz_sess->seq_in) {
+        return QZ_WAIT_SW_PENDING;
+    }
+
+    QZ_DEBUG("SW DecompIn src_ptr %p, dest_ptr %p, Sending %u bytes, seq = %ld, instance = %d\n",
+             src_ptr, dest_ptr, tmp_src_avail_len, qz_sess->seq, i);
+    rc = qzSWDecompress(sess,
+                        src_ptr,
+                        tmp_src_avail_len,
+                        dest_ptr,
+                        tmp_dest_avail_len);
+    if (unlikely(QZ_OK != rc)) {
+        QZ_ERROR("SW deCompIn fallback failure! decompress fatal ERROR!\n");
+        sess->thd_sess_stat = QZ_FAIL;
+        return QZ_FAIL;
+    }
+
+    /* For compressIn fallbcak, need to update seq_in first */
+    qz_sess->seq_in++;
+    qz_sess->processed++;
+    qz_sess->qz_in_len  += *tmp_src_avail_len;
+    qz_sess->qz_out_len += *tmp_dest_avail_len;
+    qz_sess->next_dest += *tmp_dest_avail_len;
+    return QZ_OK;
+}
+
+int decompOutSWFallback(int i, int j, QzSession_T *sess,
+                        unsigned int *dest_avail_len)
+{
+    int rc;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
+    unsigned int src_send_sz =
+        g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
+    unsigned int dest_receive_sz =
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes;
+    /*  pinned buffer ptr already strip header, need retrive.
+    *   use original src_ptr and customed len to get src_ptr for this request.
+    */
+    unsigned char *src_ptr = qz_sess->src + qz_sess->qz_in_len;
+    src_send_sz += (outputHeaderSz(data_fmt) + outputFooterSz(data_fmt)) ;
+
+    if (!qz_sess->sess_params.sw_backup) {
+        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, decompressOut fatal ERROR!\n",
+                 i);
+        return QZ_FAIL;
+    }
+
+    QZ_DEBUG("The request get dummy emty respond, offload to software!\n");
+    QZ_DEBUG("SW DecompOut src_ptr %p, dest_ptr %p, Sending %u bytes, receive %u bytes, seq = %ld\n",
+             src_ptr, qz_sess->next_dest, src_send_sz, dest_receive_sz,
+             g_process.qz_inst[i].stream[j].seq);
+    rc = qzSWDecompress(sess,
+                        src_ptr,
+                        &src_send_sz,
+                        qz_sess->next_dest,
+                        &dest_receive_sz);
+    if (QZ_OK != rc) {
+        QZ_ERROR("SW deCompOut fallback failure! compress fatal ERROR!\n");
+        return QZ_FAIL;
+    }
+
+    /* update qz_sess info, Don't need clean dest buffer */
+    decompOutErrorDestBufferCleanUp(i, j);
+    qz_sess->next_dest += dest_receive_sz;
+    qz_sess->qz_in_len += src_send_sz;
+    qz_sess->qz_out_len += dest_receive_sz;
+    *dest_avail_len -= dest_receive_sz;
+    return QZ_OK;
 }
