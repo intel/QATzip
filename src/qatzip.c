@@ -689,15 +689,6 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         BACKOUT(QZ_NOSW_NO_INST_ATTACH);
     }
 
-    for (long index = 0; index < g_process.num_instances; index++) {
-        status = cpaDcInstanceSetNotificationCb(g_process.dc_inst_handle[index],
-                                                dcEventCallback, (void *)index);
-        if (CPA_STATUS_SUCCESS != status) {
-            QZ_ERROR("Error in cpaDcInstanceSetNotificationCb status = %d\n", status);
-            BACKOUT(QZ_NOSW_NO_INST_ATTACH);
-        }
-    }
-
     qat_hw = calloc(1, sizeof(QzHardware_T));
     if (unlikely(NULL == qat_hw)) {
         QZ_ERROR("malloc failed\n");
@@ -753,6 +744,16 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         g_process.dc_inst_handle[instance_found] = new_inst->dc_inst_handle;
         free(new_inst);
         instance_found++;
+    }
+
+    /* Set EventCallback after instance shuffle */
+    for (long index = 0; index < instance_found; index++) {
+        status = cpaDcInstanceSetNotificationCb(g_process.dc_inst_handle[index],
+                                                dcEventCallback, (void *)index);
+        if (CPA_STATUS_SUCCESS != status) {
+            QZ_ERROR("Error in cpaDcInstanceSetNotificationCb status = %d\n", status);
+            BACKOUT(QZ_NOSW_NO_INST_ATTACH);
+        }
     }
 
     /* Start device heartbeat event detect thread */
