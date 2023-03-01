@@ -1262,7 +1262,7 @@ void *qzCompressAndDecompress(void *arg)
         goto done;
     }
 
-    if (g_perf_svm) {
+    if (g_perf_svm && g_input_file_name) {
         memcpy(src, ((TestArg_T *)arg)->src, src_sz);
     }
 
