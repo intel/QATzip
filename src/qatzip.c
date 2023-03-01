@@ -752,7 +752,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
                                                 dcEventCallback, (void *)index);
         if (CPA_STATUS_SUCCESS != status) {
             QZ_ERROR("Error in cpaDcInstanceSetNotificationCb status = %d\n", status);
-            BACKOUT(QZ_NOSW_NO_INST_ATTACH);
+            QZ_HW_BACKOUT(QZ_NOSW_NO_INST_ATTACH);
         }
     }
 
