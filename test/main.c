@@ -1284,6 +1284,7 @@ void *qzCompressAndDecompress(void *arg)
         QZ_ERROR("Malloc failed\n");
         goto done;
     }
+    memset(compressed_blocks_sz, 0, sizeof(int) * num_blocks);
 
     // Compress the data for testing
     if (DECOMP == service) {
@@ -1440,6 +1441,40 @@ void *qzCompressAndDecompress(void *arg)
         ts_m = (ts.tv_sec * 1000000) + ts.tv_usec;
         te_m = (te.tv_sec * 1000000) + te.tv_usec;
         el_m += te_m - ts_m;
+    }
+
+    /*  Verify the last compress is enough
+        decompress data for verify
+    */
+    if (verify_data && COMP == service) {
+        QZ_DEBUG("verify compress thread %ld, before Decompressed %lu bytes into %lu\n",
+                 tid, comp_out_sz, decomp_out_sz);
+        consumed = 0;
+        produced = 0;
+
+        for (int i = 0; i < num_blocks; i ++) {
+            in_sz = compressed_blocks_sz[i];
+            out_sz = decomp_out_sz - produced;
+            rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
+                              decomp_out + produced, (uint32_t *)(&out_sz));
+            if (rc != QZ_OK) {
+                QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+                dumpInputData(src_sz, src);
+                goto done;
+            }
+            consumed += in_sz;
+            produced += out_sz;
+        }
+
+        QZ_DEBUG("verify compressed data..\n");
+        decomp_out_sz = produced;
+        if (decomp_out_sz != org_src_sz ||
+            memcmp(src, decomp_out, org_src_sz)) {
+            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %d \n!",
+                     decomp_out_sz, org_src_sz);
+            dumpInputData(src_sz, src);
+            goto done;
+        }
     }
 
     //timeCheck(5, tid);
