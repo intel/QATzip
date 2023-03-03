@@ -3145,10 +3145,14 @@ static unsigned int qzLZ4SBound(unsigned int src_sz, QzSession_T *sess)
     unsigned int dest_sz = 0;
     CpaStatus status = CPA_STATUS_SUCCESS;
 
+#if CPA_DC_API_VERSION_AT_LEAST(3, 1)
     status = cpaDcLZ4SCompressBound(NULL, src_sz, &dest_sz);
     if (status != CPA_STATUS_SUCCESS) {
         return 0;
     }
+#else
+    return 0;
+#endif
 
     return dest_sz;
 }
@@ -3163,10 +3167,14 @@ static unsigned int qzLZ4Bound(unsigned int src_sz, QzSession_T *sess)
     assert(sess);
     assert(sess->internal);
 
+#if CPA_DC_API_VERSION_AT_LEAST(3, 1)
     status = cpaDcLZ4CompressBound(NULL, src_sz, &dest_sz);
     if (status != CPA_STATUS_SUCCESS) {
         return 0;
     }
+#else
+    return 0;
+#endif
 
     /* cpaDcLZ4CompressBound only provides the maximum output size of lz4 blocks,
      * it does not include lz4 frames header and footer size, so we need to update dest_sz
@@ -3189,12 +3197,13 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
 
     QzSess_T *qz_sess = NULL;
 
+    if (src_sz == 0) {
+        return QZ_COMPRESSED_SZ_OF_EMPTY_FILE;
+    }
+
     if (sess == NULL || sess->internal == NULL || sess->hw_session_stat != QZ_OK) {
         uint64_t in_sz = src_sz;
         uint64_t out_sz = 0;
-        if (in_sz == 0) {
-            return QZ_COMPRESSED_SZ_OF_EMPTY_FILE;
-        }
         out_sz = QZ_CEIL_DIV(9 * in_sz, 8) + QZ_SKID_PAD_SZ;
         chunk_cnt = in_sz / QZ_HW_BUFF_SZ + in_sz %
                     QZ_HW_BUFF_SZ ? 1 : 0;
