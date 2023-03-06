@@ -65,7 +65,7 @@
 
 
 /* qzip version */
-#define QZIP_VERSION "1.1.1"
+#define QZIP_VERSION "1.1.2"
 
 /* field offset in signature header */
 #define SIGNATUREHEADER_OFFSET_BASE                  8
