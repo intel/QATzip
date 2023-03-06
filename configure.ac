@@ -36,7 +36,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([qatzip], [1.1.1], [])
+AC_INIT([qatzip], [1.1.2], [])
 AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign subdir-objects tar-pax])
 
 AM_SILENT_RULES([yes])
@@ -44,7 +44,7 @@ AC_USE_SYSTEM_EXTENSIONS
 
 AC_CONFIG_MACRO_DIRS([m4])
 
-AC_SUBST([LIBQATZIP_VERSION], [3:1:0])
+AC_SUBST([LIBQATZIP_VERSION], [3:2:0])
 # Checks for programs.
 AC_PROG_AWK
 AC_PROG_CC
