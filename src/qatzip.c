@@ -3151,6 +3151,7 @@ static unsigned int qzLZ4SBound(unsigned int src_sz, QzSession_T *sess)
         return 0;
     }
 #else
+    (void)status;
     return 0;
 #endif
 
@@ -3173,6 +3174,7 @@ static unsigned int qzLZ4Bound(unsigned int src_sz, QzSession_T *sess)
         return 0;
     }
 #else
+    (void)status;
     return 0;
 #endif
 
