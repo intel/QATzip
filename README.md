@@ -35,10 +35,10 @@ The currently supported formats include:
 
 |Data Format|Algorithm|QAT device|Description|
 | :---------------:     |  :---------------: |:---------------: | :------------------------------------------------------------: |
-| `QZ_DEFLATE_4B`       | deflate\*            | QAT1.x and QAT 2.0|Data is in DEFLATE\* with a 4 byte header|
-| `QZ_DEFLATE_GZIP`     | deflate\*            | QAT1.x and QAT 2.0|Data is in DEFLATE\* wrapped by Gzip\* header and footer|
-| `QZ_DEFLATE_GZIP_EXT` | deflate\*            | QAT1.x and QAT 2.0|Data is in DEFLATE\* wrapped by Intel&reg; QAT Gzip\* extension header and footer|
-| `QZ_DEFLATE_RAW`      | deflate\*            | QAT1.x and QAT 2.0|Data is in raw DEFLATE\* without any additional header. (Only support compression, decompression will fallback to software) |
+| `QZ_DEFLATE_4B`       | deflate\*            | QAT 1.x and QAT 2.0|Data is in DEFLATE\* with a 4 byte header|
+| `QZ_DEFLATE_GZIP`     | deflate\*            | QAT 1.x and QAT 2.0|Data is in DEFLATE\* wrapped by Gzip\* header and footer|
+| `QZ_DEFLATE_GZIP_EXT` | deflate\*            | QAT 1.x and QAT 2.0|Data is in DEFLATE\* wrapped by Intel&reg; QAT Gzip\* extension header and footer|
+| `QZ_DEFLATE_RAW`      | deflate\*            | QAT 1.x and QAT 2.0|Data is in raw DEFLATE\* without any additional header. (Only support compression, decompression will fallback to software) |
 | `QZ_LZ4`              | lz4\*                | QAT 2.0|Data is in LZ4\*  wrapped by lz4\* frame |
 | `QZ_LZ4S`             | lz4s\*               | QAT 2.0|Data is in LZ4S\* blocks |
 
@@ -115,12 +115,12 @@ This release was validated on the following:
 
 ## Additional Information
 
-* For QAT1.x, the compression level in QATzip could be mapped to standard zlib\* as below:
+* For QAT 1.x, the compression level in QATzip could be mapped to standard zlib\* as below:
   * QATzip level 1 - 4, similar to zlib\* level 1 - 4.
   * QATzip level 5 - 8, we map them to QATzip level 4.
   * QATzip level 9, we will use software zlib\* to compress as level 9.
-* For QAT2.0, the compression level in QATzip could be mapped to standard zlib\* or lz4\* as below:
-  * Will be updated in feature release.
+* For QAT 2.0, the compression level in QATzip could be mapped to standard zlib\* or lz4\* as below:
+  * Will be updated in future releases.
 
 * QATzip Compression Level Mapping:
 
@@ -213,8 +213,8 @@ ___Have to update those file, Otherwise QATzip will be Unavailable.___
 QAT's the programmer’s guide which provides information on the architecture of the software
 and usage guidelines. it allows customization of runtime operation.
 
-* [Intel&reg; QAT1.7 linux Programmer's Guide][9]
-* [Intel&reg; QAT2.0 linux Programmer's Guide][10]
+* [Intel&reg; QAT 1.7 linux Programmer's Guide][9]
+* [Intel&reg; QAT 2.0 linux Programmer's Guide][10]
 
 The Intel&reg; QATzip comes with some tuning example conf files to use. you can replace the
 old conf file(under /etc/) by them. The detailed info about Configurable options, please
