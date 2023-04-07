@@ -2335,7 +2335,14 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
                  *src_len,  hdr->extra.qz_e.src_sz,
                  g_process.qz_init_status, sess->hw_session_stat,
                  isQATProcessable(src, src_len, qz_sess));
-        goto sw_decompression;
+
+        /* If sw_backup is 1, fallback to software compression. */
+        if (qz_sess->sess_params.sw_backup == 1) {
+            goto sw_decompression;
+        } else {
+            rc = QZ_FAIL;
+            goto err_exit;
+        }
     } else if (sess->hw_session_stat != QZ_OK &&
                sess->hw_session_stat != QZ_NO_INST_ATTACH) {
         rc = sess->hw_session_stat;
