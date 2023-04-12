@@ -305,7 +305,6 @@ typedef struct QzSess_S {
 
     z_stream *deflate_strm;
     DeflateState_T deflate_stat;
-    LZ4F_cctx *cctx;
     LZ4F_dctx *dctx;
 } QzSess_T;
 
