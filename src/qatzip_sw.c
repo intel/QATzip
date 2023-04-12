@@ -106,8 +106,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
 
     qz_sess = (QzSess_T *) sess->internal;
     qz_sess->force_sw = 1;
-    comp_level = (qz_sess->sess_params.comp_lvl == Z_BEST_COMPRESSION) ? \
-                 Z_BEST_COMPRESSION : Z_DEFAULT_COMPRESSION;
+    comp_level = qz_sess->sess_params.comp_lvl;
     data_fmt = qz_sess->sess_params.data_fmt;
     chunk_sz = qz_sess->sess_params.hw_buff_sz;
     stream = qz_sess->deflate_strm;
@@ -431,80 +430,15 @@ int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
                     unsigned int *src_len, unsigned char *dest,
                     unsigned int *dest_len, unsigned int last)
 {
-    unsigned int chunk_sz = 0;
-    size_t total_in = 0, total_out = 0;
-    size_t current_loop_in = 0;
-    size_t left_input_sz = *src_len;
-    size_t left_output_sz = *dest_len;
-    QzSess_T *qz_sess = NULL;
-    LZ4F_preferences_t preferences;
-    LZ4F_cctx *cctx;
-    size_t ret = 0;
-
+    size_t total_out = 0;
     assert(sess);
     assert(sess->internal);
 
-    qz_sess = (QzSess_T *) sess->internal;
-    if (qz_sess->cctx == NULL) {
-        ret = LZ4F_createCompressionContext(&(qz_sess->cctx), LZ4F_VERSION);
-        if (LZ4F_isError(ret)) {
-            QZ_ERROR("LZ4F_createCompressionContext error: %s\n", LZ4F_getErrorName(ret));
-            goto lz4_compress_fail;
-        }
-
-        qzMemSet(&preferences, 0, sizeof(LZ4F_preferences_t));
-        preferences.frameInfo.blockMode = 0;
-        preferences.frameInfo.blockChecksumFlag = 0;
-        preferences.frameInfo.contentChecksumFlag = 1;
-        preferences.frameInfo.contentSize = left_input_sz;
-        preferences.autoFlush = 1;
-        preferences.compressionLevel = qz_sess->sess_params.comp_lvl;
-
-        /* LZ4F_compressBegin will create frame header into dest buffer. */
-        ret = LZ4F_compressBegin(qz_sess->cctx, dest, left_output_sz, &preferences);
-        if (LZ4F_isError(ret)) {
-            QZ_ERROR("LZ4F_compressBegin error: %s\n", LZ4F_getErrorName(ret));
-            goto lz4_compress_fail;
-        }
-        total_out += ret;
-        left_output_sz -= ret;
-        dest += ret;
-
-    }
-
-    cctx = qz_sess->cctx;
-    chunk_sz = qz_sess->sess_params.hw_buff_sz;
-    do {
-        current_loop_in = chunk_sz < left_input_sz ? chunk_sz : left_input_sz;
-        ret = LZ4F_compressUpdate(cctx, (void *)dest, left_output_sz,
-                                  (const void *)src, current_loop_in, NULL);
-        if (LZ4F_isError(ret)) {
-            QZ_ERROR("LZ4F_compressUpdate error: %s\n", LZ4F_getErrorName(ret));
-            goto lz4_compress_fail;
-        }
-        src += current_loop_in;
-        dest += ret;
-        left_output_sz -= ret;
-        left_input_sz -= current_loop_in;
-        total_out += ret;
-        total_in += current_loop_in;
-
-    } while (left_input_sz > 0);
-
-    /* Call LZ4F_compressEnd to finish an lz4 frame, wirte an endmark and a checksum
-     * to dest buffer. */
-    ret = LZ4F_compressEnd(cctx, (void *)dest, left_output_sz,
-                           NULL);
-    if (LZ4F_isError(ret)) {
-        QZ_ERROR("LZ4F_compressEnd error: %s\n", LZ4F_getErrorName(ret));
+    total_out = LZ4F_compressFrame(dest, *dest_len, src, *src_len, NULL);
+    if (LZ4F_isError(total_out)) {
+        QZ_ERROR("LZ4F_compressUpdate error: %s\n", LZ4F_getErrorName(total_out));
         goto lz4_compress_fail;
     }
-    total_out += ret;
-
-    LZ4F_freeCompressionContext(qz_sess->cctx);
-    qz_sess->cctx = NULL;
-
-    *src_len = total_in;
     *dest_len = total_out;
     QZ_DEBUG("Exit qzLZ4SWCompress: src_len %u dest_len %u\n",
              *src_len, *dest_len);
@@ -512,10 +446,6 @@ int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
     return QZ_OK;
 
 lz4_compress_fail:
-    if (qz_sess->cctx != NULL) {
-        LZ4F_freeCompressionContext(qz_sess->cctx);
-        qz_sess->cctx = NULL;
-    }
     *src_len = 0;
     *dest_len = 0;
     return QZ_FAIL;

@@ -286,7 +286,6 @@ int qzSetupSessionInternal(QzSession_T *sess)
     qz_sess->inflate_stat = InflateNull;
     qz_sess->deflate_strm = NULL;
     qz_sess->deflate_stat = DeflateNull;
-    qz_sess->cctx = NULL;
     qz_sess->dctx = NULL;
 
     if (g_process.qz_init_status != QZ_OK) {

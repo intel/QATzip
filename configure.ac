@@ -105,7 +105,7 @@ AC_CHECK_LIB([z], [deflate], , AC_MSG_ERROR([deflate not found]))
 #check for lz4 lib
 AC_CHECK_HEADER([lz4.h], , [AC_MSG_ERROR([lz4.h not found])])
 AC_CHECK_HEADER([lz4frame.h], , [AC_MSG_ERROR([lz4frame.h not found])])
-AC_CHECK_LIB([lz4], [LZ4F_compressBegin], , AC_MSG_ERROR([LZ4F_compressBegin not found]))
+AC_CHECK_LIB([lz4], [LZ4F_compressFrame], , AC_MSG_ERROR([LZ4F_compressFrame not found]))
 
 ##check for xxhash lib
 #AC_CHECK_HEADER([xxhash.h],,[AC_MSG_ERROR([not found xxhash.h])])
