@@ -1470,7 +1470,7 @@ void *qzCompressAndDecompress(void *arg)
         decomp_out_sz = produced;
         if (decomp_out_sz != org_src_sz ||
             memcmp(src, decomp_out, org_src_sz)) {
-            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %d \n!",
+            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
                      decomp_out_sz, org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
