@@ -53,7 +53,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 #include <stdio.h>
-#include <sys/time.h>
+#include <time.h>
 
 typedef enum SERV_E {
     COMPRESSION = 0,
@@ -109,9 +109,9 @@ static inline void QZ_DEBUG(const char *format, ...)
         fprintf(fd, "Time: %s %s; Location: %s->%s->%d; ", \
                 __DATE__, __TIME__, __FILE__, __func__, __LINE__); \
     } else { \
-        struct timeval timer; \
-        gettimeofday(&timer, NULL); \
-        fprintf(fd, "Time: %lfs; ", timer.tv_sec + (1e-9)*timer.tv_usec); \
+        struct timespec ts = { 0 }; \
+        clock_gettime(CLOCK_MONOTONIC_RAW, &ts); \
+        fprintf(fd, "Time: %ld.%06lds; ", ts.tv_sec, ts.tv_nsec / 1000); \
     } \
     fprintf(fd, "%s", "Info: "); \
     fprintf(fd, __VA_ARGS__); \
