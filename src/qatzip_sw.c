@@ -433,8 +433,13 @@ int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
     size_t total_out = 0;
     assert(sess);
     assert(sess->internal);
-
-    total_out = LZ4F_compressFrame(dest, *dest_len, src, *src_len, NULL);
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    LZ4F_preferences_t preferences = {0};
+    preferences.frameInfo.contentChecksumFlag = 1;
+    preferences.frameInfo.contentSize = *src_len;
+    preferences.autoFlush = 1;
+    preferences.compressionLevel = qz_sess->sess_params.comp_lvl;
+    total_out = LZ4F_compressFrame(dest, *dest_len, src, *src_len, &preferences);
     if (LZ4F_isError(total_out)) {
         QZ_ERROR("LZ4F_compressUpdate error: %s\n", LZ4F_getErrorName(total_out));
         goto lz4_compress_fail;
