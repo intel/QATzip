@@ -569,6 +569,9 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                  unsigned int *src_len, unsigned char *dest,
                  unsigned int *dest_len, unsigned int last)
 {
+#ifdef ENABLE_TESTLOG
+    QZ_TESTLOG(2, 0, "SW_FALLBACK", "sw fallback happend!");
+#endif
     int ret = QZ_FAIL;
     DataFormatInternal_T data_fmt;
     QzSess_T *qz_sess = NULL;
@@ -604,6 +607,9 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
                    unsigned int *src_len, unsigned char *dest,
                    unsigned int *dest_len)
 {
+#ifdef ENABLE_TESTLOG
+    QZ_TESTLOG(2, 0, "SW_FALLBACK", "sw fallback happend!");
+#endif
     int ret = QZ_FAIL;
     DataFormatInternal_T data_fmt;
     QzSess_T *qz_sess = NULL;
@@ -639,6 +645,9 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
                         unsigned int *src_len, unsigned char *dest,
                         unsigned int *dest_len)
 {
+#ifdef ENABLE_TESTLOG
+    QZ_TESTLOG(2, 0, "SW_FALLBACK", "sw fallback happend!");
+#endif
     int ret = QZ_FAIL;
     DataFormatInternal_T data_fmt;
     QzSess_T *qz_sess = NULL;

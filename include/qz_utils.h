@@ -53,6 +53,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <sys/time.h>
 
 typedef enum SERV_E {
     COMPRESSION = 0,
@@ -98,6 +99,24 @@ static inline void QZ_DEBUG(const char *format, ...)
 }
 #else
 #define QZ_DEBUG(...)
+#endif
+
+#ifdef ENABLE_TESTLOG
+#define QZ_TESTLOG(debuglevel, Readable, tag, ...) { \
+    FILE *fd = debuglevel > 1 ? stdout : stderr; \
+    fprintf(fd, "Tag: %s; ", tag); \
+    if (Readable) { \
+        fprintf(fd, "Time: %s %s; Location: %s->%s->%d; ", \
+                __DATE__, __TIME__, __FILE__, __func__, __LINE__); \
+    } else { \
+        struct timeval timer; \
+        gettimeofday(&timer, NULL); \
+        fprintf(fd, "Time: %lfs; ", timer.tv_sec + (1e-9)*timer.tv_usec); \
+    } \
+    fprintf(fd, "%s", "Info: "); \
+    fprintf(fd, __VA_ARGS__); \
+    fprintf(fd, " \n"); \
+}
 #endif
 
 static inline void QZ_PRINT(const char *format, ...)

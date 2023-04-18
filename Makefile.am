@@ -84,6 +84,16 @@ else
 	@echo "Error : please enable lz4s postprocessing in configure!"
 endif
 
+AM_CFLAGS=-DENABLE_TESTLOG
+testlog: clean
+	@make -C $(QATZIP_LIB_DIR) $(QATZIP_LIB) AM_CFLAGS=$(AM_CFLAGS)
+	@make -C $(QZIP_DIR) qzip
+	@make -C $(TEST_DIR) test
+	@make -C $(TEST_DIR) bt
+if QATZIP_LZ4S_POSTPROCESS_AC
+	@make -C $(QZIP_DIR) qzstd
+endif
+
 check_code:
 	@echo -e "\n\nPerforming code formatting tests..."
 	@if ! $(CODE_FORMATTING_BIN); then                                   \

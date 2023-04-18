@@ -49,7 +49,8 @@ libqatzip_la_CFLAGS = \
                       $(COMMON_CFLAGS) \
                       $(SAL_CFLAGS) \
                       $(ADF_CFLAGS) \
-                      $(ICP_INCLUDE_CFLAGS)
+                      $(ICP_INCLUDE_CFLAGS) \
+                      $(AM_CFLAGS)
 libqatzip_la_LDFLAGS = \
                        -version-info $(LIBQATZIP_VERSION) \
 		       $(ICP_LDFLAGS)
