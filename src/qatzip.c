@@ -1848,7 +1848,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
         rc = qzSetupHW(sess, i);
         if (unlikely(QZ_OK != rc)) {
             qzReleaseInstance(i);
-            if (QZ_LOW_MEM == rc || QZ_NO_INST_ATTACH == rc) {
+            if (qz_sess->sess_params.sw_backup == 1) {
                 goto sw_compression;
             } else {
                 goto err_exit;
@@ -1861,7 +1861,11 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
         rc = qzUpdateCpaSession(sess, i);
         if (QZ_OK != rc) {
             qzReleaseInstance(i);
-            goto err_exit;
+            if (qz_sess->sess_params.sw_backup == 1) {
+                goto sw_compression;
+            } else {
+                goto err_exit;
+            }
         }
     }
 
@@ -2369,7 +2373,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         rc = qzSetupHW(sess, i);
         if (unlikely(QZ_OK != rc)) {
             qzReleaseInstance(i);
-            if (QZ_LOW_MEM == rc || QZ_NO_INST_ATTACH == rc) {
+            if (qz_sess->sess_params.sw_backup == 1) {
                 goto sw_decompression;
             } else {
                 goto err_exit;
@@ -2382,7 +2386,11 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         rc = qzUpdateCpaSession(sess, i);
         if (QZ_OK != rc) {
             qzReleaseInstance(i);
-            goto err_exit;
+            if (qz_sess->sess_params.sw_backup == 1) {
+                goto sw_decompression;
+            } else {
+                goto err_exit;
+            }
         }
     }
 
