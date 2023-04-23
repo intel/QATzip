@@ -2097,6 +2097,12 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
     // restore the attribute
     for (int i = 0; i < dir_num + fil_num; ++i) {
+        __mode_t mode = p[i].attribute >> 16;
+        /*
+         * If the file is a symbolic link, don't change it mode and skip it.
+         * Otherwise, it will change the mode of linked file.
+         */
+        if (S_ISLNK(mode)) continue;
         chmod(p[i].fileName, p[i].attribute >> 16);
     }
 
