@@ -1003,7 +1003,7 @@ int compOutCheckDestLen(int i, int j, QzSession_T *sess,
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     *dest_avail_len -= dest_receive_sz;
     if (unlikely(*dest_avail_len < 0)) {
-        QZ_ERROR("doCompressOut: inadequate output buffer length: %ld, outlen: %ld\n",
+        QZ_DEBUG("doCompressOut: inadequate output buffer length: %ld, outlen: %ld\n",
                  (long)(*qz_sess->dest_sz), qz_sess->qz_out_len);
         compOutSkipErrorRespond(i, j, qz_sess);
         qz_sess->stop_submitting = 1;
