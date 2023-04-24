@@ -1550,7 +1550,7 @@ static void *doCompressOut(void *in)
                 resl = &g_process.qz_inst[i].stream[j].res;
                 if (unlikely(CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status ||
                              CPA_DC_OK != resl->status)) {
-                    QZ_ERROR("Error(%d) in callback: %d, %d, ReqStatus: %d\n",
+                    QZ_DEBUG("Error(%d) in callback: %d, %d, ReqStatus: %d\n",
                              g_process.qz_inst[i].stream[j].job_status, i, j,
                              g_process.qz_inst[i].stream[j].res.status);
                     /* polled error/dummy respond , fallback to sw */
@@ -2166,7 +2166,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                 }
 
                 if (unlikely(CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status)) {
-                    QZ_ERROR("Error(%d) in callback: %d, %d, ReqStatus: %d\n",
+                    QZ_DEBUG("Error(%d) in callback: %d, %d, ReqStatus: %d\n",
                              g_process.qz_inst[i].stream[j].job_status, i, j,
                              g_process.qz_inst[i].stream[j].res.status);
                     /* polled error/dummy respond , fallback to sw */

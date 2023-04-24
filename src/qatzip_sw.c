@@ -686,19 +686,19 @@ int compInSWFallback(int i, int j, QzSession_T *sess,
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, compressIn fatal ERROR!\n",
+        QZ_DEBUG("The instance %d heartbeat is failure, Don't enable sw fallback, compressIn fatal ERROR!\n",
                  i);
         return QZ_FAIL;
     }
 
     if (qz_sess->single_thread) {
-        QZ_ERROR("The instance %d failure, single_thread, compressIn fatal ERROR!\n",
+        QZ_DEBUG("The instance %d failure, single_thread, compressIn fatal ERROR!\n",
                  i);
         return QZ_FAIL;
     }
 
     if (qz_sess->stop_submitting) {
-        QZ_ERROR("compInSWFallback stop submit\n");
+        QZ_DEBUG("compInSWFallback stop submit\n");
         return QZ_FAIL;
     }
 
@@ -744,7 +744,7 @@ int compOutSWFallback(int i, int j, QzSession_T *sess,
     unsigned char *dest_ptr = g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, compressOut fatal ERROR!\n",
+        QZ_DEBUG("The instance %d heartbeat is failure, Don't enable sw fallback, compressOut fatal ERROR!\n",
                  i);
         return QZ_FAIL;
     }
@@ -783,21 +783,21 @@ int decompInSWFallback(int i, int j, QzSession_T *sess,
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, decompressIn fatal ERROR!\n",
+        QZ_DEBUG("The instance %d heartbeat is failure, Don't enable sw fallback, decompressIn fatal ERROR!\n",
                  i);
         sess->thd_sess_stat = QZ_FAIL;
         return QZ_FAIL;
     }
 
     if (qz_sess->single_thread) {
-        QZ_ERROR("The instance %d failure, single thread, decompressIn fatal ERROR!\n",
+        QZ_DEBUG("The instance %d failure, single thread, decompressIn fatal ERROR!\n",
                  i);
         sess->thd_sess_stat = QZ_FAIL;
         return QZ_FAIL;
     }
 
     if (qz_sess->stop_submitting) {
-        QZ_ERROR("decompInSWFallback stop submit\n");
+        QZ_DEBUG("decompInSWFallback stop submit\n");
         return QZ_FAIL;
     }
 
@@ -844,7 +844,7 @@ int decompOutSWFallback(int i, int j, QzSession_T *sess,
     src_send_sz += (outputHeaderSz(data_fmt) + outputFooterSz(data_fmt)) ;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, decompressOut fatal ERROR!\n",
+        QZ_DEBUG("The instance %d heartbeat is failure, Don't enable sw fallback, decompressOut fatal ERROR!\n",
                  i);
         return QZ_FAIL;
     }
