@@ -1244,6 +1244,13 @@ void *qzCompressAndDecompress(void *arg)
     }
 
     //timeCheck(3, tid);
+    /*  The sleep is for enabling the sw fallback in test. sw fallback simulate hang will happend
+        when detect process generate the 'fatal events'. but detect will happen every seconds.
+        The sleep will guaranteen that test capture the 'fatal events' and fallback
+    */
+    if (thread_sleep > 0) {
+        usleep(thread_sleep);
+    }
     QZ_DEBUG("qzInitSetupsession rc = %d\n", rc);
 
     if (gen_data && !g_perf_svm) {
