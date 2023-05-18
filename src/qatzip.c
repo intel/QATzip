@@ -277,11 +277,11 @@ done:
  * QAT API Version is less than 3.1, will return QZ_FAIL.
  */
 static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
-                                 DataFormatInternal_T data_fmt)
+                                 const QzSessionParamsInternal_T *params)
 {
     assert(inst_cap != NULL);
 
-    switch (data_fmt) {
+    switch (params->data_fmt) {
     case LZ4_FH:
 #if CPA_DC_API_VERSION_AT_LEAST(3, 1)
         if (!inst_cap->statelessLZ4Compression ||
@@ -315,12 +315,26 @@ static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
             !inst_cap->checksumCRC32) {
             return QZ_FAIL;
         }
+
+        /* check if instance support dynamic huffman */
+        if (!inst_cap->dynamicHuffman && (params->huffman_hdr == QZ_DYNAMIC_HDR)) {
+            return QZ_FAIL;
+        }
+
+        /* always open the Cnv */
+        if (!inst_cap->compressAndVerify) {
+            return QZ_FAIL;
+        }
+
+        /*  will extend multi-type checksum check, data format check
+            autoSelect check, Dictionary support, stateful support  .....
+        */
         break;
     }
     return QZ_OK;
 }
 
-static int qzGrabInstance(int hint, DataFormatInternal_T data_fmt)
+static int qzGrabInstance(int hint, const QzSessionParamsInternal_T *params)
 {
     int i, j, rc, f;
 
@@ -342,7 +356,7 @@ static int qzGrabInstance(int hint, DataFormatInternal_T data_fmt)
              * the instance supports the data format.
              */
             if (QZ_OK != qzCheckInstCap(&g_process.qz_inst[i].instance_cap,
-                                        data_fmt)) {
+                                        params)) {
                 continue;
             }
             rc = __sync_lock_test_and_set(&(g_process.qz_inst[i].lock), 1);
@@ -1197,10 +1211,6 @@ int qzSetupHW(QzSession_T *sess, int i)
         /*setup and start DC session*/
         QZ_DEBUG("setup and start DC session %d\n", i);
 
-        if (CPA_FALSE == g_process.qz_inst[i].instance_cap.dynamicHuffman) {
-            qz_sess->session_setup_data.huffType = CPA_DC_HT_STATIC;
-        }
-
         qz_sess->sess_status =
             cpaDcGetSessionSize(g_process.dc_inst_handle[i],
                                 &qz_sess->session_setup_data,
@@ -2054,7 +2064,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
         return sess->hw_session_stat;
     }
 
-    i = qzGrabInstance(qz_sess->inst_hint, data_fmt);
+    i = qzGrabInstance(qz_sess->inst_hint, &(qz_sess->sess_params));
     if (unlikely(i == -1)) {
         if (qz_sess->sess_params.sw_backup == 1) {
             goto sw_compression;
@@ -2837,7 +2847,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         return sess->hw_session_stat;
     }
 
-    i = qzGrabInstance(qz_sess->inst_hint, data_fmt);
+    i = qzGrabInstance(qz_sess->inst_hint, &(qz_sess->sess_params));
     if (unlikely(i == -1)) {
         if (qz_sess->sess_params.sw_backup == 1) {
             goto sw_decompression;
