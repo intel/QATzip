@@ -109,8 +109,8 @@ This release was validated on the following:
 * QATzip has been tested by Intel&reg; on CentOS\* 7.8.2003 with kernel 3.10.0-1127.19.1.el7.x86\_64
 * Zlib\* library of version 1.2.7 or higher
 * Suggest GCC\* of version 4.8.5 or higher
-* lz4\* library
-* zstd\* static library
+* lz4\* library of version 1.8.3 or higher
+* zstd\* library of version 1.5.0 or higher
 
 
 ## Additional Information
