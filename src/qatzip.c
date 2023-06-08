@@ -150,6 +150,7 @@ QzSessionParamsInternal_T g_sess_params_internal_default = {
     .qzCallback        = NULL,
     .qzCallback_external = NULL
 };
+pthread_mutex_t g_sess_params_lock = PTHREAD_MUTEX_INITIALIZER;
 
 processData_T g_process = {
     .qz_init_status = QZ_NONE,
@@ -3021,7 +3022,9 @@ int qzSetDefaults(QzSessionParams_T *defaults)
         return QZ_PARAMS;
     }
 
+    pthread_mutex_lock(&g_sess_params_lock);
     qzSetParams(defaults, &g_sess_params_internal_default);
+    pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;
 }
@@ -3036,7 +3039,9 @@ int qzSetDefaultsDeflate(QzSessionParamsDeflate_T *defaults)
         return QZ_PARAMS;
     }
 
+    pthread_mutex_lock(&g_sess_params_lock);
     qzSetParamsDeflate(defaults, &g_sess_params_internal_default);
+    pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;
 }
@@ -3051,7 +3056,9 @@ int qzSetDefaultsLZ4(QzSessionParamsLZ4_T *defaults)
         return QZ_PARAMS;
     }
 
+    pthread_mutex_lock(&g_sess_params_lock);
     qzSetParamsLZ4(defaults, &g_sess_params_internal_default);
+    pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;
 }
@@ -3066,7 +3073,9 @@ int qzSetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults)
         return QZ_PARAMS;
     }
 
+    pthread_mutex_lock(&g_sess_params_lock);
     qzSetParamsLZ4S(defaults, &g_sess_params_internal_default);
+    pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;
 }
@@ -3077,7 +3086,9 @@ int qzGetDefaults(QzSessionParams_T *defaults)
         return QZ_PARAMS;
     }
 
+    pthread_mutex_lock(&g_sess_params_lock);
     qzGetParams(&g_sess_params_internal_default, defaults);
+    pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;
 }
@@ -3088,7 +3099,9 @@ int qzGetDefaultsDeflate(QzSessionParamsDeflate_T *defaults)
         return QZ_PARAMS;
     }
 
+    pthread_mutex_lock(&g_sess_params_lock);
     qzGetParamsDeflate(&g_sess_params_internal_default, defaults);
+    pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;
 }
@@ -3099,7 +3112,9 @@ int qzGetDefaultsLZ4(QzSessionParamsLZ4_T *defaults)
         return QZ_PARAMS;
     }
 
+    pthread_mutex_lock(&g_sess_params_lock);
     qzGetParamsLZ4(&g_sess_params_internal_default, defaults);
+    pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;
 }
@@ -3110,7 +3125,9 @@ int qzGetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults)
         return QZ_PARAMS;
     }
 
+    pthread_mutex_lock(&g_sess_params_lock);
     qzGetParamsLZ4S(&g_sess_params_internal_default, defaults);
+    pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;
 }
