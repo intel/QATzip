@@ -171,8 +171,8 @@ void streamBufferCleanup()
 
 static void *getNodeBuffFromFreeList(size_t sz, int pinned)
 {
-    assert(!pthread_mutex_lock(&g_strm_buff_list_free.mutex));
-    assert(!pthread_mutex_lock(&g_strm_buff_list_used.mutex));
+    pthread_mutex_lock(&g_strm_buff_list_free.mutex);
+    pthread_mutex_lock(&g_strm_buff_list_used.mutex);
 
     void *retval  = NULL;
     StreamBuffNode_T *node;
@@ -194,8 +194,8 @@ static void *getNodeBuffFromFreeList(size_t sz, int pinned)
     }
 
 done:
-    assert(!pthread_mutex_unlock(&g_strm_buff_list_used.mutex));
-    assert(!pthread_mutex_unlock(&g_strm_buff_list_free.mutex));
+    pthread_mutex_unlock(&g_strm_buff_list_used.mutex);
+    pthread_mutex_unlock(&g_strm_buff_list_free.mutex);
     return retval;
 }
 
@@ -253,8 +253,8 @@ static void streamBufferFree(void *addr)
 {
     StreamBuffNode_T *node;
 
-    assert(!pthread_mutex_lock(&g_strm_buff_list_free.mutex));
-    assert(!pthread_mutex_lock(&g_strm_buff_list_used.mutex));
+    pthread_mutex_lock(&g_strm_buff_list_free.mutex);
+    pthread_mutex_lock(&g_strm_buff_list_used.mutex);
     for (node = g_strm_buff_list_used.head; node != NULL; node = node->next) {
         if (addr == node->buffer) {
             if (removeNodeFromList(node, &g_strm_buff_list_used) == FAILURE) {
@@ -273,8 +273,8 @@ static void streamBufferFree(void *addr)
     }
 
 done:
-    assert(!pthread_mutex_unlock(&g_strm_buff_list_used.mutex));
-    assert(!pthread_mutex_unlock(&g_strm_buff_list_free.mutex));
+    pthread_mutex_unlock(&g_strm_buff_list_used.mutex);
+    pthread_mutex_unlock(&g_strm_buff_list_free.mutex);
 }
 
 int initStream(QzSession_T *sess, QzStream_T *strm)

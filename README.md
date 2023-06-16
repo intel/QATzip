@@ -327,15 +327,6 @@ Known issues relating to the QATzip are described in this section.
 | Resolution | Ensure qzMemDestory is invoked after qzFree, now we use attribute destructor to invoke qzMemDestory|
 | Affected OS | Linux |
 
-### QATAPP-29732
-| Title      |    v1.1.1 & v1.1.2 will core dump in envoy     |
-|----------|:-------------
-| Reference   | QATAPP-29732 |
-| Description | Envoy release building in with “-c opt” optimization that will disable all asserts by default, all asserts in QATzip cannot work as expected |
-| Implication | v1.1.1 v1.1.2 |
-| Resolution | Using v1.1.0 or before to avoid this issue |
-| Affected OS | Linux |
-
 ## Intended Audience
 
 The target audience is software developers, test and validation engineers,
