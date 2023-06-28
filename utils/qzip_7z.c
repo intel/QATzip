@@ -136,7 +136,7 @@ static unsigned char readByte(FILE *fp)
 
 static void skipNByte(int n, FILE *fp)
 {
-    assert(!fseek(fp, n, SEEK_CUR));
+    fseek(fp, n, SEEK_CUR);
 }
 
 static uint32_t readCRC(FILE *fp)
@@ -695,7 +695,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                       start_header + SIGNATUREHEADER_OFFSET_NEXTHEADER_OFFSET,
                       20);
     memcpy(start_header, &start_crc, sizeof(start_crc));
-    assert(!fseek(dst_file, SIGNATUREHEADER_OFFSET_BASE, SEEK_SET));
+    fseek(dst_file, SIGNATUREHEADER_OFFSET_BASE, SEEK_SET);
     fwrite(start_header, 1, sizeof(start_header), dst_file);
 
     displayStats(time_list_head, src_file_size, dst_file_size,
@@ -1459,7 +1459,7 @@ Qz7zEndHeader_T *resolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader)
     int streams_info_resolved = 0;
     int files_info_resolved = 0;
 
-    assert(!fseek(fp, sheader->nextHeaderOffset + 0x20, SEEK_CUR));
+    fseek(fp, sheader->nextHeaderOffset + 0x20, SEEK_CUR);
 
     while (!end) {
 
@@ -1630,7 +1630,7 @@ int checkHeaderCRC(Qz7zSignatureHeader_T *sh, FILE *fp)
     size_t n;
     unsigned char buf[4096];
     crc = 0;
-    assert(!fseek(fp, sh->nextHeaderOffset + 0x20, SEEK_SET));
+    fseek(fp, sh->nextHeaderOffset + 0x20, SEEK_SET);
     while ((n = fread(buf, 1, sizeof(buf), fp))) {
         crc = crc32(crc, buf, n);
     }
@@ -1638,7 +1638,7 @@ int checkHeaderCRC(Qz7zSignatureHeader_T *sh, FILE *fp)
         QZ_ERROR("End header CRC failed\n");
         return -1;
     }
-    assert(!fseek(fp, 0, SEEK_SET));
+    fseek(fp, 0, SEEK_SET);
     return 0;
 }
 
@@ -1919,7 +1919,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
         }
 
         // skip the signature header
-        assert(!fseek(src_file, 32, SEEK_SET));
+        fseek(src_file, 32, SEEK_SET);
 
         int i = 0; // file index
 
@@ -3308,7 +3308,7 @@ int check7zArchive(const char *archive)
 int checkDirectory(const char *filename)
 {
     struct stat buf;
-    assert(!stat(filename, &buf));
+    stat(filename, &buf);
     if (S_ISDIR(buf.st_mode)) {
         return 1;
     } else {
