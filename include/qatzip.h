@@ -1192,7 +1192,7 @@ QATZIP_API int qzCompressCrc64Ext(QzSession_T *sess,
  *
  * @retval QZ_OK                        Function executed successfully
  * @retval QZ_FAIL                      Function did not succeed
- * @retval QZ_PARAMS                    *sess or *metadata is NULL or Member of
+ * @retval QZ_PARAMS                    *sess or metadata is NULL or Member of
  *                                      params is invalid, hw_buff_sz_override
  *                                      is invalid data size.
  * @retval QZ_METADATA_OVERFLOW         Unable to populate metadata due to
@@ -1200,6 +1200,9 @@ QATZIP_API int qzCompressCrc64Ext(QzSession_T *sess,
  * @retval QZ_NOT_SUPPORTED             Compression with metadata is not
  *                                      supported with given algorithm
  *                                      or format.
+ * @retval QZ_NOSW_NO_HW                Function did not find an installed
+ *                                      kernel driver or software provider.
+ * @retval QZ_NOSW_NO_INST_ATTACH       No instance available.
  *
  * @pre
  *      None
@@ -1436,7 +1439,7 @@ QATZIP_API int qzDecompressCrc64Ext(QzSession_T *sess,
  *
  * @retval QZ_OK                        Function executed successfully.
  * @retval QZ_FAIL                      Function did not succeed.
- * @retval QZ_PARAMS                    *sess or *metadata is NULL or Member of
+ * @retval QZ_PARAMS                    *sess or metadata is NULL or Member of
  *                                      params is invalid, hw_buff_sz_override
  *                                      is invalid data size.
  * @retval QZ_METADATA_OVERFLOW         Unable to populate metadata due to
@@ -1444,6 +1447,9 @@ QATZIP_API int qzDecompressCrc64Ext(QzSession_T *sess,
  * @retval QZ_NOT_SUPPORTED             Decompression with metadata is not
  *                                      supported with given algorithm
  *                                      or format.
+ * @retval QZ_NOSW_NO_HW                Function did not find an installed
+ *                                      kernel driver or software provider.
+ * @retval QZ_NOSW_NO_INST_ATTACH       No instance available.
  *
  * @pre
  *      None
@@ -1938,7 +1944,7 @@ QATZIP_API void qzFree(void *m);
  *
  * @retval QZ_OK                Function executed successfully.
  * @retval QZ_FAIL              Function did not succeed.
- * @retval QZ_PARAMS            *metadata is NULL.
+ * @retval QZ_PARAMS            metadata is NULL.
  *
  * @pre
  *      None
@@ -1951,7 +1957,7 @@ QATZIP_API void qzFree(void *m);
  *      None
  *
  *****************************************************************************/
-QATZIP_API int qzFreeMetadata(QzMetadataBlob_T *metadata);
+QATZIP_API int qzFreeMetadata(QzMetadataBlob_T metadata);
 
 /**
  *****************************************************************************
@@ -2480,7 +2486,7 @@ QATZIP_API int qzSetSessionCrc64Config(QzSession_T *sess,
  *
  *****************************************************************************/
 QATZIP_API int qzMetadataBlockRead(uint32_t block_num,
-                                   QzMetadataBlob_T *metadata,
+                                   QzMetadataBlob_T metadata,
                                    uint32_t *block_offset,
                                    uint32_t *block_size,
                                    uint32_t *block_flags,
@@ -2549,7 +2555,7 @@ QATZIP_API int qzMetadataBlockRead(uint32_t block_num,
  *
  *****************************************************************************/
 QATZIP_API int qzMetadataBlockWrite(uint32_t block_num,
-                                    QzMetadataBlob_T *metadata,
+                                    QzMetadataBlob_T metadata,
                                     uint32_t *block_offset,
                                     uint32_t *block_size,
                                     uint32_t *block_flags,
