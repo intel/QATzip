@@ -57,7 +57,7 @@ then
         platform=`lspci | grep Co-processor | awk '{print $7}' | head -1`
         if [ $platform != "C3000" ]
         then
-            echo "Unsupport Platform: `lspci | grep Co-processor` "
+            echo "Unsupported Platform: `lspci | grep Co-processor` "
             exit 1
         fi
     fi

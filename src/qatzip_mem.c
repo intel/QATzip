@@ -81,7 +81,7 @@ void *doUserMemset(void *const ptr, unsigned char filler,
 void *qzMemSet(void *ptr, unsigned char filler, unsigned int count)
 {
     if (ptr == NULL) {
-        QZ_ERROR("Invaild input memory pointer!");
+        QZ_ERROR("Invalid input memory pointer!");
         return NULL;
     }
 #ifdef __STDC_LIB_EXT1__

@@ -112,7 +112,7 @@ AC_CHECK_LIB([lz4], [LZ4F_compressFrame], , AC_MSG_ERROR([LZ4F_compressFrame not
 #AC_CHECK_LIB([xxhash], [XXH32_update], ,AC_MSG_ERROR([not found XXH32_update in -lxxhash]))
 AC_DEFINE(XXH_NAMESPACE, QATZIP_, "Prefix xxhash API with QATZIP_")
 
-#wiht ICP_ROOT
+#with ICP_ROOT
 AC_ARG_WITH([ICP_ROOT],
     AS_HELP_STRING([--with-ICP_ROOT=PATH],[Used to link Cpa library]),
     AS_IF(
