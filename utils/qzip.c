@@ -107,7 +107,7 @@ void help(void)
         "  -L, --level       set compression level",
         "  -C, --chunksz     set chunk size",
         "  -O, --output      set output header format(gzip|gzipext|7z|deflate_4B|lz4|lz4s)",
-        "  -r,               set max inflight request number",
+        "  -r,               set max in-flight request number",
         "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
         "  -P, --polling     set polling mode, only supports busy polling settings",
@@ -415,7 +415,7 @@ int qzipSetupSessionDeflate(QzSession_T *sess, QzipParams_T *params)
         deflate_params.data_fmt = QZ_DEFLATE_RAW;
         break;
     default:
-        QZ_ERROR("Unsupport data format\n");
+        QZ_ERROR("Unsupported data format\n");
         return ERROR;
     }
 
@@ -526,7 +526,7 @@ int qatzipSetup(QzSession_T *sess, QzipParams_T *params)
         }
         break;
     default:
-        QZ_ERROR("Unsupport data format\n");
+        QZ_ERROR("Unsupported data format\n");
         return ERROR;
     }
 

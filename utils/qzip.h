@@ -578,10 +578,10 @@ typedef struct Qz7zEndHeader_S {
 /**
  ******************************************************************************
  * @ingroup qatZip
- *     7z Catagory
+ *     7z Category
  *
  * @description
- *     This structure presents a 7z catagory
+ *     This structure presents a 7z category
  *
  ******************************************************************************/
 typedef struct QzCatagory_S {
@@ -593,10 +593,10 @@ typedef struct QzCatagory_S {
 /**
  ******************************************************************************
  * @ingroup qatZip
- *     7z Catagory table
+ *     7z Category table
  *
  * @description
- *     This structure presents all catagories
+ *     This structure presents all categories
  *
  ******************************************************************************/
 typedef struct QzCatagoryTable_S {
@@ -654,7 +654,7 @@ Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp);
 Qz7zStreamsInfo_T *resolveMainStreamsInfo(FILE *fp);
 Qz7zEndHeader_T *resolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader);
 
-/* create catagory list */
+/* create category list */
 QzCatagoryTable_T *createCatagoryList();
 int scanFilesIntoCatagory(Qz7zItemList_T *the_list);
 /*
@@ -710,7 +710,7 @@ int qz7zDecompress(QzSession_T *sess, const char *archive);
 
 
 /*
- * UINT64 convertion functions
+ * UINT64 conversion functions
  */
 /* conversion from real uint64_t to UINT64 */
 int getExtraByteNum(uint64_t n);

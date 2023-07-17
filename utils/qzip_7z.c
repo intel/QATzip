@@ -234,13 +234,13 @@ int getUint64Bytes(uint64_t n, unsigned char *p)
 }
 
 /**
- * this means no catagory, every files are in one folder
+ * this means no category, every files are in one folder
  * the folder number/packed streams number is equal to
- * the number of catagory names
+ * the number of category names
  * default is the last one, DO NOT delete it, add new
- * catagory names in front of it
+ * category names in front of it
  */
-static const char *g_catagory_names[] = {
+static const char *g_category_names[] = {
     "default"
 };
 
@@ -493,7 +493,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
     }
     sheader = generateSignatureHeader();
     if (!sheader) {
-        QZ_ERROR("Cannot generate signuature header, out of memory");
+        QZ_ERROR("Cannot generate signature header, out of memory");
         ret = QZ7Z_ERR_OOM;
         goto exit;
     }
@@ -1268,7 +1268,7 @@ Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp)
         case PROPERTY_ID_EMPTY_STREAM:
             file_index = 0;
             dir_num = 0;
-            /* n bytes to hold this infomation */
+            /* n bytes to hold this information */
             n = (total_num % 8) ? (total_num / 8 + 1) : (total_num / 8);
             u64 = getU64FromBytes(fp);  /* property size */
 
@@ -1511,7 +1511,7 @@ Qz7zEndHeader_T *resolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader)
             files_info_resolved = 1;
             break;
         case PROPERTY_ID_END:
-            QZ_DEBUG("readed kEnd: %d\n\n\n", status);
+            QZ_DEBUG("read kEnd: %d\n\n\n", status);
             if (status == RESOLVE_STATUS_IN_FILESINFO)
                 end = 1;
             break;
@@ -1547,7 +1547,7 @@ static int createEmptyFile(const char *filename)
 }
 
 /**
- * create `newdir` at current dirctory
+ * create `newdir` at current directory
  * back: 1 return to original dir, 0 otherwise
  */
 int createDir(const char *newdir, int back)
@@ -1780,7 +1780,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     uint64_t fil_num = 0;
     uint64_t file_index = 0;
     int is_last;
-    int n_part; // how much parts can the src file be splited
+    int n_part; // how much parts can the src file be splitted
     int n_part_i;
     Qz7zSignatureHeader_T *sheader = NULL;
     Qz7zEndHeader_T *eheader = NULL;
@@ -2702,7 +2702,7 @@ QzCatagoryTable_T *createCatagoryList()
     cat_tbl = malloc(sizeof(QzCatagoryTable_T));
     CHECK_ALLOC_RETURN_VALUE(cat_tbl)
 
-    cat_tbl->cat_num = sizeof(g_catagory_names) / sizeof(g_catagory_names[0]);
+    cat_tbl->cat_num = sizeof(g_category_names) / sizeof(g_category_names[0]);
 
     cat_tbl->catas = malloc(cat_tbl->cat_num * sizeof(QzCatagory_T));
     CHECK_ALLOC_RETURN_VALUE(cat_tbl->catas)
@@ -2710,7 +2710,7 @@ QzCatagoryTable_T *createCatagoryList()
     // the last one for all other files
     for (int i = 0; i < cat_tbl->cat_num; ++i) {
         cat_tbl->catas[i].cat_id = i;
-        cat_tbl->catas[i].cat_name = g_catagory_names[i];
+        cat_tbl->catas[i].cat_name = g_category_names[i];
         cat_tbl->catas[i].cat_files = qzListCreate(1000);
     }
 
@@ -2723,7 +2723,7 @@ int getCatagory(QzCatagoryTable_T *tbl, Qz7zFileItem_T *p)
 }
 
 /*
- * return 0 sucess
+ * return 0 success
  *       -1  failed
  */
 int scanFilesIntoCatagory(Qz7zItemList_T *the_list)
@@ -2734,9 +2734,9 @@ int scanFilesIntoCatagory(Qz7zItemList_T *the_list)
 
     for (int i = 0; i < files->total; ++i) {
         Qz7zFileItem_T *p = qzListGet(files, i);
-        // decide the catagory for the fileitem
+        // decide the category for the fileitem
         cat_index = getCatagory(the_list->table, p);
-        // add to the catagory list
+        // add to the category list
         qzListAdd(cat[cat_index].cat_files, (void **)&p);
     }
     return 0;

@@ -66,7 +66,7 @@ void qzstd_help()
         "  -L,       set compression level of QAT",
         "  -o,       set output file name",
         "  -C,       set zstd block size && QAT hw buffer size",
-        "  -r,       set max inflight request number",
+        "  -r,       set max in-flight request number",
         "  -P,       set polling mode, only supports busy polling settings",
         "  -m,       set the mini match size for the lz4s search algorithm, \
                      only support mini_match 3 and 4",
@@ -308,7 +308,7 @@ int compressFile(int in_file, int out_file)
     int is_compress = 1;
     uint64_t callback_error_code = 0;
 
-    //initial zstd contex
+    //initial zstd context
     ZSTD_CCtx *zc = ZSTD_createCCtx();
     if (zc == NULL) {
         QZ_ERROR("%s : ZSTD_createCCtx failed\n", QZSTD_ERROR_TYPE);

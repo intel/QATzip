@@ -566,7 +566,7 @@ const char *getSectionName(void)
 
 /* Initialize the QAT hardware, get the QAT instance for current
  * process.
- * Note: return value dosen't same as qz_init_status, because return
+ * Note: return value doesn't same as qz_init_status, because return
  * value align limitation.
  *
  * After qzInit, there only are three status to qz_init_status
@@ -625,7 +625,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         BACKOUT(QZ_NOSW_NO_HW);
     }
     waiting = 0;
-    /* Start HW initilization. it could be first call qzinit or
+    /* Start HW initialization. it could be first call qzinit or
     *  Before HW init failed, which mean qz_init_status may be
     *  QZ_NOSW_NO_HW or QZ_NO_HW
     */
@@ -780,7 +780,7 @@ done:
 
 /* Free up the DMAable memory buffers used by QAT
  * internally, those buffers are source buffer,
- * intermeidate buffer and destination buffer
+ * intermediate buffer and destination buffer
  */
 void cleanUpInstMem(int i)
 {
@@ -884,7 +884,7 @@ void cleanUpInstMem(int i)
 
 /* Allocate the DMAable memory buffers used by QAT
  * internally, those buffers are source buffer,
- * intermeidate buffer and destination buffer
+ * intermediate buffer and destination buffer
  */
 static int getInstMem(int i, QzSessionParamsInternal_T *params)
 {
@@ -1353,7 +1353,7 @@ int qzUpdateCpaSession(QzSession_T *sess, int i)
     return QZ_OK;
 }
 
-/* The internal function to send the comrpession request
+/* The internal function to send the compression request
  * to the QAT hardware.
  * Note:
  *      Only when request offload success, 'submitted' and 'seq' plus,
@@ -1483,7 +1483,7 @@ err_exit:
     return ((void *)NULL);
 }
 
-/* The internal function to g_process the comrpession response
+/* The internal function to g_process the compression response
  * from the QAT hardware
  *   sess->thd_sess_stat only carry QZ_OK and QZ_FAIL and QZ_BUF_ERROR
  */
@@ -1697,14 +1697,14 @@ static int lz4sPostProcess(QzSession_T *sess, const unsigned char *src,
         if (callback_status == QZ_OK) {
             qz_sess->qz_out_len = *dest_len;
             if (!ext_rc) {
-                QZ_ERROR("Invaild ext_rc pointer!\n");
+                QZ_ERROR("Invalid ext_rc pointer!\n");
             } else {
                 *ext_rc = 0;
             }
         } else {
             QZ_ERROR("Error when call lz4s post-processing callback\n");
             if (!ext_rc) {
-                QZ_ERROR("Invaild ext_rc pointer!\n");
+                QZ_ERROR("Invalid ext_rc pointer!\n");
             } else {
                 *ext_rc = (uint64_t)error_code;
             }
@@ -1952,7 +1952,7 @@ err_exit:
     return rc;
 }
 
-/* The internal function to send the decomrpession request
+/* The internal function to send the decompression request
  * to the QAT hardware
  *     sess->thd_sess_stat carry QZ_OK && QZ_DATA_ERROR && QZ_BUF_ERROR && QZ_FAIL
  */
@@ -2107,7 +2107,7 @@ err_exit:
     return ((void *)NULL);
 }
 
-/* The internal function to g_process the decomrpession response
+/* The internal function to g_process the decompression response
  * from the QAT hardware
  */
 /* A fix for the chunksize test performance. Without the attribute
@@ -2115,7 +2115,7 @@ err_exit:
  * Will root cause it and fix it in the future version
  *
  * sess->thd_sess_stat carry QZ_OK && QZ_DATA_ERROR && QZ_FAIL
- * QZ_DATA_ERROR it seems have confliect with decompressIn
+ * QZ_DATA_ERROR it seems have conflict with decompressIn
  */
 static void *__attribute__((cold)) doDecompressOut(void *in)
 {
@@ -2174,7 +2174,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                     if (QZ_FAIL == rc) {
                         QZ_ERROR("Error in SW deCompOut:inst %d, buffer %d, seq %ld\n", i, j,
                                  qz_sess->seq_in);
-                        /* Need to swap buffer, even sw fallback falled */
+                        /* Need to swap buffer, even sw fallback failed */
                         swapDataBuffer(i, j);
                         goto err_exit;
                     }
@@ -2461,7 +2461,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
     return sess->thd_sess_stat;
 
 sw_decompression:
-    QZ_DEBUG("The thread : %lu, DeCompress API SW fallback due to HW limitaions!\n",
+    QZ_DEBUG("The thread : %lu, DeCompress API SW fallback due to HW limitations!\n",
              pthread_self());
     return qzSWDecompressMulti(sess, src, src_len, dest, dest_len);
 err_exit:

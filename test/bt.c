@@ -46,9 +46,9 @@ void usage()
 {
     printf("-f fit decompress buffers to size (default full buffers)\n");
     printf("-s skip specific number of bytes\n");
-    printf("-S start test at specific poistion of source buffer\n");
-    printf("-E finish test at specific poistion of source buffer\n");
-    printf("-c corpus flag for data in srouce buffer: 0 - iterative, 1 - random, 2 - 'A'\n");
+    printf("-S start test at specific position of source buffer\n");
+    printf("-E finish test at specific position of source buffer\n");
+    printf("-c corpus flag for data in source buffer: 0 - iterative, 1 - random, 2 - 'A'\n");
     return;
 }
 

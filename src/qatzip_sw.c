@@ -818,7 +818,7 @@ int decompInSWFallback(int i, int j, QzSession_T *sess,
         return QZ_FAIL;
     }
 
-    /* For compressIn fallbcak, need to update seq_in first */
+    /* For compressIn fallback, need to update seq_in first */
     qz_sess->seq_in++;
     qz_sess->processed++;
     qz_sess->qz_in_len  += *tmp_src_avail_len;
@@ -837,8 +837,8 @@ int decompOutSWFallback(int i, int j, QzSession_T *sess,
         g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
     unsigned int dest_receive_sz =
         g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes;
-    /*  pinned buffer ptr already strip header, need retrive.
-    *   use original src_ptr and customed len to get src_ptr for this request.
+    /*  pinned buffer ptr already strip header, need retrieve.
+    *   use original src_ptr and consumed len to get src_ptr for this request.
     */
     unsigned char *src_ptr = qz_sess->src + qz_sess->qz_in_len;
     src_send_sz += (outputHeaderSz(data_fmt) + outputFooterSz(data_fmt)) ;
@@ -849,7 +849,7 @@ int decompOutSWFallback(int i, int j, QzSession_T *sess,
         return QZ_FAIL;
     }
 
-    QZ_DEBUG("The request get dummy emty respond, offload to software!\n");
+    QZ_DEBUG("The request get dummy empty respond, offload to software!\n");
     QZ_DEBUG("SW DecompOut src_ptr %p, dest_ptr %p, Sending %u bytes, receive %u bytes, seq = %ld\n",
              src_ptr, qz_sess->next_dest, src_send_sz, dest_receive_sz,
              g_process.qz_inst[i].stream[j].seq);

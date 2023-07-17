@@ -473,7 +473,7 @@ int qzSetupDeflate(QzSession_T *sess, TestArg_T *arg)
         params.data_fmt = QZ_DEFLATE_4B;
         break;
     default:
-        QZ_ERROR("Unsupport data format\n");
+        QZ_ERROR("Unsupported data format\n");
         return QZ_FAIL;
     }
 
@@ -606,7 +606,7 @@ void *qzDecompressSwQz(void *arg)
 
     QzSessionParams_T cus_params = {0};
     if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
 
@@ -1033,7 +1033,7 @@ void *qzSetupParamFuncTest(void *arg)
 
     if (qzGetDefaults(&def_params) != QZ_OK ||
         qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1066,7 +1066,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1078,7 +1078,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1090,7 +1090,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1102,7 +1102,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1114,7 +1114,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1126,7 +1126,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1138,7 +1138,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1150,7 +1150,7 @@ void *qzSetupParamFuncTest(void *arg)
     }
 
     if (qzGetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1158,12 +1158,12 @@ void *qzSetupParamFuncTest(void *arg)
     cus_params.huffman_hdr = (QZ_HUFF_HDR_DEFAULT == QZ_DYNAMIC_HDR) ?
                              QZ_STATIC_HDR : QZ_DYNAMIC_HDR;
     if (qzSetDefaults(&cus_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to set defulat params.\n");
+        QZ_ERROR("Err: fail to set default params.\n");
         goto end;
     }
 
     if (qzGetDefaults(&new_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto end;
     }
 
@@ -1244,9 +1244,9 @@ void *qzCompressAndDecompress(void *arg)
     }
 
     //timeCheck(3, tid);
-    /*  The sleep is for enabling the sw fallback in test. sw fallback simulate hang will happend
+    /*  The sleep is for enabling the sw fallback in test. sw fallback simulate hang will happen
         when detect process generate the 'fatal events'. but detect will happen every seconds.
-        The sleep will guaranteen that test capture the 'fatal events' and fallback
+        The sleep will guarantee that test capture the 'fatal events' and fallback
     */
     if (thread_sleep > 0) {
         usleep(thread_sleep);
@@ -1715,7 +1715,7 @@ void *qzCompressStreamAndDecompress(void *arg)
         decomp_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
         break;
     default:
-        QZ_ERROR("Unsupport data format in Stream API\n");
+        QZ_ERROR("Unsupported data format in Stream API\n");
         goto exit;
     }
     QZ_DEBUG("*** Data Format: %d ***\n", comp_params.data_fmt);
@@ -2026,7 +2026,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
     if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
     params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
@@ -2103,7 +2103,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     rate = src_sz * test_arg->count * 8; // bits
     rate = rate / 1000000000.0; // gigbits
     rate = rate / sec;// Gbps
-    QZ_PRINT("[%ld] elasped microsec = %llu bytes = %lu rate = %Lf Gbps\n",
+    QZ_PRINT("[%ld] elapsed microsec = %llu bytes = %lu rate = %Lf Gbps\n",
              tid, el_m, src_sz, rate);
 
 done:
@@ -2139,7 +2139,7 @@ void *qzCompressStreamOutput(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
     if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
     params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
@@ -2261,7 +2261,7 @@ void *qzDecompressStreamInput(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
     if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
     params.strm_buff_sz = 1024 * 1024;
@@ -2352,7 +2352,7 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
     if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
     params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
@@ -2411,7 +2411,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
     if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
     params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
@@ -2516,7 +2516,7 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
     decomp_src = calloc(orig_sz, 1);
 
     if (qzGetDefaults(&comp_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         return NULL;
     }
 
@@ -2540,7 +2540,7 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
         comp_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
         break;
     default:
-        QZ_ERROR("Unsupport data format in Stream API\n");
+        QZ_ERROR("Unsupported data format in Stream API\n");
         free(orig_src);
         free(comp_src);
         free(decomp_src);
@@ -2690,7 +2690,7 @@ void *testqzEndStreamInvalidParam(void *arg, int test_no)
     decomp_src = calloc(orig_sz, 1);
 
     if (qzGetDefaults(&comp_params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         return NULL;
     }
 
@@ -2714,7 +2714,7 @@ void *testqzEndStreamInvalidParam(void *arg, int test_no)
         comp_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
         break;
     default:
-        QZ_ERROR("Unsupport data format in Stream API\n");
+        QZ_ERROR("Unsupported data format in Stream API\n");
         free(orig_src);
         free(comp_src);
         free(decomp_src);
@@ -2827,7 +2827,7 @@ void *qzInitPcieCountCheck(void *thd_arg)
              g_process.qat_available);
 
     if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
     params.strm_buff_sz = 1024 * 1024;
@@ -2922,7 +2922,7 @@ void *qzCompressDecompressSwQZMixed(void *arg)
         (qzGetDefaults(&qz_comp_params) != QZ_OK) ||
         (qzGetDefaults(&sw_decomp_params) != QZ_OK) ||
         (qzGetDefaults(&qz_decomp_params) != QZ_OK)) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         return NULL;
     }
 
@@ -2932,10 +2932,10 @@ void *qzCompressDecompressSwQZMixed(void *arg)
     qz_decomp_params.input_sz_thrshold = 1024;
 
     struct TestParams_T test_params[NUM_OF_TEST] = {
-        (struct TestParams_T){SW_SW, "SW comparess SW decompss", &sw_comp_params, &sw_decomp_params},
-        (struct TestParams_T){SW_QZ, "SW comparess QZ decompss", &sw_comp_params, &qz_decomp_params},
-        (struct TestParams_T){QZ_SW, "QZ comparess SW decompss", &qz_comp_params, &sw_decomp_params},
-        (struct TestParams_T){QZ_QZ, "QZ comparess QZ decompss", &qz_comp_params, &qz_decomp_params},
+        (struct TestParams_T){SW_SW, "SW compress SW decompress", &sw_comp_params, &sw_decomp_params},
+        (struct TestParams_T){SW_QZ, "SW compress QZ decompress", &sw_comp_params, &qz_decomp_params},
+        (struct TestParams_T){QZ_SW, "QZ compress SW decompress", &qz_comp_params, &sw_decomp_params},
+        (struct TestParams_T){QZ_QZ, "QZ compress QZ decompress", &qz_comp_params, &qz_decomp_params},
     };
 
     ((TestArg_T *) arg)->src_sz = 128 * 1024; //128KB
@@ -3050,7 +3050,7 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
     }
 
     if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
     params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
@@ -3626,7 +3626,7 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
     if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
     params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
@@ -3839,7 +3839,7 @@ void *qzDecompressStreamWithBufferError(void *thd_arg)
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
     if (qzGetDefaults(&params) != QZ_OK) {
-        QZ_ERROR("Err: fail to get defulat params.\n");
+        QZ_ERROR("Err: fail to get default params.\n");
         goto done;
     }
     params.strm_buff_sz = QZ_STRM_BUFF_SZ_DEFAULT - 1;
@@ -3937,7 +3937,7 @@ done:
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
     "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s\n"\
     "    -T huffmanType        static | dynamic\n"                              \
-    "    -r req_cnt_thrshold   max inflight request num, default is 16\n"       \
+    "    -r req_cnt_thrshold   max in-flight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
     "    -P polling            set polling mode, default is periodical polling\n" \
     "    -M svm                set perf mode with file input, default is non\n" \

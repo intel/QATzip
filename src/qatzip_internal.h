@@ -61,7 +61,7 @@ extern"C" {
 #define NODE_0               0
 #define NUM_BUFF             (32)
 /**
- * For less than 8K hardware buffer size, it needs more inflight buffers
+ * For less than 8K hardware buffer size, it needs more in-flight buffers
  * to reach peak performance
  */
 #define NUM_BUFF_8K          (128)
@@ -213,7 +213,7 @@ typedef enum {
     DeflateInited
 } DeflateState_T;
 
-// Include all support Dataforamt
+// Include all support data format
 typedef enum DataFormatInternal_E {
     DEFLATE_4B = 0,
     /**< Data is in raw deflate format with 4 byte header */
@@ -511,7 +511,7 @@ int decompOutSWFallback(int i, int j, QzSession_T *sess,
                         unsigned int *dest_avail_len);
 
 /*  Stream pData may need reset, which is caused by driver API
-    params limitaion, when setup buffer, may feed pinned pointer
+    params limitation, when setup buffer, may feed pinned pointer
     or common pointer to pBuffer.
 */
 void RestoreDestCpastreamBuffer(int i, int j);

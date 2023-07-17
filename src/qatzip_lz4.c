@@ -93,7 +93,7 @@ int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len)
         (hdr->flag_desc >> 4 & 0x1) != QZ_LZ4_BLK_CKS_FLAG ||
         (hdr->flag_desc >> 2 & 0x1) != QZ_LZ4_CNT_CKS_FLAG ||
         (hdr->flag_desc >> 3 & 0x1) != QZ_LZ4_CNT_SIZE_FLAG) {
-        QZ_DEBUG("qzVerifyLZ4FrameHeader: unsupport lz4 frame header \
+        QZ_DEBUG("qzVerifyLZ4FrameHeader: unsupported lz4 frame header \
                  switch to software.\n");
         return QZ_FORCE_SW;
     }
@@ -119,7 +119,7 @@ void qzLZ4HeaderGen(unsigned char *ptr, CpaDcRqResults *res)
                                      ((QZ_LZ4_CNT_CKS_FLAG & 0x01) << 2) +
                                      (QZ_LZ4_DICT_ID_FLAG & 0x01));
 
-    //block descriptot
+    //block descriptor
     hdr->block_desc = (unsigned char)((QZ_LZ4_MAX_BLK_SIZE & 0x07) << 4);
 
     //content size
