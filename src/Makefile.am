@@ -44,8 +44,8 @@ libqatzip_la_SOURCES = \
                        qatzip_lz4.c \
                        xxhash.c
 libqatzip_la_CFLAGS = \
-                      -I./ \
-                      -I../include/ \
+                      -I$(srcdir) \
+                      -I$(top_srcdir)/include \
                       $(COMMON_CFLAGS) \
                       $(SAL_CFLAGS) \
                       $(ADF_CFLAGS) \
