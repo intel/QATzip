@@ -40,6 +40,8 @@ static int compressFile(int in_file, int out_file)
     // You can customize parameters(ie, level, pollingmode)
     // before setup
     params.common_params.polling_mode = QZ_BUSY_POLLING;
+    params.common_params.comp_lvl = 9;
+    params.common_params.hw_buff_sz = 16 * 1024;    //must be a power of 2k(4k 8k 16k 64k 128k)
     rc = qzSetupSessionLZ4(&session, &params);
     if (rc != QZ_OK && rc != QZ_DUPLICATE) {
         fprintf(stderr, "qzSetupSessionLZ4 failed\n");
