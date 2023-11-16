@@ -2204,8 +2204,14 @@ void qzListDestroy(QzListHead_T *head)
     do {
         for (int j = 0; j < node->used; ++j) {
             fi = node->items[j];
-            free(fi->fileName);
-            free(fi);
+            if (fi) {
+                if (fi->fileName) {
+                    free(fi->fileName);
+                    fi->fileName = NULL;
+                }
+                free(fi);
+                fi = NULL;
+            }
         }
         free(node->items);
         tmp_node = node;
@@ -3257,9 +3263,6 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
     return res;
 
 error:
-    if (fi) {
-        free(fi);
-    }
     if (res) {
         itemListDestroy(res);
     }
