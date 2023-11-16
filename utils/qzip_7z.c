@@ -2231,14 +2231,16 @@ void itemListDestroy(Qz7zItemList_T *p)
 
     QzCatagoryTable_T *table = p->table;
     QzCatagory_T      cat;
-    for (int i = 0; i < table->cat_num; ++i) {
-        cat = table->catas[i];
-        free(cat.cat_files->next->items);
-        free(cat.cat_files->next);
-        free(cat.cat_files);
+    if (table) {
+        for (int i = 0; i < table->cat_num; ++i) {
+            cat = table->catas[i];
+            free(cat.cat_files->next->items);
+            free(cat.cat_files->next);
+            free(cat.cat_files);
+        }
+        free(table->catas);
+        free(table);
     }
-    free(table->catas);
-    free(table);
 
     free(p);
 }
