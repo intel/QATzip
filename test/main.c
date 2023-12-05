@@ -2351,7 +2351,10 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    qzGetDefaults(&params);
+    if (qzGetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: fail to get defulat params.\n");
+        goto done;
+    }
     params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
     if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
@@ -2407,7 +2410,10 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     }
     QZ_DEBUG("qzInit  rc = %d\n", rc);
 
-    qzGetDefaults(&params);
+    if (qzGetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: fail to get defulat params.\n");
+        goto done;
+    }
     params.strm_buff_sz = DEFAULT_STREAM_BUF_SZ;
     if (qzSetDefaults(&params) != QZ_OK) {
         QZ_ERROR("Err: set params fail with incorrect compress params.\n");
@@ -2509,7 +2515,10 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
     comp_src = malloc(comp_sz);
     decomp_src = calloc(orig_sz, 1);
 
-    qzGetDefaults(&comp_params);
+    if (qzGetDefaults(&comp_params) != QZ_OK) {
+        QZ_ERROR("Err: fail to get defulat params.\n");
+        return NULL;
+    }
 
     slice_sz = comp_params.hw_buff_sz / 4;
 
@@ -2680,7 +2689,10 @@ void *testqzEndStreamInvalidParam(void *arg, int test_no)
     comp_src = malloc(comp_sz);
     decomp_src = calloc(orig_sz, 1);
 
-    qzGetDefaults(&comp_params);
+    if (qzGetDefaults(&comp_params) != QZ_OK) {
+        QZ_ERROR("Err: fail to get defulat params.\n");
+        return NULL;
+    }
 
     slice_sz = comp_params.hw_buff_sz / 4;
 
@@ -3037,7 +3049,10 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
         goto done;
     }
 
-    qzGetDefaults(&params);
+    if (qzGetDefaults(&params) != QZ_OK) {
+        QZ_ERROR("Err: fail to get defulat params.\n");
+        goto done;
+    }
     params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
     rc = qzSetupSession(&sess, &params);
     if (QZ_SETUP_SESSION_FAIL(rc)) {
