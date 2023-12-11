@@ -1373,9 +1373,9 @@ static void *doCompressIn(void *in)
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
-    struct timespec my_time;
-    my_time.tv_sec = 0;
-    my_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
+    struct timespec sleep_time;
+    sleep_time.tv_sec = 0;
+    sleep_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
     QZ_DEBUG("Always enable CnV\n");
 
     i = qz_sess->inst_hint;
@@ -1404,7 +1404,7 @@ static void *doCompressIn(void *in)
             do {
                 j = getUnusedBuffer(i, j);
                 if (unlikely(-1 == j)) {
-                    nanosleep(&my_time, NULL);
+                    nanosleep(&sleep_time, NULL);
                 }
             } while (-1 == j);
             QZ_DEBUG("getUnusedBuffer returned %d\n", j);
@@ -1540,12 +1540,12 @@ static void *doCompressOut(void *in)
                 }
 
                 /*  res.status is passed into QAT by cpaDcCompressData2, and changed in
-                    dcCompression_ProcessCallback, it's type is CpaDcReqStatus.
-                    job_status is from the dccallback, it's type is CpaStatus.
-                    Generally, the res.status should have more detailed info about device error
-                    we assume fallback feature will always call callback func, as well as
-                    cpaDcCompressData2 return success. res.status and job_status should
-                    all return Error status, but with different error number.
+                *   dcCompression_ProcessCallback, it's type is CpaDcReqStatus.
+                *   job_status is from the dccallback, it's type is CpaStatus.
+                *   Generally, the res.status should have more detailed info about device error
+                *   we assume fallback feature will always call callback func, as well as
+                *   cpaDcCompressData2 return success. res.status and job_status should
+                *   all return Error status, but with different error number.
                 */
                 resl = &g_process.qz_inst[i].stream[j].res;
                 if (unlikely(CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status ||
@@ -1971,10 +1971,10 @@ static void *doDecompressIn(void *in)
     QzGzH_T hdr = {{0}, 0};
     QzSession_T *sess = (QzSession_T *)in;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
-    struct timespec my_time;
+    struct timespec sleep_time;
 
-    my_time.tv_sec = 0;
-    my_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
+    sleep_time.tv_sec = 0;
+    sleep_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
     i = qz_sess->inst_hint;
     j = -1;
 
@@ -2022,7 +2022,7 @@ static void *doDecompressIn(void *in)
                     }
                 } else {
                     if (unlikely(-1 == j)) {
-                        nanosleep(&my_time, NULL);
+                        nanosleep(&sleep_time, NULL);
                     }
                 }
             } while (-1 == j);
