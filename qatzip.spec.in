@@ -74,6 +74,7 @@ rm -vf %{buildroot}%{_mandir}/*.pdf
 %license LICENSE*
 %{_mandir}/man1/qzip.1*
 %{_bindir}/qzip
+%{_bindir}/qatzip-test
 
 %files libs
 %license LICENSE*
