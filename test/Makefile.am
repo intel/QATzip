@@ -32,19 +32,20 @@
 #
 ################################################################
 
-noinst_PROGRAMS = test bt
-test_SOURCES = main.c
-test_CFLAGS = \
+noinst_PROGRAMS = bt
+bin_PROGRAMS = qatzip-test
+qatzip_test_SOURCES = main.c
+qatzip_test_CFLAGS = \
               -I$(abs_top_srcdir)/include/ \
               -I$(abs_top_srcdir)/src/    \
               -I$(abs_top_srcdir)/utils/  \
               $(COMMON_CFLAGS) \
               $(ICP_INCLUDE_CFLAGS)
-test_LDADD = \
+qatzip_test_LDADD = \
              $(abs_top_srcdir)/src/.libs/libqatzip.a \
              $(QATLIB_FLAGS) \
              $(USDMLIB_FLAGS)
-test_LDFLAGS = \
+qatzip_test_LDFLAGS = \
                $(ICP_LDFLAGS)
 
 bt_SOURCES = bt.c

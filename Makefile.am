@@ -72,8 +72,8 @@ qzip: $(QATZIP_LIB)
 qzip_obj_without_main:
 	@make -C $(QZIP_DIR) qzip_obj_without_main
 
-test:$(QATZIP_LIB)
-	@make -C $(TEST_DIR) test
+qatzip-test:$(QATZIP_LIB)
+	@make -C $(TEST_DIR) qatzip-test
 
 bt:$(QATZIP_LIB)
 	@make -C $(TEST_DIR) bt
@@ -88,7 +88,7 @@ AM_CFLAGS=-DENABLE_TESTLOG
 testlog: clean
 	@make -C $(QATZIP_LIB_DIR) $(QATZIP_LIB) AM_CFLAGS=$(AM_CFLAGS)
 	@make -C $(QZIP_DIR) qzip
-	@make -C $(TEST_DIR) test
+	@make -C $(TEST_DIR) qatzip-test
 	@make -C $(TEST_DIR) bt
 if QATZIP_LZ4S_POSTPROCESS_AC
 	@make -C $(QZIP_DIR) qzstd
@@ -116,6 +116,6 @@ rpm: clean dist qatzip.spec
 rpmclean:
 	@rm -fr rpmbuild
 
-.PHONY: rpm rpmclean libqatzip qzip test check_code \
+.PHONY: rpm rpmclean libqatzip qzip qatzip-test check_code \
 	qzip_obj_without_main bt $(QATZIP_LIB) clean-local \
 	qzstd
