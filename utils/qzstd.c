@@ -38,7 +38,7 @@
 QzSession_T qzstd_g_sess;
 QzSessionParamsLZ4S_T g_sess_params = {{0}};
 QzSessionParamsLZ4S_T sess_params_zstd_default = {
-    .common_params.direction         = QZ_DIRECTION_DEFAULT,
+    .common_params.direction         = QZ_DIR_COMPRESS,
     .common_params.comp_lvl          = QZ_COMP_LEVEL_DEFAULT,
     .common_params.comp_algorithm    = QZ_LZ4s,
     .common_params.max_forks         = QZ_MAX_FORK_DEFAULT,
