@@ -486,6 +486,11 @@ int qzCheckParamsLZ4S(QzSessionParamsLZ4S_T *params)
         return QZ_PARAMS;
     }
 
+    if (params->common_params.direction != QZ_DIR_COMPRESS) {
+        QZ_ERROR("LZ4s only support compression direction\n");
+        return QZ_PARAMS;
+    }
+
     if ((params->common_params.comp_lvl < QZ_LZS_COMP_LVL_MINIMUM) ||
         (params->common_params.comp_lvl > QZ_LZS_COMP_LVL_MAXIMUM)) {
         QZ_ERROR("Invalid comp_lvl value\n");
@@ -707,6 +712,8 @@ void qzGetParamsLZ4S(QzSessionParamsInternal_T *internal_params,
     qzGetParamsCommon(internal_params, &params->common_params);
 
     params->common_params.comp_algorithm = QZ_LZ4s;
+    /* LZ4s only support compression. */
+    params->common_params.direction = QZ_DIR_COMPRESS;
     params->qzCallback = internal_params->qzCallback;
     params->qzCallback_external = internal_params->qzCallback_external;
     params->lz4s_mini_match = internal_params->lz4s_mini_match;
