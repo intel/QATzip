@@ -1494,7 +1494,7 @@ static int qzLZ4StoredBlocks(QzSess_T *qz_sess, const unsigned char *src,
     //set block size to STORED_BLK_MAX_LEN(64K)
     block_size = STORED_BLK_MAX_LEN;
     block_count = src_len / block_size +
-                  src_len % block_size > 0 ? 1 : 0;
+               (((src_len % block_size) > 0) ? 1 : 0);
     out_len = (outputHeaderSz(data_fmt) +
                (block_count * QZ_LZ4_STORED_HEADER_SIZE) +
                src_len + outputFooterSz(data_fmt));
@@ -1570,7 +1570,7 @@ static int qzDeflateStoredBlocks(QzSess_T *qz_sess, const unsigned char *src,
     DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
 
     block_count = src_len / block_size +
-                  src_len % block_size > 0 ? 1 : 0;
+               (((src_len % block_size) > 0) ? 1 : 0);
     out_len = (outputHeaderSz(data_fmt) + (block_count * STORED_BLK_HDR_SZ) +
                src_len + outputFooterSz(data_fmt));
     *dest_len -= out_len;
