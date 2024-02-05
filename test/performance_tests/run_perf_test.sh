@@ -41,9 +41,9 @@ rm -f result_decomp_stderr
 
 CURRENT_PATH=`dirname $(readlink -f "$0")`
 
-#check whether test exists
-if [ ! -f "$QZ_ROOT/test/test" ]; then
-    echo "$QZ_ROOT/test/test: No such file. Compile first!"
+#check whether qatzip-test exists
+if [ ! -f "$QZ_ROOT/test/qatzip-test" ]; then
+    echo "$QZ_ROOT/test/qatzip-test: No such file. Compile first!"
     exit 1
 fi
 
@@ -104,7 +104,7 @@ echo > result_comp
 cpu_list=0
 for((numProc_comp = 0; numProc_comp < $process; numProc_comp ++))
 do
-    taskset -c $cpu_list $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D comp >> result_comp 2>> result_comp_stderr &
+    taskset -c $cpu_list $QZ_ROOT/test/qatzip-test -m 4 -l 1000 -t $thread -D comp >> result_comp 2>> result_comp_stderr &
     cpu_list=$(($cpu_list + 1))
 done
 wait
@@ -115,7 +115,7 @@ echo > result_decomp
 cpu_list=0
 for((numProc_decomp = 0; numProc_decomp < $process; numProc_decomp ++))
 do
-    taskset -c $cpu_list $QZ_ROOT/test/test -m 4 -l 1000 -t $thread -D decomp >> result_decomp 2>> result_decomp_stderr &
+    taskset -c $cpu_list $QZ_ROOT/test/qatzip-test -m 4 -l 1000 -t $thread -D decomp >> result_decomp 2>> result_decomp_stderr &
     cpu_list=$(($cpu_list + 1))
 done
 wait
