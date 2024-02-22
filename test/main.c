@@ -249,7 +249,7 @@ QzBlock_T *parseFormatOption(char *buf)
 
             for (fmt_idx = 0; fmt_idx < list_len; fmt_idx++) {
                 if (0 == strcmp(sub_token, g_format_list[fmt_idx].fmt_name)) {
-                    blk = malloc(sizeof(QzBlock_T));
+                    blk = calloc(1, sizeof(QzBlock_T));
                     assert(NULL != blk);
 
                     blk->fmt = g_format_list[fmt_idx].fmt;
