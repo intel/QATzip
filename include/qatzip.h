@@ -585,6 +585,18 @@ typedef struct QzSessionParamsZstd_S {
     unsigned char reserved[7];
 } QzSessionParamsZstd_T;
 
+typedef struct QzDictionaryParams_S
+{
+    const unsigned char* dictionary;
+    /*< Pointer to dictionary buffer */
+    unsigned int dictionary_len;
+    /*< Length of dictionary buffer (maximum value of 32KB for ZSTD, otherwise
+     * 64KB) */
+    int compressed; /*< non-zero indicates compressed dictionary supplied */
+    unsigned long* crc64Addr; /*< If not NULL, address to store CRC64 generated
+                                 on the dictionary */
+} QzDictionaryParams_T;
+
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
 #define QZ_DIRECTION_DEFAULT         QZ_DIR_BOTH
 #define QZ_DATA_FORMAT_DEFAULT       QZ_DEFLATE_GZIP_EXT
@@ -1662,6 +1674,13 @@ QATZIP_API int qzCompress2(QzSession_T *sess, const unsigned char *src,
                            unsigned char *dest, qzAsyncCallbackFn callback,
                            QzResult_T *qzResults);
 
+QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
+                                        const unsigned char* src,
+                                        unsigned char* dest,
+                                        QzDictionaryParams_T* dictionary,
+                                        qzAsyncCallbackFn callback,
+                                        QzResult_T* qzResults);
+
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -1814,6 +1833,64 @@ QATZIP_API int qzDecompressCrc64Ext(QzSession_T *sess,
                                     unsigned int *dest_len,
                                     uint64_t *crc,
                                     uint64_t *ext_rc);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Decompress a buffer with dictionary (asynchronous or synchronous model)
+ *
+ * @description
+ *      These functions has the same decompression ability as "qzDecompress",
+ *      but with asynchronous or synchronous model.
+ *
+ *      NOTE: asynchronous model currently not supported. Supplying a non-null
+ *      callback function will result in error QZ_NOT_SUPPORTED.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      No
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess       Session handle
+ *                             (pointer to opaque instance and session data)
+ * @param[in]       src        Pointer to source buffer containing compressed
+ *                             data.
+ * @param[in]       dest       Pointer to destination buffer where decompressed
+ *                             data will be stored.
+ * @param[in]       dictionary Pointer to structure containing dictionary
+ *                             parameters
+ * @param[in]       callback   User-defined callback function to be called upon
+ *                             completion of the decompression operation.
+ * @param[in,out]   qzResults  Pointer to QzResult, It have to allocate by user.
+ *
+ * @retval QZ_OK               Decompression request submitted successfully.
+ * @retval QZ_FAIL             Decompression request submission failed.
+ * @retval QZ_PARAMS           *sess is NULL or member of params is invalid.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      None
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzDecompressWithDictionary(QzSession_T* sess,
+                                          const unsigned char* src,
+                                          unsigned char* dest,
+                                          QzDictionaryParams_T* dictionary,
+                                          qzAsyncCallbackFn callback,
+                                          QzResult_T* qzResults);
 
 /**
  *****************************************************************************
