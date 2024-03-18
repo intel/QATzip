@@ -73,17 +73,21 @@ AC_TYPE_UINT8_T
 AC_CHECK_HEADERS([stdio.h stdarg.h fcntl.h limits.h memory.h \
     unistd.h stdint.h stdlib.h string.h sys/ioctl.h \
     sys/time.h sys/types.h sys/stat.h unistd.h utime.h \
-    pthread.h])
+    pthread.h sched.h])
 
 # Checks for library functions.
 AC_CHECK_FUNCS([atexit getcwd gettimeofday \
     memmove memset mkdir munmap \
     realpath strdup strerror strrchr \
-    strtol strtoul utime fork malloc mmap])
+    strtol strtoul utime fork malloc mmap \
+    sched_getcpu])
 
 # Checks for pthread.
 AC_CHECK_LIB([pthread], [pthread_create], ,
     [AC_MSG_ERROR([not found pthread_create in -lpthread])])
+
+#check for numa.
+AC_CHECK_HEADER([numa.h], , [AC_MSG_ERROR([numa.h not found])])
 
 #check for zlib.
 AC_CHECK_HEADER([zlib.h], , [AC_MSG_ERROR([zlib.h not found])])
@@ -99,7 +103,7 @@ AC_TRY_COMPILE(
 [AC_MSG_ERROR([zlib version must be 1.2.7 or higher.])
 ])
 
-
+AC_CHECK_LIB([numa], [numa_node_of_cpu], , AC_MSG_ERROR([numa_node_of_cpu not found]))
 AC_CHECK_LIB([z], [deflate], , AC_MSG_ERROR([deflate not found]))
 
 #check for lz4 lib

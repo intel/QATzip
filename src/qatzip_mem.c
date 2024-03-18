@@ -37,6 +37,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <numa.h>
+#include <sched.h>
 
 #ifdef HAVE_QAT_HEADERS
 #include <qat/cpa.h>
@@ -167,6 +169,7 @@ void qzMemDestory(void)
 void *qzMalloc(size_t sz, int numa, int pinned)
 {
     int status;
+    int real_numa;
     QzSession_T temp_sess;
     qzMemSet(&temp_sess, 0, sizeof(QzSession_T));
 
@@ -193,7 +196,18 @@ void *qzMalloc(size_t sz, int numa, int pinned)
         }
     }
 
-    g_a = qaeMemAllocNUMA(sz, numa, 64);
+    if (numa == QZ_AUTO_SELECT_NUMA_NODE) {
+        int cpu_id = sched_getcpu();
+        real_numa = numa_node_of_cpu(cpu_id);
+        if (real_numa == -1) {
+            QZ_ERROR("couldn't find NUMA node of CPU %d\n", cpu_id);
+            return NULL;
+        }
+    } else {
+        real_numa = numa;
+    }
+
+    g_a = qaeMemAllocNUMA(sz, real_numa, 64);
     if (NULL == g_a) {
         if (0 == pinned) {
             QZ_DEBUG("regular malloc\n");

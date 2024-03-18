@@ -107,9 +107,9 @@ int main(int argc, char *argv[])
 
     src_sz = DEFAULT_BUF_LEN;
     dest_sz = (9 * src_sz / 8) + 1024;
-    src = qzMalloc(src_sz, 0, 1);
-    dest = qzMalloc(dest_sz, 0, 1);
-    src2 = qzMalloc(src_sz, 0, 1);
+    src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, 1);
+    dest = qzMalloc(dest_sz, QZ_AUTO_SELECT_NUMA_NODE, 1);
+    src2 = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, 1);
     if (NULL == src || NULL == dest || NULL == src2) {
         return -1;
     }

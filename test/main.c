@@ -618,10 +618,10 @@ void *qzDecompressSwQz(void *arg)
     QZ_DEBUG("Hello from qzDecompressSwQz tid=%ld, count=%d, service=2, "
              "verify_data=%d\n", tid, count, verify_data);
 
-    src = qzMalloc(src_sz, 0, PINNED_MEM);
-    comp_out = qzMalloc(comp_out_sz, 0, PINNED_MEM);
-    decomp_sw_out = qzMalloc(decomp_sw_out_sz, 0, PINNED_MEM);
-    decomp_qz_out = qzMalloc(decomp_qz_out_sz, 0, PINNED_MEM);
+    src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    comp_out = qzMalloc(comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_sw_out = qzMalloc(decomp_sw_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_qz_out = qzMalloc(decomp_qz_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
 
     if (!src || !comp_out || !decomp_sw_out || !decomp_qz_out) {
         QZ_ERROR("Malloc failed\n");
@@ -837,9 +837,9 @@ void *qzCompressDecompressWithFormatOption(void *arg)
     QZ_DEBUG("qzInitSetupsession rc = %d\n", rc);
 
     if (gen_data) {
-        src = qzMalloc(src_sz, 0, PINNED_MEM);
-        comp_out = qzMalloc(comp_out_sz, 0, PINNED_MEM);
-        decomp_out = qzMalloc(decomp_out_sz, 0, PINNED_MEM);
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        comp_out = qzMalloc(comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        decomp_out = qzMalloc(decomp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
     } else {
         src = ((TestArg_T *)arg)->src;
         comp_out = ((TestArg_T *)arg)->comp_out;
@@ -1023,8 +1023,8 @@ void *qzSetupParamFuncTest(void *arg)
 
     src_sz = 256 * 1024;
     test_dest_sz = dest_sz = 256 * 1024 * 2;
-    src = qzMalloc(src_sz, 0, COMMON_MEM);
-    dest = qzMalloc(dest_sz, 0, COMMON_MEM);
+    src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
+    dest = qzMalloc(dest_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
 
     if (!src || !dest) {
         QZ_ERROR("Malloc failed\n");
@@ -1254,9 +1254,9 @@ void *qzCompressAndDecompress(void *arg)
     QZ_DEBUG("qzInitSetupsession rc = %d\n", rc);
 
     if (gen_data && !g_perf_svm) {
-        src = qzMalloc(src_sz, 0, PINNED_MEM);
-        comp_out = qzMalloc(comp_out_sz, 0, PINNED_MEM);
-        decomp_out = qzMalloc(decomp_out_sz, 0, PINNED_MEM);
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        comp_out = qzMalloc(comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        decomp_out = qzMalloc(decomp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
     } else {
         src = g_perf_svm ? malloc(src_sz) : ((TestArg_T *)arg)->src;
         comp_out = g_perf_svm ? malloc(comp_out_sz) : ((TestArg_T *)arg)->comp_out;
@@ -1561,8 +1561,8 @@ void *qzMemFuncTest(void *test_arg)
     QZ_DEBUG("Hello from test2 thread id %ld\n", tid);
 
     for (i = 0; i < 1000; i++) {
-        ptr[i] = qzMalloc(100000, 0, PINNED_MEM);
-        ptr2[i] = qzMalloc(100000, 0, COMMON_MEM);
+        ptr[i] = qzMalloc(100000, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        ptr2[i] = qzMalloc(100000, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
         if (ptr[i] == NULL || ptr2[i] == NULL) {
             QZ_ERROR("[Test2 %ld]\tptr[%d]=0x%lx\t0x%lx\n", tid, i,
                      (unsigned long)ptr[i], (unsigned long)ptr2[i]);
@@ -1601,9 +1601,9 @@ int qzCompressDecompressWithParams(const TestArg_T *arg,
     size_t orig_sz, src_sz, comp_sz, decomp_sz;
 
     orig_sz = comp_sz = decomp_sz = arg->src_sz;
-    orig_src = qzMalloc(orig_sz, 0, PINNED_MEM);
-    comp_src = qzMalloc(comp_sz, 0, PINNED_MEM);
-    decomp_src = qzMalloc(orig_sz, 0, PINNED_MEM);
+    orig_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    comp_src = qzMalloc(comp_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
 
     if (orig_src == NULL ||
         comp_src == NULL ||
@@ -2051,8 +2051,8 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     if (gen_data) {
         src_sz = QATZIP_MAX_HW_SZ;
         dest_sz = QATZIP_MAX_HW_SZ;
-        src = qzMalloc(src_sz, 0, COMMON_MEM);
-        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
+        dest = qzMalloc(dest_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     } else {
         src = test_arg->src;
         src_sz = test_arg->src_sz;
@@ -2163,8 +2163,8 @@ void *qzCompressStreamOutput(void *thd_arg)
     if (gen_data) {
         src_sz = QATZIP_MAX_HW_SZ;
         dest_sz = QATZIP_MAX_HW_SZ;
-        src = qzMalloc(src_sz, 0, COMMON_MEM);
-        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
+        dest = qzMalloc(dest_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     } else {
         src = test_arg->src;
         src_sz = test_arg->src_sz;
@@ -2429,8 +2429,8 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     if (gen_data) {
         src_sz = QATZIP_MAX_HW_SZ;
         dest_sz = QATZIP_MAX_HW_SZ;
-        src = qzMalloc(src_sz, 0, COMMON_MEM);
-        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
+        dest = qzMalloc(dest_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     } else {
         src = test_arg->src;
         src_sz = test_arg->src_sz;
@@ -2961,9 +2961,9 @@ int qzDecompressFailedAtUnknownGzipHeader(void)
     QzSessionParams_T params = {0};
 
     orig_sz = comp_sz = decomp_sz = 64 * 1024; /*64K*/
-    orig_src = qzMalloc(orig_sz, 0, PINNED_MEM);
-    comp_src = qzMalloc(comp_sz, 0, PINNED_MEM);
-    decomp_src = qzMalloc(orig_sz, 0, PINNED_MEM);
+    orig_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    comp_src = qzMalloc(comp_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
 
     if (orig_src == NULL ||
         comp_src == NULL ||
@@ -3032,9 +3032,9 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
     unsigned int produce;
 
     orig_sz = comp_sz = decomp_sz = USDM_ALLOC_MAX_SZ;
-    orig_src = qzMalloc(orig_sz, 0, PINNED_MEM);
-    comp_src = qzMalloc(comp_sz, 0, PINNED_MEM);
-    decomp_src = qzMalloc(orig_sz, 0, PINNED_MEM);
+    orig_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    comp_src = qzMalloc(comp_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
 
     if (orig_src == NULL ||
         comp_src == NULL ||
@@ -3121,9 +3121,9 @@ int qzDecompressHWFailedAtUnknownGzipBlock(void)
     uint32_t produce;
 
     orig_sz = comp_sz = decomp_sz = USDM_ALLOC_MAX_SZ;
-    orig_src = qzMalloc(orig_sz, 0, PINNED_MEM);
-    comp_src = qzMalloc(comp_sz, 0, PINNED_MEM);
-    decomp_src = qzMalloc(orig_sz, 0, PINNED_MEM);
+    orig_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    comp_src = qzMalloc(comp_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
 
     if (orig_src == NULL ||
         comp_src == NULL ||
@@ -3193,9 +3193,9 @@ int qzDecompressForceSW(void)
     uint32_t consume, produce;
 
     orig_sz = comp_sz = decomp_sz = USDM_ALLOC_MAX_SZ;
-    orig_src = qzMalloc(orig_sz, 0, PINNED_MEM);
-    comp_src = qzMalloc(comp_sz, 0, PINNED_MEM);
-    decomp_src = qzMalloc(orig_sz, 0, PINNED_MEM);
+    orig_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    comp_src = qzMalloc(comp_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
 
     if (orig_src == NULL ||
         comp_src == NULL ||
@@ -3491,9 +3491,9 @@ int qzCompressSWL9DecompressHW(void)
     QzSessionParams_T params = {0};
 
     orig_sz = comp_sz = decomp_sz = 4 * MB;
-    orig_src = qzMalloc(orig_sz, 0, COMMON_MEM);
-    comp_src = qzMalloc(comp_sz, 0, COMMON_MEM);
-    decomp_src = qzMalloc(orig_sz, 0, COMMON_MEM);
+    orig_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
+    comp_src = qzMalloc(comp_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
+    decomp_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
 
     if (orig_src == NULL ||
         comp_src == NULL ||
@@ -3645,8 +3645,8 @@ void *qzCompressStreamWithPendingOut(void *thd_arg)
     if (gen_data) {
         src_sz = QATZIP_MAX_HW_SZ;
         dest_sz = QATZIP_MAX_HW_SZ;
-        src = qzMalloc(src_sz, 0, COMMON_MEM);
-        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
+        dest = qzMalloc(dest_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     } else {
         src = test_arg->src;
         src_sz = test_arg->src_sz;
@@ -3859,8 +3859,8 @@ void *qzDecompressStreamWithBufferError(void *thd_arg)
     if (gen_data) {
         src_sz = QATZIP_MAX_HW_SZ;
         dest_sz = QATZIP_MAX_HW_SZ;
-        src = qzMalloc(src_sz, 0, COMMON_MEM);
-        dest = qzMalloc(dest_sz, 0, COMMON_MEM);
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
+        dest = qzMalloc(dest_sz, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     } else {
         src = test_arg->src;
         src_sz = test_arg->src_sz;
@@ -4308,7 +4308,7 @@ int main(int argc, char *argv[])
                 QZ_ERROR("ERROR: only can allocate 2M memory in huge page\n");
                 return -1;
             }
-            input_buf = qzMalloc(input_buf_len, 0, PINNED_MEM);
+            input_buf = qzMalloc(input_buf_len, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         } else {
             input_buf = malloc(input_buf_len);
         }
@@ -4345,9 +4345,9 @@ int main(int argc, char *argv[])
         if (compress_buf_type == PINNED_MEM) {
             test_arg[i].comp_out_sz = test_arg[i].src_sz;
             test_arg[i].src = input_buf;
-            test_arg[i].comp_out = qzMalloc(test_arg[i].comp_out_sz, 0, PINNED_MEM);
+            test_arg[i].comp_out = qzMalloc(test_arg[i].comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
             test_arg[i].decomp_out_sz = test_arg[i].src_sz;
-            test_arg[i].decomp_out = qzMalloc(test_arg[i].decomp_out_sz, 0, PINNED_MEM);
+            test_arg[i].decomp_out = qzMalloc(test_arg[i].decomp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         } else {
             test_arg[i].comp_out_sz = test_arg[i].src_sz * 2;
             test_arg[i].src = input_buf;
