@@ -587,6 +587,7 @@ typedef struct QzSessionParamsLZ4S_S {
 #define QZ_DEFLATE_COMP_LVL_MAXIMUM_Gen3 (12)
 #define QZ_LZS_COMP_LVL_MINIMUM          (1)
 #define QZ_LZS_COMP_LVL_MAXIMUM          (12)
+#define QZ_AUTO_SELECT_NUMA_NODE         (-1)
 
 /**
  *****************************************************************************
@@ -1814,7 +1815,8 @@ QATZIP_API int qzGetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
  *      Yes
  *
  * @param[in]       sz                  Memory size to be allocated
- * @param[in]       numa                NUMA node from which to allocate memory
+ * @param[in]       numa                NUMA node (0 or greater) from which to allocate memory
+ *                                      QZ_AUTO_SELECT_NUMA_NODE (-1) to auto select optimal NUMA node
  * @param[in]       force_pinned        PINNED_MEM allocate contiguous memory
  *                                      COMMON_MEM allocate non-contiguous memory
  *

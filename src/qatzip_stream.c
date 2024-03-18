@@ -315,19 +315,19 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
     stream_buf->flush_more = 0;
     stream_buf->buf_len = qz_sess->sess_params.strm_buff_sz;
     stream_buf->in_buf =
-        streamBufferAlloc(stream_buf->buf_len, NODE_0, PINNED_MEM);
+        streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
     stream_buf->out_buf =
-        streamBufferAlloc(stream_buf->buf_len, NODE_0, PINNED_MEM);
+        streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
 
     if (NULL == stream_buf->in_buf) {
         QZ_DEBUG("stream_buf->in_buf : PINNED_MEM failed, try COMMON_MEM\n");
         stream_buf->in_buf =
-            streamBufferAlloc(stream_buf->buf_len, NODE_0, COMMON_MEM);
+            streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     }
     if (NULL == stream_buf->out_buf) {
         QZ_DEBUG("stream_buf->out_buf : PINNED_MEM failed, try COMMON_MEM\n");
         stream_buf->out_buf =
-            streamBufferAlloc(stream_buf->buf_len, NODE_0, COMMON_MEM);
+            streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     }
 
     if (NULL == stream_buf->in_buf ||
