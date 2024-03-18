@@ -58,7 +58,6 @@ extern"C" {
 #define FAILURE              0
 #define QZ_WAIT_SW_PENDING   10
 
-#define NODE_0               0
 #define NUM_BUFF             (32)
 /**
  * For less than 8K hardware buffer size, it needs more in-flight buffers

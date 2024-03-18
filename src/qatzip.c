@@ -922,12 +922,12 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
 
     for (j = 0; j < g_process.qz_inst[i].intermediate_cnt; j++) {
         g_process.qz_inst[i].intermediate_buffers[j] = (CpaBufferList *)
-                qzMalloc(sizeof(CpaBufferList), NODE_0, PINNED_MEM);
+                qzMalloc(sizeof(CpaBufferList), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].intermediate_buffers[j], i);
 
         if (0 != g_process.qz_inst[i].buff_meta_size) {
             g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData =
-                qzMalloc((size_t)(g_process.qz_inst[i].buff_meta_size), NODE_0, PINNED_MEM);
+                qzMalloc((size_t)(g_process.qz_inst[i].buff_meta_size), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
             QZ_INST_MEM_CHECK(
                 g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData,
                 i);
@@ -936,11 +936,11 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
         }
 
         g_process.qz_inst[i].intermediate_buffers[j]->pBuffers = (CpaFlatBuffer *)
-                qzMalloc(sizeof(CpaFlatBuffer), NODE_0, PINNED_MEM);
+                qzMalloc(sizeof(CpaFlatBuffer), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].intermediate_buffers[j]->pBuffers, i);
 
         g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData = (Cpa8U *)
-                qzMalloc(inter_sz, NODE_0, PINNED_MEM);
+                qzMalloc(inter_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData,
                           i);
 
@@ -977,23 +977,23 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
         g_process.qz_inst[i].stream[j].sink2 = 0;
 
         g_process.qz_inst[i].src_buffers[j] = (CpaBufferList *)
-                                              qzMalloc(sizeof(CpaBufferList), NODE_0, PINNED_MEM);
+                                              qzMalloc(sizeof(CpaBufferList), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].src_buffers[j], i);
 
         if (0 != g_process.qz_inst[i].buff_meta_size) {
             g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData =
-                qzMalloc(g_process.qz_inst[i].buff_meta_size, NODE_0, PINNED_MEM);
+                qzMalloc(g_process.qz_inst[i].buff_meta_size, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
             QZ_INST_MEM_CHECK(g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData, i);
         } else {
             g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData = NULL;
         }
 
         g_process.qz_inst[i].src_buffers[j]->pBuffers = (CpaFlatBuffer *)
-                qzMalloc(sizeof(CpaFlatBuffer), NODE_0, PINNED_MEM);
+                qzMalloc(sizeof(CpaFlatBuffer), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].src_buffers, i);
 
         g_process.qz_inst[i].src_buffers[j]->pBuffers->pData = (Cpa8U *)
-                qzMalloc(src_sz, NODE_0, PINNED_MEM);
+                qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData, i);
         /* The orig_src points internal pre-allocated pinned buffer. */
         g_process.qz_inst[i].stream[j].orig_src =
@@ -1005,23 +1005,23 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
 
     for (j = 0; j < g_process.qz_inst[i].dest_count; j++) {
         g_process.qz_inst[i].dest_buffers[j] = (CpaBufferList *)
-                                               qzMalloc(sizeof(CpaBufferList), NODE_0, PINNED_MEM);
+                                               qzMalloc(sizeof(CpaBufferList), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].dest_buffers[j], i);
 
         if (0 != g_process.qz_inst[i].buff_meta_size) {
             g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData =
-                qzMalloc(g_process.qz_inst[i].buff_meta_size, NODE_0, PINNED_MEM);
+                qzMalloc(g_process.qz_inst[i].buff_meta_size, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
             QZ_INST_MEM_CHECK(g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData, i);
         } else {
             g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData = NULL;
         }
 
         g_process.qz_inst[i].dest_buffers[j]->pBuffers = (CpaFlatBuffer *)
-                qzMalloc(sizeof(CpaFlatBuffer), NODE_0, PINNED_MEM);
+                qzMalloc(sizeof(CpaFlatBuffer), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].dest_buffers, i);
 
         g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData = (Cpa8U *)
-                qzMalloc(dest_sz, NODE_0, PINNED_MEM);
+                qzMalloc(dest_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData, i);
         /* The orig_dest points internal pre-allocated pinned buffer. */
         g_process.qz_inst[i].stream[j].orig_dest =
@@ -1260,7 +1260,7 @@ int qzSetupHW(QzSession_T *sess, int i)
                                 &qz_sess->ctx_size);
         if (CPA_STATUS_SUCCESS == qz_sess->sess_status) {
             g_process.qz_inst[i].cpaSess = qzMalloc((size_t)(qz_sess->session_size),
-                                                    NODE_0, PINNED_MEM);
+                                                    QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
             if (NULL ==  g_process.qz_inst[i].cpaSess) {
                 rc = qz_sess->sess_params.sw_backup ? QZ_LOW_MEM : QZ_NOSW_LOW_MEM;
                 goto done_sess;
@@ -1330,7 +1330,7 @@ int qzUpdateCpaSession(QzSession_T *sess, int i)
     }
 
     g_process.qz_inst[i].cpaSess = qzMalloc((size_t)(qz_sess->session_size),
-                                            NODE_0, PINNED_MEM);
+                                            QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
     if (!g_process.qz_inst[i].cpaSess) {
         QZ_ERROR("qzUpdateCpaSession: allocate session failed\n");
         return QZ_FAIL;
