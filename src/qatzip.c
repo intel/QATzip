@@ -2359,7 +2359,8 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
             QZ_DEBUG("Don't grab HW instance, fallback to sw\n");
             goto sw_decompression;
         } else {
-            rc = sess->hw_session_stat = QZ_NO_INST_ATTACH;
+            sess->hw_session_stat = QZ_NO_INST_ATTACH;
+            rc = QZ_NOSW_NO_INST_ATTACH;
             goto err_exit;
         }
         /*Make this a s/w compression*/
