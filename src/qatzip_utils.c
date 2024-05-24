@@ -36,6 +36,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <qz_utils.h>
+#include <zstd.h>
 
 #ifdef HAVE_QAT_HEADERS
 #include <qat/cpa.h>
@@ -339,6 +340,17 @@ static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
         break;
 #else
         QZ_ERROR("QAT driver does not support lz4s algorithm\n");
+        return QZ_UNSUPPORTED_FMT;
+#endif
+    case ZSTD:
+#if CPA_DC_API_VERSION_AT_LEAST(3, 1)
+        session_setup_data->compType = CPA_DC_ZSTD;
+        session_setup_data->checksum = CPA_DC_XXHASH64;
+        session_setup_data->autoSelectBestHuffmanTree = CPA_DC_ASB_ENABLED;
+        // TODO: setup_data no flag for hist buffer and block size
+        break;
+#else
+        QZ_ERROR("QAT driver does not support zstd algorithm\n");
         return QZ_UNSUPPORTED_FMT;
 #endif
     default:
@@ -661,6 +673,30 @@ int qzCheckParamsLZ4S(QzSessionParamsLZ4S_T *params)
     return QZ_OK;
 }
 
+int qzCheckParamsZSTD(QzSessionParamsZstd_T *params)
+{
+    assert(params);
+
+    if (qzCheckParamsCommon(&params->common_params) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    if (params->common_params.comp_algorithm != QZ_ZSTD) {
+        QZ_ERROR("Invalid comp_algorithm value\n");
+        return QZ_PARAMS;
+    }
+
+    if ((params->common_params.comp_lvl < QZ_ZSTD_COMP_LVL_MINIMUM) ||
+        (params->common_params.comp_lvl > QZ_ZSTD_COMP_LVL_MAXIMUM)) {
+        QZ_ERROR("Invalid comp_lvl value\n");
+        return QZ_PARAMS;
+    }
+
+    //TODO: Check hist buffer and block, once enable it
+
+    return QZ_OK;
+}
+
 static void qzSetParamsCommon(QzSessionParamsCommon_T *params,
                               QzSessionParamsInternal_T *internal_params)
 {
@@ -781,6 +817,17 @@ void qzSetParamsLZ4S(QzSessionParamsLZ4S_T *params,
     internal_params->qzCallback = params->qzCallback;
     internal_params->qzCallback_external = params->qzCallback_external;
     internal_params->lz4s_mini_match = params->lz4s_mini_match;
+}
+
+void qzSetParamsZSTD(QzSessionParamsZstd_T *params,
+                     QzSessionParamsInternal_T *internal_params)
+{
+    assert(params);
+    assert(internal_params);
+
+    qzSetParamsCommon(&params->common_params, internal_params);
+    internal_params->data_fmt = ZSTD;
+    //TODO: Update zstd hist buffer block in internal
 }
 
 /**
@@ -912,6 +959,18 @@ void qzGetParamsLZ4S(QzSessionParamsInternal_T *internal_params,
     params->lz4s_mini_match = internal_params->lz4s_mini_match;
 }
 
+void qzGetParamsZSTD(QzSessionParamsInternal_T *internal_params,
+                     QzSessionParamsZstd_T *params)
+{
+    assert(params);
+    assert(internal_params);
+
+    qzGetParamsCommon(internal_params, &params->common_params);
+    params->common_params.comp_algorithm = QZ_ZSTD;
+    params->blockSize = QZ_ZSTD_BLOCKSIZE_DEFAULT;
+    params->historyBuffer = QZ_ZSTD_HIST_BUFF_DEFAULT;
+}
+
 inline unsigned long outputFooterSz(DataFormatInternal_T data_fmt)
 {
     unsigned long size = 0;
@@ -924,6 +983,7 @@ inline unsigned long outputFooterSz(DataFormatInternal_T data_fmt)
     case LZ4_FH:
         size = qzLZ4FooterSz();
         break;
+    case ZSTD:
     case LZ4S_BK:
         size = 0;
         break;
@@ -961,6 +1021,8 @@ unsigned long outputHeaderSz(DataFormatInternal_T data_fmt)
     case DEFLATE_ZLIB:
         size = stdZlibHeaderSz();
         break;
+    case ZSTD:
+        break;
     case DEFLATE_GZIP_EXT:
     default:
         size = qzGzipHeaderSz();
@@ -992,6 +1054,8 @@ void outputHeaderGen(unsigned char *ptr,
     case DEFLATE_ZLIB:
         stdZlibHeaderGen(ptr, res);
         break;
+    case ZSTD:
+        break;
     case DEFLATE_GZIP_EXT:
     default:
         qzGzipHeaderGen(ptr, res);
@@ -1014,11 +1078,44 @@ inline void outputFooterGen(unsigned char *ptr,
     case DEFLATE_ZLIB:
         qzZlibFooterGen(ptr, res);
         break;
+    case ZSTD:
+        break;
     case DEFLATE_GZIP_EXT:
     default:
         qzGzipFooterGen(ptr, res);
         break;
     }
+}
+
+int isQATZSTDProcessable(const unsigned char *ptr,
+                         const unsigned int *const src_len,
+                         QzSess_T *const qz_sess)
+{
+    int rc = 0;
+    unsigned long long orignal_size = 0;
+
+    /* ZSTDv07_FRAMEHEADERSIZE_MAX Macro is 18, but if qatzip want to
+     * use this Marco directly, must to link zstd static library
+     */
+    if (*src_len < 18) {
+        QZ_ERROR("Decompressed data size is smaller than frame header.\n");
+        return rc;
+    }
+
+    orignal_size = ZSTD_getFrameContentSize(ptr, *src_len);
+    switch (orignal_size) {
+    case ZSTD_CONTENTSIZE_ERROR:
+        QZ_ERROR("Decompress data is not QZ HW Processable.\n");
+        break;
+    case ZSTD_CONTENTSIZE_UNKNOWN:
+        QZ_DEBUG("Decompress data size is unknow, please fallback to stream mode.\n");
+        rc = 1;
+        break;
+    default:
+        rc = 1;
+        break;
+    }
+    return rc;
 }
 
 int isQATProcessable(const unsigned char *ptr,
@@ -1050,6 +1147,9 @@ int isQATProcessable(const unsigned char *ptr,
         } else {
             rc = 1;
         }
+        break;
+    case ZSTD:
+        rc = isQATZSTDProcessable(ptr, src_len, qz_sess);
         break;
     default:
         rc = 0;
@@ -1340,6 +1440,17 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         QZ_DEBUG("checkHeader DEFLATE_ZLIB: compressed_sz %u  uncompressed_sz %u\n",
                  compressed_sz, uncompressed_sz);
         break;
+    case ZSTD:
+        compressed_sz = ZSTD_findFrameCompressedSize(src_ptr, src_avail_len);
+        uncompressed_sz = ZSTD_getFrameContentSize(src_ptr, src_avail_len);
+        /* if zstd content size is unknow, assume it's equel to hw buffer size
+         * And offload to HW firstly if it's overflow, then sw fallback in
+         * decompressout
+         */
+        if (uncompressed_sz == ZSTD_CONTENTSIZE_UNKNOWN) {
+            uncompressed_sz = qz_sess->sess_params.hw_buff_sz;
+        }
+        break;
     default:
         return QZ_FAIL;
     }
@@ -1535,8 +1646,14 @@ int decompOutCheckSum(int i, int j, QzSession_T *sess,
         QZ_DEBUG("After resp checksum: %x data checksum %x\n", resl->checksum,
                  g_process.qz_inst[i].stream[j].checksum);
     }
-    if ((qz_sess->sess_params.data_fmt != DEFLATE_4B) &&
-        (qz_sess->sess_params.data_fmt != DEFLATE_RAW) &&
+    /* For DEFLATE_4B, it don't include the frame header/Footer, no need to
+     * check the checksum. For ZSTD, driver already check the decompression
+     * checksum, if "Content_Checksum_flag" enabled in zstd frame header, no
+     * need to check in qatzip level.
+     */
+    if ((qz_sess->sess_params.data_fmt != DEFLATE_4B &&
+         qz_sess->sess_params.data_fmt != DEFLATE_RAW &&
+         qz_sess->sess_params.data_fmt != ZSTD) &&
         unlikely(resl->checksum !=
                  g_process.qz_inst[i].stream[j].checksum ||
                  (resl->produced != g_process.qz_inst[i].stream[j].orgdatalen &&

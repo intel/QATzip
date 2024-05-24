@@ -170,9 +170,15 @@ typedef struct QzCpaStream_S {
     QzAsyncReq_T *req;
 } QzCpaStream_T;
 
+typedef struct QzInstanceCapability_S {
+    CpaDcInstanceCapabilities inst_common_cap;
+    int zstd_Capability_Resp;
+} QzInstanceCapability_T;
+
+
 typedef struct QzInstance_S {
     CpaInstanceInfo2 instance_info;
-    CpaDcInstanceCapabilities instance_cap;
+    QzInstanceCapability_T instance_cap;
     CpaBufferList **intermediate_buffers;
     Cpa32U buff_meta_size;
 
@@ -250,6 +256,8 @@ typedef enum DataFormatInternal_E {
     /**< Data is in LZ4s sequences with block header, it's only for post processed */
     DEFLATE_ZLIB,
     /**< Data is in  deflate wrapped by zlib header and footer */
+    ZSTD,
+    /**< Data is in ZSTD frame */
 } DataFormatInternal_T;
 
 // Include all support session parameters
@@ -572,6 +580,9 @@ int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len);
 int isQATLZ4Processable(const unsigned char *ptr,
                         const unsigned int *const src_len,
                         QzSess_T *const qz_sess);
+int isQATZSTDProcessable(const unsigned char *ptr,
+                         const unsigned int *const src_len,
+                         QzSess_T *const qz_sess);
 int isQATDeflateProcessable(const unsigned char *ptr,
                             const unsigned int *const src_len,
                             QzSess_T *const qz_sess);
@@ -586,6 +597,7 @@ int qzCheckParamsDeflate(QzSessionParamsDeflate_T *params);
 int qzCheckParamsLZ4(QzSessionParamsLZ4_T *params);
 int qzCheckParamsLZ4S(QzSessionParamsLZ4S_T *params);
 int qzCheckParamsDeflateExt(QzSessionParamsDeflateExt_T *params);
+int qzCheckParamsZSTD(QzSessionParamsZstd_T *params);
 
 void qzGetParams(QzSessionParamsInternal_T *internal_params,
                  QzSessionParams_T *params);
@@ -597,11 +609,15 @@ void qzGetParamsLZ4S(QzSessionParamsInternal_T *internal_params,
                      QzSessionParamsLZ4S_T *params);
 void qzGetParamsDeflateExt(QzSessionParamsInternal_T *internal_params,
                            QzSessionParamsDeflateExt_T *params);
+void qzGetParamsZSTD(QzSessionParamsInternal_T *internal_params,
+                     QzSessionParamsZstd_T *params);
 
 void qzSetParamsLZ4S(QzSessionParamsLZ4S_T *params,
                      QzSessionParamsInternal_T *internal_params);
 void qzSetParamsLZ4(QzSessionParamsLZ4_T *params,
                     QzSessionParamsInternal_T *internal_params);
+void qzSetParamsZSTD(QzSessionParamsZstd_T *params,
+                     QzSessionParamsInternal_T *internal_params);
 void qzSetParamsDeflate(QzSessionParamsDeflate_T *params,
                         QzSessionParamsInternal_T *internal_params);
 void qzSetParams(QzSessionParams_T *params,

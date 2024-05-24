@@ -157,13 +157,17 @@ extern"C" {
  *  If a thread terminates without invoking tear down and close functions,
  *  memory and hardware are not cleaned up until the application exits.
  *
- *  Additions for QAT 2.0 and beyond platforms though Extending
- *  QzSessionParamsGen3_T, QzDataFormatGen3_T and Using qzSetupSessionGen3
- *  to setup session.
+ *  Changes from Gen4 onwards
  *  1. Addition of LZ4 and LZ4s
- *  2. Addition of post processing functions for out of LZ4s
+ *  2. Addition of post-processing functions for LZ4s
  *  3. Compression level up to 12 for LZ4 and LZ4s
  *  4. Support for gzip header with additional compression algorithms
+ *
+ *  Changes from Gen6 onwards
+ *  1. Addition of ZSTD for both comp and decomp, no post-processing required.
+ *  2. Compression level up to 12 for ZSTD
+ *  3. Static Huffman is no longer supported. QATzip will silently switch to use
+ *     dynamic Huffman.
  *
  *****************************************************************************/
 /**
@@ -229,7 +233,7 @@ typedef enum QzDirection_E {
  *      This enumerated list identifies the data format supported by
  *    QATzip streaming API. A format can be raw deflate data block, deflate
  *    block wrapped by GZip header and footer, or deflate data block wrapped
- *    by GZip extension header and footer.
+ *    by GZip extension header and footer, or a ZSTD block.
  *
  *****************************************************************************/
 typedef enum QzDataFormat_E {
@@ -241,6 +245,8 @@ typedef enum QzDataFormat_E {
     /**< Data is in deflate wrapped by GZip extended header and footer */
     QZ_DEFLATE_RAW,
     /**< Data is in raw deflate format */
+    // QZ_ZSTD,
+    /**< Data is in ZSTD format */
     QZ_FMT_NUM
 } QzDataFormat_T;
 
@@ -276,6 +282,8 @@ typedef enum QzCrcType_E {
     /**< CRC32 checksum */
     QZ_ADLER,
     /**< Adler checksum */
+    QZ_XXHASH,
+    /**< xxhash checksum */
     NONE
     /**< No checksum */
 } QzCrcType_T;
@@ -570,6 +578,13 @@ typedef struct QzSessionParamsDeflateExt_S {
     unsigned char zlib_format;
 } QzSessionParamsDeflateExt_T;
 
+typedef struct QzSessionParamsZstd_S {
+    QzSessionParamsCommon_T common_params;
+    unsigned int historyBuffer;
+    unsigned char blockSize;
+    unsigned char reserved[7];
+} QzSessionParamsZstd_T;
+
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
 #define QZ_DIRECTION_DEFAULT         QZ_DIR_BOTH
 #define QZ_DATA_FORMAT_DEFAULT       QZ_DEFLATE_GZIP_EXT
@@ -598,6 +613,10 @@ typedef struct QzSessionParamsDeflateExt_S {
 #define QZ_LZS_COMP_LVL_MINIMUM          (1)
 #define QZ_LZS_COMP_LVL_MAXIMUM          (12)
 #define QZ_AUTO_SELECT_NUMA_NODE         (-1)
+#define QZ_ZSTD_COMP_LVL_MINIMUM         (1)
+#define QZ_ZSTD_COMP_LVL_MAXIMUM         (12)
+#define QZ_ZSTD_HIST_BUFF_DEFAULT        (64*1024)
+#define QZ_ZSTD_BLOCKSIZE_DEFAULT        (128)
 
 /**
  *****************************************************************************
@@ -1149,6 +1168,9 @@ QATZIP_API int qzSetupSessionLZ4S(QzSession_T *sess,
 
 QATZIP_API int qzSetupSessionDeflateExt(QzSession_T *sess,
                                         QzSessionParamsDeflateExt_T *params);
+
+QATZIP_API int qzSetupSessionZstd(QzSession_T *sess,
+                                  QzSessionParamsZstd_T *params);
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -1159,9 +1181,6 @@ QATZIP_API int qzSetupSessionDeflateExt(QzSession_T *sess,
  *    session or a software based session is available. If no session has
  *    been established - as indicated by the contents of *sess - then this
  *    function will attempt to set up a session using qzInit and qzSetupSession.
- *
- *    The resulting compressed block of data will be composed of one or more
- *    gzip blocks, as per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
  *    buffer.
@@ -1231,6 +1250,144 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
                              unsigned int *dest_len, unsigned int last,
                              uint64_t *ext_rc);
 
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      QATzip crc structure's valid_flags bitmap
+ *
+ * @description
+ *      The following definitions can be used with the crc structure's
+ *      valid_flags.
+ *
+ *      QZ_INPUT_CRC_VALID_MASK indicates if input crc feild is valid
+ *      QZ_OUTPUT_CRC_VALID_MASK indicates if output crc feild is valid
+ *      QZ_CRC32_VALID_MASK indicates if crc type is crc32 in union
+ *      QZ_CRC64_VALID_MASK indicates if crc type is crc64 in union
+ *
+ *****************************************************************************/
+
+#define QZ_INPUT_CRC_VALID_BIT             (4)
+#define QZ_INPUT_CRC_VALID_MASK            (1 << QZ_INPUT_CRC_VALID_BIT)
+#define QZ_OUTPUT_CRC_VALID_BIT            (8)
+#define QZ_OUTPUT_CRC_VALID_MASK           (1 << QZ_OUTPUT_CRC_VALID_BIT)
+#define QZ_CRC32_VALID_BIT                 (12)
+#define QZ_CRC32_VALID_MASK                (1 << QZ_CRC32_VALID_BIT)
+#define QZ_CRC64_VALID_BIT                 (16)
+#define QZ_CRC64_VALID_MASK                (1 << QZ_CRC64_VALID_BIT)
+
+#define QZ_CRC32_VALID(valid_flags) \
+        ((valid_flags >> (32 - QZ_CRC32_VALID_BIT)) & QZ_CRC32_VALID_MASK)
+
+#define QZ_CRC64_VALID(valid_flags) \
+        ((valid_flags >> (32 - QZ_CRC64_VALID_BIT)) & QZ_CRC64_VALID_MASK)
+
+#define QZ_INPUT_CRC_VALID(valid_flags) \
+        ((valid_flags >> (32 - QZ_INPUT_CRC_VALID_BIT)) & QZ_INPUT_CRC_VALID_MASK)
+
+#define QZ_OUTPUT_CRC_VALID(valid_flags) \
+        ((valid_flags >> (32 - QZ_OUTPUT_CRC_VALID_BIT)) & QZ_OUTPUT_CRC_VALID_BIT)
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      crc structure in QzResult_T
+ *
+ * @description
+ *      This structure include the crc input/output value data.
+ *     And crc calculate status, whether input/output valid.
+ *
+ *****************************************************************************/
+typedef struct QzCrcResult_S
+{
+    int status;
+    /**< indicate checksum compute's status */
+    uint32_t valid_flags;
+    /**< indicate whether input and output crc’s are valid */
+    union
+    {
+        uint32_t *crc_32;
+        uint64_t *crc_64;
+    } in_crc;
+    /**< indicate input crc value */
+    union
+    {
+        uint32_t *crc_32;
+        uint64_t *crc_64;
+    } out_crc;
+    /**< indicate output crc value */
+} QzCrcResult_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      QzResult structure for compress2/decompress2 API
+ *
+ * @description
+ *      This structure contains status, custom callback params for async
+ *     callback function, src_len for input buf length and dest_len for
+ *     output buf length, and extend return code for post processing and
+ *     CRC input/output result.
+ *
+ *****************************************************************************/
+typedef struct QzResult_S
+{
+    int status;
+    /**< Status of the offload operation, output only */
+    void *cb_tag;
+    /**< Opaque to QATzip, Users could uses this pointer for tracking      */
+    /**< customer side job structures, Most likely, the caller could track */
+    /**< other variables including the pointers to the src and dest in     */
+    /**< async mode, could set to NULL */
+    unsigned int src_len;
+    /**< Length of source buffer. Modified to number of bytes consumed */
+    unsigned int dest_len;
+    /**< Length of destination buffer. Modified to length of produced */
+    /**< data when function returns */
+    uint64_t ext_rc;
+    /**< Extended return codes, output only */
+    QzCrcResult_T *crc;
+    /**< crc result include input/output, could be NULL */
+    void *extension_result;
+    /**< This pointer is for extensibility of QzResult, please don't use */
+    /**< this pointer and always set this pointer as NULL */
+} QzResult_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *
+ * @description
+ *      This callback function will be called in asynchronous compression and
+ *      decompression API. Function implementation should be provided by user
+ *      and comply with this prototype's rules.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in,out]  res      it's same as compress2/decompress2 API's last
+ *                          parameters, include offloading result.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      None
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+typedef int (*qzAsyncCallbackFn)(QzResult_T *res);
 
 /**
  *****************************************************************************
@@ -1242,9 +1399,6 @@ QATZIP_API int qzCompressExt(QzSession_T *sess, const unsigned char *src,
  *    session or a software based session is available. If no session has been
  *    established - as indicated by the contents of *sess - then this function
  *    will attempt to set up a session using qzInit and qzSetupSession.
- *
- *    The resulting compressed block of data will be composed of one or more
- *    gzip blocks, as per RFC 1952.
  *
  *    This function will place completed compression blocks in the output
  *    buffer and put CRC32 or CRC64 checksum for compressed input data in
@@ -1518,9 +1672,6 @@ QATZIP_API int qzCompress2(QzSession_T *sess, const unsigned char *src,
  *    session or a software based session is available. If no session has been
  *    established - as indicated by the contents of *sess - then this function
  *    will attempt to set up a session using qzInit and qzSetupSession.
- *
- *    The input compressed block of data will be composed of one or more
- *    gzip blocks, as per RFC 1952.
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -1895,6 +2046,60 @@ QATZIP_API int qzClose(QzSession_T *sess);
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      Compress a buffer with asynchronous or synchronous model
+ *
+ * @description
+ *      These functions has the same compression ability as "qzCompress",
+ *      but with asynchronous or synchronous model.
+ *
+ *      If user provide the callback function(callback is not NULL), it would
+ *      work as asynchronous model. Otherwise, it would work as synchronous
+ *      model, just like "qzCompress".
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      No
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess       Session handle
+ *                             (pointer to opaque instance and session data)
+ * @param[in]       src        Pointer to source buffer.
+ * @param[in]       dest       Pointer to destination buffer.
+ * @param[in]       callback   User-defined callback Function to be called upon
+ *                             completion of the compression operation. it could
+ *                             be NULL, then it's an synchronous call, otherwise,
+ *                             it's asynchronous call.
+ * @param[in,out]   qzResults  Pointer to QzResult, It have to allocate by user.
+ *
+ * @retval QZ_OK               Request submit successfully.
+ * @retval QZ_FAIL             Request submit failed.
+ * @retval QZ_PARAMS           *sess is NULL or member of params is invalid.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      None
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzCompress2(QzSession_T *sess, const unsigned char *src,
+                           unsigned char *dest, qzAsyncCallbackFn callback,
+                           QzResult_T *qzResults);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      Get current QAT status
  *
  * @description
@@ -2092,6 +2297,8 @@ QATZIP_API int qzSetDefaultsLZ4(QzSessionParamsLZ4_T *defaults);
 QATZIP_API int qzSetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
 
 QATZIP_API int qzSetDefaultsDeflateExt(QzSessionParamsDeflateExt_T *defaults);
+
+QATZIP_API int qzSetDefaultsZstd(QzSessionParamsZstd_T *defaults);
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -2138,6 +2345,63 @@ QATZIP_API int qzGetDefaultsLZ4(QzSessionParamsLZ4_T *defaults);
 QATZIP_API int qzGetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
 
 QATZIP_API int qzGetDefaultsDeflateExt(QzSessionParamsDeflateExt_T *defaults);
+
+QATZIP_API int qzGetDefaultsZstd(QzSessionParamsZstd_T *defaults);
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Decompress a buffer with asynchronous or synchronous model
+ *
+ * @description
+ *      These functions has the same decompression ability as "qzDecompress",
+ *      but with asynchronous or synchronous model.
+ *
+ *      If user provide the callback function(callback is not NULL), it would
+ *      work as asynchronous model. Otherwise, it would work as synchronous
+ *      model, just like "qzDecompress".
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      No
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess       Session handle
+ *                             (pointer to opaque instance and session data)
+ * @param[in]       src        Pointer to source buffer containing compressed data.
+ * @param[in]       dest       Pointer to destination buffer where decompressed
+ *                             data will be stored.
+ * @param[in]       callback   User-defined callback function to be called upon
+ *                             completion of the decompression operation. it could
+ *                             be NULL, then it's an synchronous call, otherwise,
+ *                             it's asynchronous call.
+ * @param[in,out]   qzResults  Pointer to QzResult, It have to allocate by user.
+ *
+ * @retval QZ_OK               Decompression request submitted successfully.
+ * @retval QZ_FAIL             Decompression request submission failed.
+ * @retval QZ_PARAMS           *sess is NULL or member of params is invalid.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      None
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzDecompress2(QzSession_T *sess, const unsigned char *src,
+                            unsigned char *dest, qzAsyncCallbackFn callback,
+                            QzResult_T *qzResults);
+
 /**
  *****************************************************************************
  * @ingroup qatZip

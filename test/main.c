@@ -133,7 +133,8 @@ typedef enum {
     TEST_DEFLATE_4B,
     TEST_LZ4,
     TEST_LZ4S,
-    TEST_ZLIB
+    TEST_ZLIB,
+    TEST_ZSTD
 } TEST_FORMAT_T;
 
 typedef struct CPUCore_S {
@@ -614,6 +615,35 @@ int qzSetupLZ4S(QzSession_T *sess, TestArg_T *arg)
     return QZ_OK;
 }
 
+int qzSetupZSTD(QzSession_T *sess, TestArg_T *arg)
+{
+    int status;
+
+    QzSessionParamsZstd_T params;
+
+    status = qzGetDefaultsZstd(&params);
+    if (status < 0) {
+        QZ_ERROR("Get defaults params error with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    params.common_params.comp_lvl = arg->comp_lvl;
+    params.common_params.comp_algorithm = arg->comp_algorithm;
+    params.common_params.hw_buff_sz = arg->hw_buff_sz;
+    params.common_params.polling_mode = arg->polling_mode;
+    params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
+    params.common_params.max_forks = arg->max_forks;
+    params.common_params.sw_backup = arg->sw_backup;
+
+    status = qzSetupSessionZstd(sess, &params);
+    if (status) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    return QZ_OK;
+}
+
 int qzInitSetupsessionExt(QzSession_T *sess, TestArg_T *arg)
 {
     int rc = QZ_OK;
@@ -673,6 +703,9 @@ int qzInitSetupsession(QzSession_T *sess, TestArg_T *arg)
             break;
         case TEST_ZLIB:
             rc = qzSetupDeflateExt(sess, arg);
+            break;
+        case TEST_ZSTD:
+            rc = qzSetupZSTD(sess, arg);
             break;
         default:
             QZ_ERROR("Unsupported data format\n");
@@ -6346,7 +6379,7 @@ done:
     "    -v                    verify, disabled by default\n"                   \
     "    -e init engine        enable | disable. enabled by default\n"          \
     "    -s init session       enable | disable. enabled by default\n"          \
-    "    -A comp_algorithm     deflate | lz4 | lz4s\n"                          \
+    "    -A comp_algorithm     deflate | lz4 | lz4s | zstd\n"                   \
     "    -B swBack             0 means disable sw\n"                            \
     "                          1 means enable sw\n"                             \
     "    -C hw_buff_sz         default 64K\n"                                   \
@@ -6359,7 +6392,7 @@ done:
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
-    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s | zlib\n"\
+    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s | zlib | zstd\n"\
     "                          For zlib and deflate raw the block size must be same\n"\
     "                          as HW buffer size, e.g '-b' and '-C' should be same.\n" \
     "    -T huffmanType        static | dynamic\n"                              \
@@ -6480,6 +6513,8 @@ int main(int argc, char *argv[])
                 args.comp_algorithm = QZ_LZ4;
             } else if (strcmp(optarg, "lz4s") == 0) {
                 args.comp_algorithm = QZ_LZ4s;
+            } else if (strcmp(optarg, "zstd") == 0) {
+                args.comp_algorithm = QZ_ZSTD;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;
@@ -6500,6 +6535,8 @@ int main(int argc, char *argv[])
                 args.test_format = TEST_LZ4S;
             } else if (strcmp(optarg, "zlib") == 0) {
                 args.test_format = TEST_ZLIB;
+            } else if (strcmp(optarg, "zstd") == 0) {
+                args.test_format = TEST_ZSTD;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;

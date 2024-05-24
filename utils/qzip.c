@@ -520,6 +520,33 @@ int qzipSetupSessionLZ4(QzSession_T *sess, QzipParams_T *params)
     return OK;
 }
 
+int qzipSetupSessionZSTD(QzSession_T *sess, QzipParams_T *params)
+{
+    int status;
+    QzSessionParamsZstd_T zstd_params;
+
+    status = qzGetDefaultsZstd(&zstd_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    zstd_params.common_params.direction = params->direction;
+    zstd_params.common_params.comp_lvl = params->comp_lvl;
+    zstd_params.common_params.comp_algorithm = params->comp_algorithm;
+    zstd_params.common_params.hw_buff_sz = params->hw_buff_sz;
+    zstd_params.common_params.polling_mode = params->polling_mode;
+    zstd_params.common_params.req_cnt_thrshold = params->req_cnt_thrshold;
+
+    status = qzSetupSessionZstd(sess, &zstd_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    return OK;
+}
+
 int qzipSetupSessionLZ4S(QzSession_T *sess, QzipParams_T *params)
 {
     int status;
@@ -577,6 +604,12 @@ int qatzipSetup(QzSession_T *sess, QzipParams_T *params)
             QZ_ERROR("qzipSetupSessionLZ4 fail with error: %d\n", status);
         }
         break;
+    case QZIP_ZSTD:
+        status = qzipSetupSessionZSTD(sess, params);
+        if (status != OK) {
+            QZ_ERROR("qzipSetupSessionZSTD fail with error: %d\n", status);
+        }
+        break;
     case QZIP_LZ4S_BK:
         status = qzipSetupSessionLZ4S(sess, params);
         if (status != OK) {
@@ -613,6 +646,9 @@ QzSuffix_T getSuffix(const char *filename)
     }  else if (len >= strlen(SUFFIX_LZ4) &&
                 !strcmp(filename + (len - strlen(SUFFIX_LZ4)), SUFFIX_LZ4)) {
         s = E_SUFFIX_LZ4;
+    }  else if (len >= strlen(SUFFIX_ZSTD) &&
+                !strcmp(filename + (len - strlen(SUFFIX_ZSTD)), SUFFIX_ZSTD)) {
+        s = E_SUFFIX_ZSTD;
     }  else if (len >= strlen(SUFFIX_LZ4S) &&
                 !strcmp(filename + (len - strlen(SUFFIX_LZ4S)), SUFFIX_LZ4S)) {
         s = E_SUFFIX_LZ4S;
@@ -627,6 +663,12 @@ bool hasSuffix(const char *fname)
     case QZIP_LZ4_FH:
         if (len >= strlen(SUFFIX_LZ4) &&
             !strcmp(fname + (len - strlen(SUFFIX_LZ4)), SUFFIX_LZ4)) {
+            return 1;
+        }
+        break;
+    case QZIP_ZSTD:
+        if (len >= strlen(SUFFIX_ZSTD) &&
+            !strcmp(fname + (len - strlen(SUFFIX_ZSTD)), SUFFIX_ZSTD)) {
             return 1;
         }
         break;
@@ -690,6 +732,16 @@ QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
         } else {
             return E_CHECK_SUFFIX_OK;
         }
+    } else if (E_SUFFIX_ZSTD == suffix) {
+        if (!is_format_set) {
+            g_params_th.data_fmt = QZIP_ZSTD;
+            return E_CHECK_SUFFIX_OK;
+        }
+        if (QZIP_ZSTD != g_params_th.data_fmt) {
+            return E_CHECK_SUFFIX_FORMAT_UNMATCH;
+        } else {
+            return E_CHECK_SUFFIX_OK;
+        }
     } else {    /* Unsupported suffix */
         return E_CHECK_SUFFIX_UNSUPPORT;
     }
@@ -708,6 +760,9 @@ int makeOutName(const char *in_name, const char *out_name,
         if (g_params_th.data_fmt == QZIP_LZ4_FH) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4);
+        } else if (g_params_th.data_fmt == QZIP_ZSTD) {
+            snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
+                     SUFFIX_ZSTD);
         } else if (g_params_th.data_fmt == QZIP_LZ4S_BK) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4S);
@@ -720,7 +775,7 @@ int makeOutName(const char *in_name, const char *out_name,
         }
     } else {
         if (!hasSuffix(in_name)) {
-            QZ_ERROR("%s: Wrong suffix. Supported suffix: 7z/gz/lz4\n",
+            QZ_ERROR("%s: Wrong suffix. Supported suffix: 7z/gz/lz4/zst\n",
                      in_name);
             return -1;
         }
@@ -729,6 +784,8 @@ int makeOutName(const char *in_name, const char *out_name,
         if (NULL == out_name) {
             if (g_params_th.data_fmt == QZIP_LZ4_FH) {
                 oname[strlen(in_name) - strlen(SUFFIX_LZ4)] = '\0';
+            } else if (g_params_th.data_fmt == QZIP_ZSTD) {
+                oname[strlen(in_name) - strlen(SUFFIX_ZSTD)] = '\0';
             } else {
                 oname[strlen(in_name) - strlen(SUFFIX_GZ)] = '\0';
             }
@@ -938,4 +995,3 @@ exit:
         exit(ret);
     }
 }
-

@@ -32,6 +32,7 @@ QATzip is a user-space library built on top of the Intel&reg; QuickAssist Techno
 | `QZ_DEFLATE_RAW`       | deflate\* | QAT 1.x & QAT 2.0  | Data is in raw DEFLATE\* without any additional header. (Compression only; decompression falls back to software.) |
 | `QZ_LZ4`               | lz4\*     | QAT 2.0            | Data is in LZ4\* wrapped by an lz4\* frame.                                                   |
 | `QZ_LZ4S`              | lz4s\*    | QAT 2.0            | Data is in LZ4S\* blocks.                                                                     |
+| `QZ_ZSTD`              | zstd\*    | QAT 5.x            | Data is in zstd\* wrapped by zstd\* frame.                                                    |
 
 ## Features
 

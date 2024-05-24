@@ -43,6 +43,7 @@
 #include <pthread.h>
 #include <lz4frame.h>
 #include <lz4.h>
+#include <zstd.h>
 
 #ifdef HAVE_QAT_HEADERS
 #include <qat/cpa.h>
@@ -74,6 +75,7 @@ static void gen_qatzip_hdr(gz_header *hdr)
     hdr->os = 255;
 }
 
+/* Deflate compress and decompress SW fallback */
 int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
                         unsigned int *src_len, unsigned char *dest,
                         unsigned int *dest_len, unsigned int last)
@@ -445,6 +447,7 @@ out:
     return ret;
 }
 
+/* LZ4 compress and decompress SW fallback */
 int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
                     unsigned int *src_len, unsigned char *dest,
                     unsigned int *dest_len, unsigned int last)
@@ -581,6 +584,121 @@ out:
     return ret;
 }
 
+/* ZSTD compress and decompress SW fallback */
+int qzZSTDSWCompress(QzSession_T *sess, const unsigned char *src,
+                     unsigned int *src_len, unsigned char *dest,
+                     unsigned int *dest_len, unsigned int last)
+{
+    size_t compress_out = 0;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+
+    ZSTD_CCtx *cctx = ZSTD_createCCtx();
+    /* ZSTD sw fallback better follow HW history buffer size */
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_windowLog, 16);
+    compress_out = ZSTD_compressCCtx(cctx, dest, *dest_len, src, *src_len,
+                                     qz_sess->sess_params.comp_lvl);
+    if (ZSTD_isError(compress_out)) {
+        QZ_ERROR("ZSTD_compress error: %s\n", ZSTD_getErrorName(compress_out));
+        goto zstd_compress_fail;
+    }
+    *dest_len = compress_out;
+    QZ_DEBUG("Exit qzZSTDSWCompress: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+
+    ZSTD_freeCCtx(cctx);
+    return QZ_OK;
+
+zstd_compress_fail:
+    ZSTD_freeCCtx(cctx);
+    *src_len = 0;
+    *dest_len = 0;
+    return QZ_FAIL;
+}
+
+int qzZSTDSWDecompress(QzSession_T *sess, const unsigned char *src,
+                       unsigned int *src_len, unsigned char *dest,
+                       unsigned int *dest_len)
+{
+    size_t in_sz = 0;
+    size_t out_sz = 0;
+    size_t ret = QZ_OK;
+    QZ_DEBUG("Enter qzZSTDSWDecompress: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+
+    ZSTD_DCtx *dctx = ZSTD_createDCtx();
+    ZSTD_DCtx_setParameter(dctx, ZSTD_d_windowLogMax, 17);
+    in_sz = *src_len;
+    out_sz = *dest_len;
+
+    ret = ZSTD_decompressDCtx(dctx, dest, out_sz, src, in_sz);
+    if (ZSTD_isError(ret)) {
+        QZ_ERROR("ZSTD_decompressDCtx error: %s\n", ZSTD_getErrorName(ret));
+        goto zstd_decompress_fail;
+    }
+
+    *src_len = in_sz;
+    *dest_len = ret;
+    QZ_DEBUG("Exit qzLZ4SWDecompress: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+
+    ZSTD_freeDCtx(dctx);
+    return QZ_OK;
+
+zstd_decompress_fail:
+    ZSTD_freeDCtx(dctx);
+    *src_len = 0;
+    *dest_len  = 0;
+    return QZ_FAIL;
+}
+
+int qzSWDecompressMultiZSTD(QzSession_T *sess, const unsigned char *src,
+                            unsigned int *src_len, unsigned char *dest,
+                            unsigned int *dest_len)
+{
+    size_t ret = QZ_OK;
+    QZ_DEBUG("Enter qzZSTDSWDecompress: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+
+    ZSTD_DStream *dctx = ZSTD_createDStream();
+    ZSTD_initDStream(dctx);
+    ZSTD_DCtx_setParameter(dctx, ZSTD_d_windowLogMax, 17);
+
+    ZSTD_inBuffer input = { src, *src_len, 0 };
+    ZSTD_outBuffer output = { dest, *dest_len, 0 };
+    /* Given a valid frame, zstd won't consume the last byte of the frame
+        * until it has flushed all of the decompressed data of the frame.
+        * Therefore, instead of checking if the return code is 0, we can
+        * decompress just check if input.pos < input.size.
+        */
+    while (input.pos < input.size) {
+        /* The return code is zero if the frame is complete, but there may
+            * be multiple frames concatenated together. Zstd will automatically
+            * reset the context when a frame is complete. Still, calling
+            * ZSTD_DCtx_reset() can be useful to reset the context to a clean
+            * state, for instance if the last decompression call returned an
+            * error.
+            */
+        ret = ZSTD_decompressStream(dctx, &output, &input);
+        if (ZSTD_isError(ret)) {
+            QZ_ERROR("ZSTD_decompressStream error: %s\n", ZSTD_getErrorName(ret));
+            goto zstd_decompress_fail;
+        }
+    }
+
+    *src_len = input.pos;
+    *dest_len = output.pos;
+    QZ_DEBUG("Exit ZSTD_decompressStream: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
+
+    ZSTD_freeDStream(dctx);
+    return QZ_OK;
+
+zstd_decompress_fail:
+    ZSTD_freeDStream(dctx);
+    *src_len = 0;
+    *dest_len  = 0;
+    return QZ_FAIL;
+}
 
 /* The software failover function for compression request */
 int qzSWCompress(QzSession_T *sess, const unsigned char *src,
@@ -610,6 +728,9 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
         break;
     case LZ4_FH:
         ret = qzLZ4SWCompress(sess, src, src_len, dest, dest_len, last);
+        break;
+    case ZSTD:
+        ret = qzZSTDSWCompress(sess, src, src_len, dest, dest_len, last);
         break;
     default:
         QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
@@ -650,6 +771,9 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     case LZ4_FH:
         ret = qzLZ4SWDecompress(sess, src, src_len, dest, dest_len);
         break;
+    case ZSTD:
+        ret = qzZSTDSWDecompress(sess, src, src_len, dest, dest_len);
+        break;
     default:
         QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
         *src_len = 0;
@@ -688,6 +812,9 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
         break;
     case LZ4_FH:
         ret = qzSWDecompressMultiLZ4(sess, src, src_len, dest, dest_len);
+        break;
+    case ZSTD:
+        ret = qzSWDecompressMultiZSTD(sess, src, src_len, dest, dest_len);
         break;
     default:
         QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);

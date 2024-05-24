@@ -117,6 +117,8 @@ int main(int argc, char **argv)
                 g_params_th.data_fmt = QZIP_LZ4_FH;
             } else if (strcmp(optarg, "lz4s") == 0) {
                 g_params_th.data_fmt = QZIP_LZ4S_BK;
+            } else if (strcmp(optarg, "zstd") == 0) {
+                g_params_th.data_fmt = QZIP_ZSTD;
             } else {
                 printf("Error gzip header format arg: %s\n", optarg);
                 return -1;
@@ -319,9 +321,17 @@ int main(int argc, char **argv)
                         }
                         processFile(&g_sess, argv[optind++], out_name,
                                     g_decompress == 0);
+                    } else if (suffix == E_SUFFIX_ZSTD) {
+                        if (g_params_th.data_fmt != QZIP_ZSTD) {
+                            QZ_ERROR("Error: Suffix(.zst) doesn't match the data format,"
+                                     "please confirm the data format\n");
+                            exit(ERROR);
+                        }
+                        processFile(&g_sess, argv[optind++], out_name,
+                                    g_decompress == 0);
                     } else {
                         QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: "
-                                 "7z/gz/lz4.\n", argv[optind]);
+                                 "7z/gz/lz4/zst.\n", argv[optind]);
                         exit(ERROR);
                     }
                 }  else {
