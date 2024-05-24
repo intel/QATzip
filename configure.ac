@@ -103,6 +103,10 @@ AC_CHECK_LIB([lz4], [LZ4F_compressFrame], [],
 # Internal xxhash with namespaced symbols
 AC_DEFINE([XXH_NAMESPACE], [QATZIP_], [Prefix xxhash API with QATZIP_])
 
+#check for zstd lib
+AC_CHECK_HEADER([zstd.h], , [AC_MSG_ERROR([zstd.h not found])])
+AC_CHECK_LIB([zstd], [ZSTD_compressCCtx], ,AC_MSG_ERROR([ZSTD_compressCCtx not found]))
+
 # QAT configuration
 AC_ARG_WITH([ICP_ROOT],
     [AS_HELP_STRING([--with-ICP_ROOT=PATH], [Path to QAT driver source])],

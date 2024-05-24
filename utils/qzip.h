@@ -169,6 +169,7 @@
 #define SUFFIX_7Z      ".7z"
 #define SUFFIX_LZ4     ".lz4"
 #define SUFFIX_LZ4S    ".lz4s"
+#define SUFFIX_ZSTD    ".zst"
 
 #define QZIP_GET_LOWER_32BITS(v)  ((v) & 0xFFFFFFFF)
 
@@ -181,6 +182,7 @@ typedef enum QzSuffix_E {
     E_SUFFIX_7Z,
     E_SUFFIX_LZ4,
     E_SUFFIX_LZ4S,
+    E_SUFFIX_ZSTD,
     E_SUFFIX_UNKNOWN = 999
 } QzSuffix_T;
 
@@ -203,6 +205,8 @@ typedef enum QzipDataFormat_E {
     /**< Data is in LZ4 format with frame headers */
     QZIP_LZ4S_BK,
     /**< Data is in LZ4s format with block headers */
+    QZIP_ZSTD,
+    /**< Data is in zstd format with frame headers */
 } QzipDataFormat_T;
 
 typedef struct QzipParams_S {
