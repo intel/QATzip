@@ -111,6 +111,7 @@ This release was validated on the following:
 * Suggest GCC\* of version 4.8.5 or higher
 * lz4\* library of version 1.8.3 or higher
 * zstd\* library of version 1.5.0 or higher
+* numactl-devel\*
 
 
 ## Additional Information
