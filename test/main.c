@@ -2516,6 +2516,9 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
     decomp_src = calloc(orig_sz, 1);
 
     if (qzGetDefaults(&comp_params) != QZ_OK) {
+        free(orig_src);
+        free(comp_src);
+        free(decomp_src);
         QZ_ERROR("Err: fail to get default params.\n");
         return NULL;
     }
@@ -2690,6 +2693,9 @@ void *testqzEndStreamInvalidParam(void *arg, int test_no)
     decomp_src = calloc(orig_sz, 1);
 
     if (qzGetDefaults(&comp_params) != QZ_OK) {
+        free(orig_src);
+        free(comp_src);
+        free(decomp_src);
         QZ_ERROR("Err: fail to get default params.\n");
         return NULL;
     }
