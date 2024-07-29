@@ -10,12 +10,12 @@
 - [Additional Information](#additional-information)
 - [Limitations](#limitations)
 - [Installation Instructions](#installation-instructions)
-  - [Build Intel&reg; QuickAssist Technology Driver](#build-intel-quickassist-technology-driver)
-  - [Install QATzip As Root User](#install-qatzip-as-root-user)
-  - [Install QATzip As Non-root User](#install-qatzip-as-non-root-user)
+  - [Install with the in-tree QAT package](#install-with-the-in-tree-QAT-package)
+  - [Install with the out-of-tree QAT package](#install-with-the-out-of-tree-QAT-package)
+  - [Configuration](#configuration)
   - [Enable qzstd](#enable-qzstd)
-  - [Test QATzip](#test-qatzip)
-  - [Performance Test With QATzip](#performance-test-with-qatzip)
+- [Test QATzip](#test-qatzip)
+- [Performance Test With QATzip](#performance-test-with-qatzip)
 - [QATzip API manual](#qatzip-api-manual)
 - [Intended Audience](#intended-audience)
 - [Open Issues](#open-issues)
@@ -74,7 +74,7 @@ contained in the file `LICENSE.GPL` within the `config_file` folder.
 * Provide streaming interface of compression and decompression to achieve better compression
   ratio and throughput for data sets that are submitted piecemeal.
 * 'qzip' utility supports compression from regular file, pipeline and block device.
-* For QATzip GZIP\* format, try hardware decompression 1st before switch to software decompression.
+* For QATzip GZIP\* format, try hardware decompression first before switching to software decompression.
 * Enable adaptive polling mechanism to save CPU usage in stress mode.
 * 'qzip' utility supports compression files and directories into 7z format.
 * Support QATzip Gzip\* format, it includes 10 bytes header and 8 bytes footer:
@@ -160,58 +160,51 @@ This release was validated on the following:
 
 ## Installation Instructions
 
-### Build Intel&reg; QuickAssist Technology Driver
+### Install with the in-tree QAT package
 
-Please follow the instructions contained in:
+* Please refer to [link][11].
 
-**For Intel&reg; C62X Series Chipset:**
+### Install with the out-of-tree QAT package
 
-[Intel&reg; QuickAssist Technology Software for Linux\* - Getting Started Guide - HW version 1.7][11]
+1. The Installation of the out-of-tree QAT package refer to [link][12].
+> **Note**<br>
+> - If you run QAT as **non-root** user, more steps need to be manually applied, please refer to [link][13].<br>
+> - If SVM is not enabled, memory passed to QAT hardware must be DMA’able, Intel provides a USDM component
+> which allocates/frees DMA-able memory. Please refer to [link][14] for USDM setting.
 
-**For Intel&reg; Communications Chipset 89XX Series:**
-
-[Intel&reg; Communications Chipset 89xx Series Software for Linux\* - Getting Started Guide][12]
-
-**For Intel&reg; 4XXX Series:**
-
-[Intel&reg; QuickAssist Technology (Intel&reg; QAT) Software for Linux\* Getting Started Guide – Hardware Version 2.0][13]
-
-
-### Install QATzip As Root User
-
-**Set below environment variable**
-
-`ICP_ROOT`: the root directory of your QAT driver source tree
-
-`QZ_ROOT`: the root directory of your QATzip source tree
-
-**Enable huge page**
-
-```bash
-    echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
-    rmmod usdm_drv
-    insmod $ICP_ROOT/build/usdm_drv.ko max_huge_pages=1024 max_huge_pages_per_process=48
+2. Install the package dependencies by running the below command:
+```
+sudo dnf install -y autoconf automake libtool zlib-devel lz4-devel
+For Debian-based distros like Ubuntu, use these names for the latter two packages:
+sudo apt -y install zlib1g-dev liblz4-dev
 ```
 
-**Compile and install QATzip**
+3. Configure the QATzip library by running the following commands:
+```
+cd QATzip/
+export QZ_ROOT=`pwd`
+export ICP_ROOT=/QAT/PACKAGE/PATH
+./autogen.sh
+./configure
+```
+> **Note**<br>
+> For more configure options, please run "./configure -h" for help.
 
-```bash
-    cd $QZ_ROOT
-    ./autogen.sh
-    ./configure --with-ICP_ROOT=$ICP_ROOT
-    make clean
-    make
-    make install
+4. Build and install the QATzip library by running the below commands:
+```
+make clean
+make
+sudo make install
 ```
 
-For more configure options, please run "./configure -h" for help
+### Configuration
 
-**Update configuration files**
+> **Note**<br>
+> This section is only required when you are using out-of-tree QAT package. if you are
+> using qatlib with in-tree QAT package, please refer to [link][16] for details on configuring qatlib.
 
-___Have to update those file, Otherwise QATzip will be Unavailable.___
-
-QAT's the programmer’s guide which provides information on the architecture of the software
-and usage guidelines. it allows customization of runtime operation.
+QAT programmer’s guide which provides information on the architecture of the software
+and usage guidelines, allows customization of runtime operation.
 
 * [Intel&reg; QAT 1.7 linux Programmer's Guide][9]
 * [Intel&reg; QAT 2.0 linux Programmer's Guide][10]
@@ -221,15 +214,15 @@ old conf file(under /etc/) by them. The detailed info about Configurable options
 refer Programmer's Guide manual.
 
 The process section name(in configuration file) is the key change for QATzip.
-there are two way to change:
+There are two way to change:
 * QAT Driver default conf file does not contain a [SHIM] section which the Intel&reg; QATzip
-  requires by default. you can follow below step to replace them.
+  requires by default. You can follow below step to replace them.
 * The default section name in the QATzip can be modified if required by setting the environment
 variable "QAT_SECTION_NAME".
 
-To update the configuration file, copy the configure file(s) from directory of
+To update the configuration file, copy the configure file(s) from the directory of
 `$QZ_ROOT/config_file/$YOUR_PLATFORM/$CONFIG_TYPE/*.conf`
-to directory of `/etc`
+to the directory of `/etc`
 
 `YOUR_PLATFORM`: the QAT hardware platform, c6xx for Intel&reg; C62X Series
 Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
@@ -247,12 +240,9 @@ Chipset, dh895xcc for Intel&reg; Communications Chipset 8925 to 8955 Series
 With current configuration, each PCI-e device in C6XX platform could support
 32 processes in maximum.
 
-### Install QAT As Non-root User
-  Please refer to [Intel&reg; QuickAssist Technology (Intel&reg; QAT) Software for Linux\* Getting Started Guide][13] section "3.8 Running Applications as Non-Root User".
-
 ### Enable qzstd
-If you want to enable lz4s + postprocessing pipeline, you have to compile qzstd. which
-is a sample app to support ZSTD format compression/decompression. before enabling qzstd,
+If you want to enable lz4s + postprocessing pipeline, you have to compile qzstd which
+is a sample app to support ZSTD format compression/decompression. Before enabling qzstd,
 make sure that you have installed zstd static lib.
 
 **Compile qzstd**
@@ -267,10 +257,10 @@ make sure that you have installed zstd static lib.
 **test qzstd**
 
 ```bash
-    qzstd -k $your_input_file
+    qzstd $your_input_file
 ```
 
-### Test QATzip
+## Test QATzip
 
 Run the following command to check if the QATzip is setup correctly for
 compressing or decompressing files:
@@ -279,26 +269,26 @@ compressing or decompressing files:
     qzip -k $your_input_file  -O gzipext -A deflate
 ```
 
-#### File compression in 7z:
+### File compression in 7z:
 ```bash
     qzip -O 7z FILE1 FILE2 FILE3... -o result.7z
 ```
-#### Dir compression in 7z:
+### Dir compression in 7z:
 ```bash
     qzip -O 7z DIR1 DIR2 DIR3... -o result.7z
 ```
-#### Decompression file in 7z:
+### Decompression file in 7z:
 ```bash
     qzip -d result.7z
 ```
-#### Dir Decompression with -R:
+### Dir Decompression with -R:
 If the DIR contains files that are compressed by qzip and using gzip/gzipext
 format, then it should be add `-R` option to decompress them:
 ```bash
     qzip -d -R DIR
 ```
 
-### Performance Test With QATzip
+## Performance Test With QATzip
 
 Please run the QATzip (de)compression performance test with the following command.
 Please update the drive configuration and process/thread argument in run_perf_test.sh
@@ -314,6 +304,7 @@ in run_perf_test.sh should be changed accordingly, at least 6 times of threads n
 ## QATzip API Manual
 
 Please refer to file `QATzip-man.pdf` under the `docs` folder
+Please refer to the [link][15] for QAT documents
 
 ## Open Issues
 Known issues relating to the QATzip are described in this section.
@@ -367,7 +358,10 @@ and/or other countries.
 [7]:https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md
 [8]:https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md
 [9]:https://www.intel.com/content/www/us/en/content-details/710060/intel-quickassist-technology-software-for-linux-programmer-s-guide-hw-version-1-7.html
-[10]:https://www.intel.com/content/www/us/en/content-details/743912/intel-quickassist-technology-intel-qat-software-for-linux-programmers-guide-hardware-version-2-0.html
-[11]:https://www.intel.com/content/www/us/en/content-details/710059/intel-quickassist-technology-software-for-linux-getting-started-guide-customer-enabling-release.html
-[12]:https://www.intel.com/content/www/us/en/content-details/710089/intel-communications-chipset-89xx-series-software-for-linux-getting-started-guide.html
-[13]:https://www.intel.com/content/www/us/en/content-details/632506/intel-quickassist-technology-intel-qat-software-for-linux-getting-started-guide-hardware-version-2-0.html
+[10]:https://intel.github.io/quickassist/PG/configuration_files_index.html
+[11]:https://intel.github.io/quickassist/qatlib/qatzip.html
+[12]:https://intel.github.io/quickassist/GSG/2.X/installation.html
+[13]:https://intel.github.io/quickassist/GSG/2.X/installation.html#running-applications-as-non-root-user
+[14]:https://intel.github.io/quickassist/PG/infrastructure_memory_management.html#huge-pages
+[15]:https://intel.github.io/quickassist
+[16]:https://intel.github.io/quickassist/qatlib/configuration.html#
