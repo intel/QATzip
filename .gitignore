@@ -32,6 +32,6 @@ test/*.o
 
 # app
 test/bt
-test/test
+test/qatzip-test
 utils/qzip
 utils/qzstd
