@@ -255,7 +255,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     FILE *src_file = NULL;
     FILE *dst_file = NULL;
     unsigned int bytes_read = 0;
-    unsigned long bytes_processed = 0;
+    unsigned int bytes_lookahead = 0;
+    long offset_revert = 0;
     unsigned int ratio_idx = 0;
     const unsigned int ratio_limit =
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
@@ -326,14 +327,15 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
 
         puts((is_compress) ? "Compressing..." : "Decompressing...");
 
+        bytes_lookahead = bytes_read;
         ret = doProcessBuffer(sess, src_buffer, &bytes_read, dst_buffer,
                               dst_buffer_size, time_list_head, dst_file,
                               &dst_file_size, is_compress);
 
         if (QZ_DATA_ERROR == ret || QZ_BUF_ERROR == ret) {
-            bytes_processed += bytes_read;
             if (0 != bytes_read) {
-                if (-1 == fseek(src_file, bytes_processed, SEEK_SET)) {
+                offset_revert = (long)bytes_read - (long)bytes_lookahead;
+                if (-1 == fseek(src_file, offset_revert, SEEK_CUR)) {
                     ret = ERROR;
                     goto exit;
                 }
