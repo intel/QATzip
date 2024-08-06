@@ -65,7 +65,7 @@ int main(int argc, char **argv)
         return QZSTD_ERROR;
     }
 
-    const char *optPatten = "dhC:L:o:r:P:m:";
+    const char *optPatten = "dhC:L:o:r:P:m:g:";
     char *stop = NULL;
     int ch;
     while ((ch = getopt(argc, argv, optPatten)) >= 0) {
@@ -110,6 +110,22 @@ int main(int argc, char **argv)
                 g_sess_params.lz4s_mini_match != 4) {
                 QZ_ERROR("%s : mini_match can only set 3 or 4!\n", QZSTD_ERROR_TYPE);
                 return QZSTD_ERROR;
+            }
+            break;
+        case 'g':
+            if (strcmp(optarg, "none") == 0) {
+                qzSetLogLevel(LOG_NONE);
+            } else if (strcmp(optarg, "error") == 0) {
+                qzSetLogLevel(LOG_ERROR);
+            } else if (strcmp(optarg, "warn") == 0) {
+                qzSetLogLevel(LOG_WARNING);
+            } else if (strcmp(optarg, "info") == 0) {
+                qzSetLogLevel(LOG_INFO);
+            } else if (strcmp(optarg, "debug") == 0) {
+                qzSetLogLevel(LOG_DEBUG1);
+            } else {
+                printf("Error log level: %s\n", optarg);
+                return -1;
             }
             break;
         default:

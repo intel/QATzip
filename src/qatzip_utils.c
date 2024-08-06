@@ -145,10 +145,9 @@ static void doDumpThreadInfo(ThreadList_T *node,
             serv_title = "Decompression";
         }
 
-        QZ_PRINT("[INFO]: %s num_th %u\n",
-                 serv_title, num_node);
+        QZ_INFO("%s num_th %u\n", serv_title, num_node);
         while (node) {
-            QZ_PRINT("th_id: %u comp_hw_count: %u comp_sw_count: %u "
+            QZ_INFO("th_id: %u comp_hw_count: %u comp_sw_count: %u "
                      "decomp_hw_count: %u decomp_sw_count: %u\n",
                      node->thread_id,
                      node->comp_hw_count,
@@ -165,7 +164,7 @@ static void doDumpThreadInfo(ThreadList_T *node,
         if (node) {
             QZ_ERROR("[ERROR]: there's node left in the list\n");
         }
-        QZ_PRINT("\n");
+        QZ_INFO("\n");
     }
 }
 
@@ -180,6 +179,58 @@ void dumpThreadInfo(void)
                      DECOMPRESSION);
 }
 #endif
+
+QzLogLevel_T currentLogLevel = LOG_WARNING;
+
+void qzSetLogLevel(QzLogLevel_T level) {
+    currentLogLevel = level;
+}
+
+const char* getLogLevelString(QzLogLevel_T level) {
+    switch (level) {
+        case LOG_ERROR: return "ERROR";
+        case LOG_WARNING: return "WARNING";
+        case LOG_INFO: return "INFO";
+        case LOG_DEBUG1: return "DEBUG";
+        case LOG_DEBUG2: return "TEST";
+        case LOG_DEBUG3: return "MEM";
+        default: return "UNKNOWN";
+    }
+}
+
+void logMessage(QzLogLevel_T level, const char* file, int line, const char* format, ...) {
+
+    if (level > currentLogLevel) return;
+
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    char time_buffer[26];
+    strftime(time_buffer, 26, "%Y-%m-%d %H:%M:%S", tm_info);
+    FILE *output = stderr;
+
+    switch (level)
+    {
+    case LOG_ERROR:
+    case LOG_WARNING:
+        output = stderr;
+        fprintf(output, "[%s] [%s] (%s:%d): ", getLogLevelString(level), time_buffer, file, line);
+        break;
+    case LOG_INFO:
+    case LOG_DEBUG1:
+    case LOG_DEBUG2:
+    case LOG_DEBUG3:
+        output = stdout;
+        fprintf(output, "[%s]: ", getLogLevelString(level));
+        break;
+    default:
+        break;
+    }
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(output, format, args);
+    va_end(args);
+}
 
 void initDebugLock(void)
 {
@@ -775,7 +826,7 @@ void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      DataFormatInternal_T data_fmt)
 {
-    QZ_DEBUG("Generate header\n");
+    QZ_INFO("Generate header\n");
 
     switch (data_fmt) {
     case DEFLATE_4B:
@@ -1179,7 +1230,7 @@ void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
 
     QZ_DEBUG("doDecompressIn: Sending %u bytes starting at 0x%lx\n",
              src_send_sz, (unsigned long)src_ptr);
-    QZ_DEBUG("sending seq number %lu %d %ld\n", i, j, qz_sess->seq);
+    QZ_DEBUG("sending seq number %d %d %ld\n", i, j, qz_sess->seq);
 
     if (DEFLATE_GZIP_EXT == data_fmt ||
         DEFLATE_GZIP == data_fmt) {

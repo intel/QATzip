@@ -58,7 +58,7 @@ QzipParams_T g_params_th = {
 const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-char const g_short_opts[] = "A:H:L:C:r:o:O:P:dfhkVR";
+char const g_short_opts[] = "A:H:L:C:r:o:O:P:g:dfhkVR";
 const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -77,6 +77,7 @@ const struct option g_long_opts[] = {
                                   directory */
     {"polling",    1, 0, 'P'}, /* set polling mode when compressing and
                                   decompressing */
+    {"loglevel",   1, 0, 'g'}, /* set log level */
     { 0, 0, 0, 0 }
 };
 
@@ -85,7 +86,7 @@ const unsigned int USDM_ALLOC_MAX_SZ = (2 * 1024 * 1024 - 5 * 1024);
 
 void tryHelp(void)
 {
-    QZ_PRINT("Try `%s --help' for more information.\n", g_program_name);
+    QZ_INFO("Try `%s --help' for more information.\n", g_program_name);
     exit(ERROR);
 }
 
@@ -111,15 +112,16 @@ void help(void)
         "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
         "  -P, --polling     set polling mode, only supports busy polling settings",
+        "  -g, --loglevel    set qatzip loglevel(none|error|warn|info|debug)",
         "",
         "With no FILE, read standard input.",
         0
     };
     char const *const *p = help_msg;
 
-    QZ_PRINT("Usage: %s [OPTION]... [FILE]...\n", g_program_name);
+    QZ_INFO("Usage: %s [OPTION]... [FILE]...\n", g_program_name);
     while (*p) {
-        QZ_PRINT("%s\n", *p++);
+        QZ_INFO("%s\n", *p++);
     }
 }
 
@@ -159,11 +161,11 @@ void displayStats(RunTimeList_T *time_list,
         double compressionRatio = ((double)insize) / ((double)outsize);
         double spaceSavings = 1 - ((double)outsize) / ((double)insize);
 
-        QZ_PRINT("Time taken:    %9.3lf ms\n", us_diff / 1000);
-        QZ_PRINT("Throughput:    %9.3lf Mbit/s\n", throughput);
+        QZ_INFO("Time taken:    %9.3lf ms\n", us_diff / 1000);
+        QZ_INFO("Throughput:    %9.3lf Mbit/s\n", throughput);
         if (is_compress) {
-            QZ_PRINT("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
-            QZ_PRINT("Compression ratio: %.3lf : 1\n", compressionRatio);
+            QZ_INFO("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
+            QZ_INFO("Compression ratio: %.3lf : 1\n", compressionRatio);
         }
     }
 }
@@ -271,7 +273,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     //open file
     src_fd = open(src_file_name, O_RDONLY);
     if (src_fd < 0) {
-        QZ_PRINT("Open input file %s failed\n", src_file_name);
+        QZ_INFO("Open input file %s failed\n", src_file_name);
         exit(ERROR);
     }
     ret = fstat(src_fd, &src_file_stat);
@@ -319,7 +321,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     do {
         if (read_more) {
             bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
-            QZ_PRINT("Reading input file %s (%u Bytes)\n", src_file_name,
+            QZ_INFO("Reading input file %s (%u Bytes)\n", src_file_name,
                      bytes_read);
         } else {
             bytes_read = file_remaining;
@@ -756,9 +758,9 @@ void version()
 {
     char const *const *p = g_license_msg;
 
-    QZ_PRINT("%s v%s\n", g_program_name, QZIP_VERSION);
+    QZ_INFO("%s v%s\n", g_program_name, QZIP_VERSION);
     while (*p) {
-        QZ_PRINT("%s\n", *p++);
+        QZ_INFO("%s\n", *p++);
     }
 }
 

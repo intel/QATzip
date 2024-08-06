@@ -767,6 +767,62 @@ typedef void *QzMetadataBlob_T;
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      QATzip log trace level
+ *
+ * @description
+ *      This is an emum for qatzip log trace level
+ *
+ *****************************************************************************/
+typedef enum QzLogLevel_E{
+    LOG_NONE = 0,
+    LOG_FATAL,
+    LOG_ERROR,
+    LOG_WARNING,
+    LOG_INFO,
+    LOG_DEBUG1,
+    LOG_DEBUG2,
+    LOG_DEBUG3
+} QzLogLevel_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Set qatzip log trace level
+ *
+ * @description
+ *      Set qatzip log trace level
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       level           set log trace level
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      None
+ *
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API void qzSetLogLevel(QzLogLevel_T level);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      Initialize QAT hardware
  *
  * @description
