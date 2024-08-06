@@ -269,7 +269,7 @@ QzBlock_T *parseFormatOption(char *buf)
     blk = head->next;
     i = 1;
     while (blk) {
-        QZ_PRINT("[INFO] Block%d:  format -%8s, \tsize - %d\n",
+        QZ_INFO("[INFO] Block%d:  format -%8s, \tsize - %d\n",
                  i++, g_format_list[blk->fmt - 1].fmt_name, blk->size);
         blk = blk->next;
     }
@@ -320,20 +320,20 @@ static void dumpTimers(int tid)
     unsigned long long start, local, diff;
     start = (g_timer_start.tv_sec * 1000000) + g_timer_start.tv_usec;
     if (0 == tid) {
-        QZ_PRINT("[ts]: %lld\n", start);
+        QZ_INFO("[ts]: %lld\n", start);
     }
 
-    QZ_PRINT("[%5.5d]", tid);
+    QZ_INFO("[%5.5d]", tid);
     for (i = 0; i < 15; i++) {
         local = (g_timers[i][tid].tv_sec * 1000000) + g_timers[i][tid].tv_usec;
         if (local > 0) {
             diff = local - start;
-            QZ_PRINT(" %lld", diff);
+            QZ_INFO(" %lld", diff);
         } else {
-            QZ_PRINT(" -");
+            QZ_INFO(" -");
         }
     }
-    QZ_PRINT("\n");
+    QZ_INFO("\n");
 }
 #endif
 
@@ -767,16 +767,16 @@ void *qzDecompressSwQz(void *arg)
     rate /= sec;// Gbps
     rc = pthread_mutex_lock(&g_lock_print);
     assert(0 == rc);
-    QZ_PRINT("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
+    QZ_INFO("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
              "bytes=%lu, %Lf Gbps", tid, verify_data, count, el_m, org_src_sz, rate);
-    QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%",
+    QZ_INFO(", input_len=%lu, comp_len=%lu, ratio=%f%%",
              org_src_sz, comp_out_sz,
              ((double)comp_out_sz / (double)org_src_sz) * 100);
-    QZ_PRINT(", comp_len=%lu, sw_decomp_len=%lu",
+    QZ_INFO(", comp_len=%lu, sw_decomp_len=%lu",
              comp_out_sz, decomp_sw_out_sz);
-    QZ_PRINT(", comp_len=%lu, qz_decomp_len=%lu",
+    QZ_INFO(", comp_len=%lu, qz_decomp_len=%lu",
              comp_out_sz, decomp_qz_out_sz);
-    QZ_PRINT("\n");
+    QZ_INFO("\n");
     rc = pthread_mutex_unlock(&g_lock_print);
     assert(0 == rc);
 
@@ -988,14 +988,14 @@ void *qzCompressDecompressWithFormatOption(void *arg)
     rate /= sec;// Gbps
     rc = pthread_mutex_lock(&g_lock_print);
     assert(0 == rc);
-    QZ_PRINT("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
+    QZ_INFO("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
              "bytes=%lu, %Lf Gbps", tid, verify_data, count, el_m, org_src_sz, rate);
-    QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%",
+    QZ_INFO(", input_len=%lu, comp_len=%lu, ratio=%f%%",
              org_src_sz, comp_out_sz,
              ((double)comp_out_sz / (double)org_src_sz) * 100);
-    QZ_PRINT(", comp_len=%lu, decomp_len=%lu",
+    QZ_INFO(", comp_len=%lu, decomp_len=%lu",
              comp_out_sz, decomp_out_sz);
-    QZ_PRINT("\n");
+    QZ_INFO("\n");
     rc = pthread_mutex_unlock(&g_lock_print);
     assert(0 == rc);
 
@@ -1053,7 +1053,7 @@ void *qzSetupParamFuncTest(void *arg)
         QZ_ERROR("Err: fail to compress data with ret: %d\n", rc);
         goto end;
     }
-    QZ_PRINT("With default params, input_len:%lu, output_len:%lu.\n",
+    QZ_INFO("With default params, input_len:%lu, output_len:%lu.\n",
              src_sz, test_dest_sz);
     test_dest_sz = dest_sz;
 
@@ -1499,31 +1499,31 @@ void *qzCompressAndDecompress(void *arg)
     if (0 != pthread_mutex_lock(&g_lock_print)) {
         goto done;
     }
-    QZ_PRINT("[INFO] srv=");
+    QZ_INFO("[INFO] srv=");
     if (COMP == service) {
-        QZ_PRINT("COMP");
+        QZ_INFO("COMP");
     } else if (DECOMP == service) {
-        QZ_PRINT("DECOMP");
+        QZ_INFO("DECOMP");
     } else if (BOTH == service) {
-        QZ_PRINT("BOTH");
+        QZ_INFO("BOTH");
     } else {
         QZ_ERROR("UNKNOWN\n");
         pthread_mutex_unlock(&g_lock_print);
         goto done;
     }
-    QZ_PRINT(", tid=%ld, verify=%d, count=%d, msec=%llu, "
+    QZ_INFO(", tid=%ld, verify=%d, count=%d, msec=%llu, "
              "bytes=%lu, %Lf Gbps",
              tid, verify_data, count, el_m, org_src_sz, rate);
     if (DECOMP != service) {
-        QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%",
+        QZ_INFO(", input_len=%lu, comp_len=%lu, ratio=%f%%",
                  org_src_sz, comp_out_sz,
                  ((double)comp_out_sz / (double)org_src_sz) * 100);
     }
     if (COMP != service) {
-        QZ_PRINT(", comp_len=%lu, decomp_len=%lu",
+        QZ_INFO(", comp_len=%lu, decomp_len=%lu",
                  comp_out_sz, decomp_out_sz);
     }
-    QZ_PRINT("\n");
+    QZ_INFO("\n");
     if (test_thread_safe_flag == 1) {
         if (thread_sleep == 0) {
             srand(time(NULL));
@@ -1977,7 +1977,7 @@ test_3_end:
     }
     QZ_DEBUG("*** Decompress Stream Test 4 PASS***\n");
 
-    QZ_PRINT("Compress Stream and Decompress function test: PASS\n");
+    QZ_INFO("Compress Stream and Decompress function test: PASS\n");
 
 exit:
     if (NULL != orig_src) {
@@ -2103,7 +2103,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     rate = src_sz * test_arg->count * 8; // bits
     rate = rate / 1000000000.0; // gigbits
     rate = rate / sec;// Gbps
-    QZ_PRINT("[%ld] elapsed microsec = %llu bytes = %lu rate = %Lf Gbps\n",
+    QZ_INFO("[%ld] elapsed microsec = %llu bytes = %lu rate = %Lf Gbps\n",
              tid, el_m, src_sz, rate);
 
 done:
@@ -2341,7 +2341,7 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
     const long tid = test_arg->thd_id;
     QzSession_T sess = {0};
 
-    QZ_PRINT("Hello from qzCompressStreamInvalidChunkSize id %ld\n", tid);
+    QZ_INFO("Hello from qzCompressStreamInvalidChunkSize id %ld\n", tid);
 
     timeCheck(0, tid);
 
@@ -2374,7 +2374,7 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
         pthread_exit((void *)
                      "qzCompressStreamInvalidChunkSize input param check FAILED");
     }
-    QZ_PRINT("qzCompressStreamInvalidChunkSize : PASS\n");
+    QZ_INFO("qzCompressStreamInvalidChunkSize : PASS\n");
 
 done:
     timeCheck(5, tid);
@@ -2402,7 +2402,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
     const long tid = test_arg->thd_id;
     QzSession_T sess = {0};
 
-    QZ_PRINT("Hello from qzCompressStreamInvalidQzStreamParam id %ld\n", tid);
+    QZ_INFO("Hello from qzCompressStreamInvalidQzStreamParam id %ld\n", tid);
 
     rc = qzInit(&sess, test_arg->sw_backup);
     if (QZ_INIT_HW_FAIL(rc)) {
@@ -2480,7 +2480,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
         dumpOutputData(comp_strm.out_sz, comp_strm.out, filename);
         qzEndStream(&sess, &comp_strm);
     }
-    QZ_PRINT("qzCompressStreamInvalidQzStreamParam : PASS\n");
+    QZ_INFO("qzCompressStreamInvalidQzStreamParam : PASS\n");
 
 done:
     if (gen_data) {
@@ -2953,7 +2953,7 @@ void *qzCompressDecompressSwQZMixed(void *arg)
         }
     }
 
-    QZ_PRINT("HW/SW mixed function test: PASS\n");
+    QZ_INFO("HW/SW mixed function test: PASS\n");
     return NULL;
 }
 
@@ -3579,7 +3579,7 @@ int qzFuncTests(void)
             return -1;
         }
     }
-    QZ_PRINT("SWFailOverFunc test : Passed\n");
+    QZ_INFO("SWFailOverFunc test : Passed\n");
 
     int (*qz_compress_negative_tests[])(void) = {
         qzCompressFailedAtBufferOverflow,
@@ -3591,7 +3591,7 @@ int qzFuncTests(void)
             return -1;
         }
     }
-    QZ_PRINT("qzCompressNegative test : Passed\n");
+    QZ_INFO("qzCompressNegative test : Passed\n");
 
 
     int (*qz_compress_crc_positive[])(void) = {
@@ -3604,7 +3604,7 @@ int qzFuncTests(void)
             return -1;
         }
     }
-    QZ_PRINT("qz_compress_crc_positive test : Passed\n");
+    QZ_INFO("qz_compress_crc_positive test : Passed\n");
     return 0;
 }
 
@@ -3739,8 +3739,8 @@ void *forkResourceCheck(void *arg)
     QzSession_T sess = {0};
 
     QZ_DEBUG("Hello from forkResourceCheck\n");
-    QZ_PRINT("This is parent process, my pid = %d\n", getpid());
-    QZ_PRINT("Before qzInit, qz_init_status in parent process is %d\n",
+    QZ_INFO("This is parent process, my pid = %d\n", getpid());
+    QZ_INFO("Before qzInit, qz_init_status in parent process is %d\n",
              g_process.qz_init_status);
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(&sess, ((TestArg_T *)arg)->sw_backup);
@@ -3751,9 +3751,9 @@ void *forkResourceCheck(void *arg)
 
     pid = fork();
     if (pid > 0) {
-        QZ_PRINT("After qzInit, qz_init_status in parent process is %d\n",
+        QZ_INFO("After qzInit, qz_init_status in parent process is %d\n",
                  g_process.qz_init_status);
-        QZ_PRINT("instID in parent process is %s\n",
+        QZ_INFO("instID in parent process is %s\n",
                  g_process.qz_inst[0].instance_info.instID);
         hp_params_fd = open(MAX_HUGEPAGE_FILE, O_RDONLY);
         if (hp_params_fd < 0) {
@@ -3773,25 +3773,25 @@ void *forkResourceCheck(void *arg)
             close(hp_params_fd);
             goto done;
         }
-        QZ_PRINT("After qzInit, number_huge_pages in parent process is %d\n",
+        QZ_INFO("After qzInit, number_huge_pages in parent process is %d\n",
                  (int)number_huge_pages);
         close(hp_params_fd);
         wait(&status);
     } else if (pid == 0) {
         sleep(2);
-        QZ_PRINT("This is child process, my pid = %d\n", getpid());
-        QZ_PRINT("This is child process, my ppid = %d\n", getppid());
+        QZ_INFO("This is child process, my pid = %d\n", getpid());
+        QZ_INFO("This is child process, my ppid = %d\n", getppid());
         g_process.qz_init_status = QZ_NONE;
-        QZ_PRINT("Before qzInit, qz_init_status in child process is %d\n",
+        QZ_INFO("Before qzInit, qz_init_status in child process is %d\n",
                  g_process.qz_init_status);
         if (!((TestArg_T *)arg)->init_engine_disabled) {
             rc = qzInit(&sess, ((TestArg_T *)arg)->sw_backup);
             if (QZ_INIT_FAIL(rc)) {
                 pthread_exit((void *)"qzInit failed");
             }
-            QZ_PRINT("After qzInit, qz_init_status in child process is %d\n",
+            QZ_INFO("After qzInit, qz_init_status in child process is %d\n",
                      g_process.qz_init_status);
-            QZ_PRINT("instID in child process is %s\n",
+            QZ_INFO("instID in child process is %s\n",
                      g_process.qz_inst[0].instance_info.instID);
         }
         hp_params_fd = open(MAX_HUGEPAGE_FILE, O_RDONLY);
@@ -3812,7 +3812,7 @@ void *forkResourceCheck(void *arg)
             close(hp_params_fd);
             goto done;
         }
-        QZ_PRINT("After qzInit, number_huge_pages in child process is %d\n",
+        QZ_INFO("After qzInit, number_huge_pages in child process is %d\n",
                  (int)number_huge_pages);
         close(hp_params_fd);
         exit(0);
@@ -4438,10 +4438,10 @@ int main(int argc, char *argv[])
     if (test == 18) {
         rc_check = qz_do_g_process_Check();
         if (QZ_OK == rc_check) {
-            QZ_PRINT("Check g_process PASSED\n");
+            QZ_INFO("Check g_process PASSED\n");
         } else {
             ret = -1;
-            QZ_PRINT("Check g_process FAILED\n");
+            QZ_INFO("Check g_process FAILED\n");
         }
     }
 

@@ -320,12 +320,12 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
         streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
 
     if (NULL == stream_buf->in_buf) {
-        QZ_DEBUG("stream_buf->in_buf : PINNED_MEM failed, try COMMON_MEM\n");
+        QZ_WARN("stream_buf->in_buf : PINNED_MEM failed, try COMMON_MEM\n");
         stream_buf->in_buf =
             streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     }
     if (NULL == stream_buf->out_buf) {
-        QZ_DEBUG("stream_buf->out_buf : PINNED_MEM failed, try COMMON_MEM\n");
+        QZ_WARN("stream_buf->out_buf : PINNED_MEM failed, try COMMON_MEM\n");
         stream_buf->out_buf =
             streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     }
@@ -334,7 +334,7 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
         NULL == stream_buf->out_buf) {
         goto clear;
     }
-    QZ_DEBUG("Allocate stream buf %u\n", stream_buf->buf_len);
+    QZ_INFO("Allocate stream buf %u\n", stream_buf->buf_len);
 
     strm->pending_in = 0;
     strm->pending_out = 0;
@@ -368,7 +368,7 @@ static unsigned int copyStreamInput(QzStream_T *strm, unsigned char *in)
     avail_in = stream_buf->buf_len - strm->pending_in;
     cpy_cnt = (strm->in_sz > avail_in) ? avail_in : strm->in_sz;
     QZ_MEMCPY(stream_buf->in_buf + strm->pending_in, in, cpy_cnt, strm->in_sz);
-    QZ_DEBUG("Copy to input from %p, to %p, count %u\n",
+    QZ_INFO("Copy to input from %p, to %p, count %u\n",
              in, stream_buf->in_buf + strm->pending_in, cpy_cnt);
 
     strm->pending_in += cpy_cnt;
@@ -386,7 +386,7 @@ static unsigned int copyStreamOutput(QzStream_T *strm, unsigned char *out)
     cpy_cnt = (strm->pending_out > avail_out) ? avail_out : strm->pending_out;
     QZ_MEMCPY(out, stream_buf->out_buf + stream_buf->out_offset, avail_out,
               cpy_cnt);
-    QZ_DEBUG("copy %u to user output\n", cpy_cnt);
+    QZ_INFO("copy %u to user output\n", cpy_cnt);
 
     strm->out_sz -= cpy_cnt;
     strm->pending_out -= cpy_cnt;
@@ -637,7 +637,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
     }
 
     stream_buf = (QzStreamBuf_T *) strm->opaque;
-    QZ_DEBUG("Decompress Stream Start...\n");
+    QZ_INFO("Decompress Stream Start...\n");
 
     while (strm->pending_out > 0) {
         copied_output = copyStreamOutput(strm, strm->out + produced);
@@ -650,10 +650,10 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
                  * corrupt the memory behind the boundary. */
                 stream_buf->flush_more = 1;
             }
-            QZ_DEBUG("No space for pending output...\n");
+            QZ_INFO("No space for pending output...\n");
             goto done;
         }
-        QZ_DEBUG("Copy output %u bytes\n", copied_output);
+        QZ_INFO("Copy output %u bytes\n", copied_output);
     }
 
     while (0 == strm->pending_out) {
@@ -665,7 +665,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
             if (strm->pending_in < stream_buf->buf_len &&
                 last != 1) {
                 rc = QZ_OK;
-                QZ_DEBUG("Batch more input data...\n");
+                QZ_INFO("Batch more input data...\n");
                 goto done;
             } else {
                 copy_more = 0;
@@ -719,7 +719,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
                 rc = QZ_FAIL;
                 goto done;
             } else {
-                QZ_DEBUG("Recoverable buffer error occurs... \n");
+                QZ_INFO("Recoverable buffer error occurs... \n");
                 rc = QZ_OK;
             }
         }

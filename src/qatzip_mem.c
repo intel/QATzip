@@ -109,7 +109,7 @@ int qzMemFindAddr(unsigned char *a)
     rc = (PINNED == loadAddr(&g_qz_page_table,
                              (void *)b)) ? PINNED_MEM : COMMON_MEM;
     if (0 != rc) {
-        QZ_DEBUG("Find 0x%lx in page table\n", b);
+        QZ_MEM_PRINT("Find 0x%lx in page table\n", b);
     }
     return rc;
 }
@@ -138,9 +138,9 @@ static int qzMemRegAddr(unsigned char *a, size_t sz)
     al = (unsigned long)a;
     b = (al & PAGE_MASK);
     sz += (al - b);
-    QZ_DEBUG("4 KB page is 0x%lx\n", b);
+    QZ_MEM_PRINT("4 KB page is 0x%lx\n", b);
 
-    QZ_DEBUG("Inserting 0x%lx size %lx to page table\n", b, sz);
+    QZ_MEM_PRINT("Inserting 0x%lx size %lx to page table\n", b, sz);
     rc = storeMmapRange(&g_qz_page_table, (void *)b, PINNED, sz);
 
     pthread_mutex_unlock(&g_qz_table_lock);
@@ -210,7 +210,7 @@ void *qzMalloc(size_t sz, int numa, int pinned)
     g_a = qaeMemAllocNUMA(sz, real_numa, 64);
     if (NULL == g_a) {
         if (0 == pinned) {
-            QZ_DEBUG("regular malloc\n");
+            QZ_MEM_PRINT("regular malloc\n");
             g_a = malloc(sz);
         }
     } else {
@@ -229,7 +229,7 @@ void qzFree(void *m)
         return;
     }
 
-    QZ_DEBUG("\t\tfreeing 0x%lx\n", (unsigned long)m);
+    QZ_MEM_PRINT("\t\tfreeing 0x%lx\n", (unsigned long)m);
     if (1 == qzMemFindAddr(m)) {
         qaeMemFreeNUMA((void **)&m);
         qzMemUnRegAddr(m);

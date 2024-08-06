@@ -88,7 +88,7 @@ int main(int argc, char **argv)
             } else if (strcmp(optarg, "zstd") == 0) {
                 g_params_th.comp_algorithm = QZ_ZSTD;
             } else {
-                QZ_ERROR("Error service arg: %s\n", optarg);
+                printf("Error service arg: %s\n", optarg);
                 return -1;
             }
             break;
@@ -98,7 +98,7 @@ int main(int argc, char **argv)
             } else if (strcmp(optarg, "dynamic") == 0) {
                 g_params_th.huffman_hdr = QZ_DYNAMIC_HDR;
             } else {
-                QZ_ERROR("Error huffman arg: %s\n", optarg);
+                printf("Error huffman arg: %s\n", optarg);
                 return -1;
             }
             break;
@@ -116,7 +116,7 @@ int main(int argc, char **argv)
             } else if (strcmp(optarg, "lz4s") == 0) {
                 g_params_th.data_fmt = QZIP_LZ4S_BK;
             } else {
-                QZ_ERROR("Error gzip header format arg: %s\n", optarg);
+                printf("Error gzip header format arg: %s\n", optarg);
                 return -1;
             }
             is_format_set = 1;
@@ -129,7 +129,7 @@ int main(int argc, char **argv)
             if (*stop != '\0' || ERANGE == errno ||
                 g_params_th.comp_lvl > QZ_DEFLATE_COMP_LVL_MAXIMUM ||
                 g_params_th.comp_lvl <= 0) {
-                QZ_ERROR("Error compLevel arg: %s\n", optarg);
+                printf("Error compLevel arg: %s\n", optarg);
                 return -1;
             }
             break;
@@ -158,6 +158,22 @@ int main(int argc, char **argv)
                 g_params_th.polling_mode = QZ_BUSY_POLLING;
             } else {
                 printf("Error set polling mode: %s\n", optarg);
+                return -1;
+            }
+            break;
+        case 'g':
+            if (strcmp(optarg, "none") == 0) {
+                qzSetLogLevel(LOG_NONE);
+            } else if (strcmp(optarg, "error") == 0) {
+                qzSetLogLevel(LOG_ERROR);
+            } else if (strcmp(optarg, "warn") == 0) {
+                qzSetLogLevel(LOG_WARNING);
+            } else if (strcmp(optarg, "info") == 0) {
+                qzSetLogLevel(LOG_INFO);
+            } else if (strcmp(optarg, "debug") == 0) {
+                qzSetLogLevel(LOG_DEBUG1);
+            } else {
+                printf("Error log level: %s\n", optarg);
                 return -1;
             }
             break;

@@ -585,7 +585,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                     } else {
                         bytes_read = fread(src_buffer, 1, src_buffer_size,
                                            src_file);
-                        QZ_PRINT("Reading input file %s (%u Bytes)\n",
+                        QZ_INFO("Reading input file %s (%u Bytes)\n",
                                  src_file_name, bytes_read);
                     }
                 } else {
@@ -661,7 +661,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
         }// end for
 
     } else {
-        QZ_PRINT("Compressing...\n");
+        QZ_INFO("Compressing...\n");
     }
 
     eheader = generateEndHeader(list, total_compressed_size);
@@ -1873,7 +1873,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
         src_fd = open(src_file_name, O_RDONLY);
         if (src_fd < 0) {
-            QZ_PRINT("Open input file %s failed\n", src_file_name);
+            QZ_INFO("Open input file %s failed\n", src_file_name);
             ret = QZ7Z_ERR_OPEN;
             goto exit;
         }
@@ -1942,7 +1942,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
             if (read_more) {
                 src_buffer = src_buffer_orig;
                 bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
-                QZ_PRINT("Reading input file %s (%u Bytes)\n", src_file_name,
+                QZ_INFO("Reading input file %s (%u Bytes)\n", src_file_name,
                          bytes_read);
             } else {
                 bytes_read = file_remaining;
@@ -2082,7 +2082,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
         } while (file_remaining > 0);
 
     } else {
-        QZ_PRINT("Decompressing...\n");
+        QZ_INFO("Decompressing...\n");
     }
 
     gettimeofday(&run_time->time_e, NULL);

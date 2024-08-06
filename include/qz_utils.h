@@ -54,6 +54,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <time.h>
+#include "qatzip.h"
 
 typedef enum SERV_E {
     COMPRESSION = 0,
@@ -89,17 +90,18 @@ extern void insertThread(unsigned int th_id,
                          Serv_T serv_type,
                          Engine_T engine_type);
 
-#ifdef QATZIP_DEBUG
-static inline void QZ_DEBUG(const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    vfprintf(stdout, format, args);
-    va_end(args);
-}
-#else
-#define QZ_DEBUG(...)
-#endif
+/*  QATzip log API
+ *  could change the log level on runtime
+ */
+void logMessage(QzLogLevel_T level, const char* file, int line, const char* format, ...);
+
+#define LOG(level, format, ...) logMessage(level, __FILE__, __LINE__, format, ##__VA_ARGS__)
+#define QZ_ERROR(format, ...) LOG(LOG_ERROR, format, ##__VA_ARGS__)
+#define QZ_WARN(format, ...) LOG(LOG_WARNING, format, ##__VA_ARGS__)
+#define QZ_INFO(format, ...) LOG(LOG_INFO, format, ##__VA_ARGS__)
+#define QZ_DEBUG(format, ...) LOG(LOG_DEBUG1, format, ##__VA_ARGS__)
+#define QZ_TEST(format, ...) LOG(LOG_DEBUG2, format, ##__VA_ARGS__)
+#define QZ_MEM_PRINT(format, ...) LOG(LOG_DEBUG3, format, ##__VA_ARGS__)
 
 #ifdef ENABLE_TESTLOG
 #define QZ_TESTLOG(debuglevel, Readable, tag, ...) { \
@@ -119,20 +121,5 @@ static inline void QZ_DEBUG(const char *format, ...)
 }
 #endif
 
-static inline void QZ_PRINT(const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    vfprintf(stdout, format, args);
-    va_end(args);
-}
-
-static inline void QZ_ERROR(const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-}
 
 #endif

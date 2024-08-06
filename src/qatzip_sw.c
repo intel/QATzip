@@ -294,7 +294,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
     *src_len = 0;
     *dest_len = 0;
 
-    QZ_DEBUG("decomp_sw data_fmt: %d\n", data_fmt);
+    QZ_INFO("decomp_sw data_fmt: %d\n", data_fmt);
     switch (data_fmt) {
     case DEFLATE_4B:
     case DEFLATE_RAW:
@@ -319,7 +319,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
             ret = QZ_FAIL;
             goto done;
         }
-        QZ_DEBUG("\n****** inflate init done with win_bits: %d *****\n", windows_bits);
+        QZ_INFO("\n****** inflate init done with win_bits: %d *****\n", windows_bits);
         qz_sess->inflate_stat = InflateInited;
         stream->total_in = 0;
         total_in = 0;
@@ -334,7 +334,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
     switch (zlib_ret) {
     case Z_OK:
         if (QZ_LOW_DEST_MEM == sess->thd_sess_stat) {
-            QZ_DEBUG("ERR: inflate failed with Z_DATA_ERROR\n");
+            QZ_ERROR("ERR: inflate failed with Z_DATA_ERROR\n");
             ret = QZ_DATA_ERROR;
             qz_sess->inflate_stat = InflateError;
             goto done;
@@ -347,12 +347,12 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
         qz_sess->inflate_stat = InflateEnd;
         break;
     case Z_DATA_ERROR:
-        QZ_DEBUG("ERR: inflate failed with Z_DATA_ERROR\n");
+        QZ_ERROR("ERR: inflate failed with Z_DATA_ERROR\n");
         ret = QZ_DATA_ERROR;
         qz_sess->inflate_stat = InflateError;
         goto done;
     default:
-        QZ_DEBUG("ERR: inflate failed with error code %d\n", ret);
+        QZ_ERROR("ERR: inflate failed with error code %d\n", ret);
         ret = QZ_FAIL;
         qz_sess->inflate_stat = InflateError;
         goto done;
@@ -373,11 +373,11 @@ done:
              *dest_len);
     if (zlib_ret == Z_STREAM_END || QZ_LOW_DEST_MEM == sess->thd_sess_stat) {
         if (Z_OK != inflateEnd(stream)) {
-            QZ_DEBUG("inflateEnd failed.\n");
+            QZ_ERROR("inflateEnd failed.\n");
             ret = QZ_FAIL;
         }
         qz_sess->inflate_stat = InflateNull;
-        QZ_DEBUG("\n****** inflate end done *****\n");
+        QZ_INFO("\n****** inflate end done *****\n");
     }
 
     return ret;
@@ -397,7 +397,7 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
 #ifdef QATZIP_DEBUG
     insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
 #endif
-    QZ_DEBUG("Start qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
+    QZ_INFO("Start qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
              *src_len, *dest_len);
 
     *src_len = 0;
@@ -422,7 +422,7 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
     }
 
 out:
-    QZ_DEBUG("Exit qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
+    QZ_INFO("Exit qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
              *src_len, *dest_len);
     return ret;
 }
@@ -446,7 +446,7 @@ int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
         goto lz4_compress_fail;
     }
     *dest_len = total_out;
-    QZ_DEBUG("Exit qzLZ4SWCompress: src_len %u dest_len %u\n",
+    QZ_INFO("Exit qzLZ4SWCompress: src_len %u dest_len %u\n",
              *src_len, *dest_len);
 
     return QZ_OK;
@@ -465,7 +465,7 @@ int qzLZ4SWDecompress(QzSession_T *sess, const unsigned char *src,
     size_t out_sz = 0;
     size_t ret = QZ_OK;
     QzSess_T *qz_sess = NULL;
-    QZ_DEBUG("Enter qzLZ4SWDecompress: src_len %u dest_len %u\n",
+    QZ_INFO("Enter qzLZ4SWDecompress: src_len %u dest_len %u\n",
              *src_len, *dest_len);
 
     qz_sess = (QzSess_T *) sess->internal;
@@ -498,12 +498,12 @@ int qzLZ4SWDecompress(QzSession_T *sess, const unsigned char *src,
          * it needs more compressed data to decompress. The remaining compressed data
          * was stored in dctx.
          */
-        QZ_DEBUG("LZ4F_decompress: incomplete compressed data, need more data\n");
+        QZ_INFO("LZ4F_decompress: incomplete compressed data, need more data\n");
     }
 
     *src_len = in_sz;
     *dest_len = out_sz;
-    QZ_DEBUG("Exit qzLZ4SWDecompress: src_len %u dest_len %u\n",
+    QZ_INFO("Exit qzLZ4SWDecompress: src_len %u dest_len %u\n",
              *src_len, *dest_len);
 
     return QZ_OK;
@@ -533,7 +533,7 @@ int qzSWDecompressMultiLZ4(QzSession_T *sess, const unsigned char *src,
 #ifdef QATZIP_DEBUG
     insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
 #endif
-    QZ_DEBUG("Start qzSWDecompressMultiLz4: src_len %u dest_len %u\n",
+    QZ_INFO("Start qzSWDecompressMultiLz4: src_len %u dest_len %u\n",
              *src_len, *dest_len);
 
     *src_len = 0;
@@ -558,7 +558,7 @@ int qzSWDecompressMultiLZ4(QzSession_T *sess, const unsigned char *src,
     }
 
 out:
-    QZ_DEBUG("Exit qzSWDecompressMultiLz4: src_len %u dest_len %u\n",
+    QZ_INFO("Exit qzSWDecompressMultiLz4: src_len %u dest_len %u\n",
              *src_len, *dest_len);
     return ret;
 }
@@ -686,19 +686,19 @@ int compInSWFallback(int i, int j, QzSession_T *sess,
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_DEBUG("The instance %d heartbeat is failure, Don't enable sw fallback, compressIn fatal ERROR!\n",
+        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, compressIn fatal ERROR!\n",
                  i);
         return QZ_FAIL;
     }
 
     if (qz_sess->single_thread) {
-        QZ_DEBUG("The instance %d failure, single_thread, compressIn fatal ERROR!\n",
+        QZ_ERROR("The instance %d failure, single_thread, compressIn fatal ERROR!\n",
                  i);
         return QZ_FAIL;
     }
 
     if (qz_sess->stop_submitting) {
-        QZ_DEBUG("compInSWFallback stop submit\n");
+        QZ_INFO("compInSWFallback stop submit\n");
         return QZ_FAIL;
     }
 
@@ -744,7 +744,7 @@ int compOutSWFallback(int i, int j, QzSession_T *sess,
     unsigned char *dest_ptr = g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_DEBUG("The instance %d heartbeat is failure, Don't enable sw fallback, compressOut fatal ERROR!\n",
+        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, compressOut fatal ERROR!\n",
                  i);
         return QZ_FAIL;
     }
@@ -783,21 +783,21 @@ int decompInSWFallback(int i, int j, QzSession_T *sess,
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_DEBUG("The instance %d heartbeat is failure, Don't enable sw fallback, decompressIn fatal ERROR!\n",
+        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, decompressIn fatal ERROR!\n",
                  i);
         sess->thd_sess_stat = QZ_FAIL;
         return QZ_FAIL;
     }
 
     if (qz_sess->single_thread) {
-        QZ_DEBUG("The instance %d failure, single thread, decompressIn fatal ERROR!\n",
+        QZ_ERROR("The instance %d failure, single thread, decompressIn fatal ERROR!\n",
                  i);
         sess->thd_sess_stat = QZ_FAIL;
         return QZ_FAIL;
     }
 
     if (qz_sess->stop_submitting) {
-        QZ_DEBUG("decompInSWFallback stop submit\n");
+        QZ_INFO("decompInSWFallback stop submit\n");
         return QZ_FAIL;
     }
 
@@ -806,7 +806,7 @@ int decompInSWFallback(int i, int j, QzSession_T *sess,
     }
 
     QZ_DEBUG("SW DecompIn src_ptr %p, dest_ptr %p, Sending %u bytes, seq = %ld, instance = %d\n",
-             src_ptr, dest_ptr, tmp_src_avail_len, qz_sess->seq, i);
+             src_ptr, dest_ptr, *tmp_src_avail_len, qz_sess->seq, i);
     rc = qzSWDecompress(sess,
                         src_ptr,
                         tmp_src_avail_len,
@@ -844,7 +844,7 @@ int decompOutSWFallback(int i, int j, QzSession_T *sess,
     src_send_sz += (outputHeaderSz(data_fmt) + outputFooterSz(data_fmt)) ;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_DEBUG("The instance %d heartbeat is failure, Don't enable sw fallback, decompressOut fatal ERROR!\n",
+        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, decompressOut fatal ERROR!\n",
                  i);
         return QZ_FAIL;
     }
