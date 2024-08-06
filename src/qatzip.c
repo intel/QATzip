@@ -210,19 +210,19 @@ static void dcCallback(void *cbtag, CpaStatus stat)
 
     if (g_process.qz_inst[i].stream[j].src1 !=
         g_process.qz_inst[i].stream[j].src2) {
-        QZ_ERROR("FLOW ERROR IN CBi src1 != src2\n");
+        QZ_WARN("FLOW ERROR IN CBi src1 != src2\n");
         goto print_err;
     }
 
     if (g_process.qz_inst[i].stream[j].sink1 !=
         g_process.qz_inst[i].stream[j].sink2) {
-        QZ_ERROR("FLOW ERROR IN CBi sink1 != sink2\n");
+        QZ_WARN("FLOW ERROR IN CBi sink1 != sink2\n");
         goto print_err;
     }
 
     if (g_process.qz_inst[i].stream[j].src2 !=
         (g_process.qz_inst[i].stream[j].sink1 + 1)) {
-        QZ_ERROR("FLOW ERROR IN CBi src2 != sink1 + 1\n");
+        QZ_WARN("FLOW ERROR IN CBi src2 != sink1 + 1\n");
         goto print_err;
     }
 
@@ -243,15 +243,15 @@ static void dcEventCallback(const CpaInstanceHandle instanceHandle,
     long i = (long)pCallbackTag;
     switch (instanceEvent) {
     case CPA_INSTANCE_EVENT_RESTARTING:
-        QZ_DEBUG("QAT instance %ld detected Event 'restarting'\n", i);
+        QZ_INFO("QAT instance %ld detected Event 'restarting'\n", i);
         break;
     case CPA_INSTANCE_EVENT_RESTARTED:
         g_process.qz_inst[i].heartbeat = CPA_STATUS_SUCCESS;
-        QZ_DEBUG("QAT instance %ld detected Event 'restarted'\n", i);
+        QZ_INFO("QAT instance %ld detected Event 'restarted'\n", i);
         break;
     case CPA_INSTANCE_EVENT_FATAL_ERROR:
         g_process.qz_inst[i].heartbeat = CPA_STATUS_FAIL;
-        QZ_DEBUG("QAT instance %ld detected Event 'fatal error'\n", i);
+        QZ_INFO("QAT instance %ld detected Event 'fatal error'\n", i);
         break;
     default:
         QZ_ERROR("QAT instance %ld detected Unknow Event!\n", i);
@@ -264,7 +264,7 @@ static void *PollingHeartBeat(void *arg)
     while (true) {
         status = icp_sal_poll_device_events();
         if (CPA_STATUS_SUCCESS != status) {
-            QZ_DEBUG("Polling device heartbeat is failure!\n");
+            QZ_WARN("Polling device heartbeat is failure!\n");
             continue;
         }
         /* This time may effect the sw fallback times */
@@ -455,7 +455,7 @@ static void stopQat(void)
         goto reset;
     }
 
-    QZ_DEBUG("Call stopQat.\n");
+    QZ_INFO("Call stopQat.\n");
 
     /* scenario: qzinit succeed. outside qzinit */
     if (QZ_OK == g_process.qz_init_status) {
@@ -474,7 +474,7 @@ static void stopQat(void)
         }
         (void)icp_sal_userStop();
     } else {
-        QZ_ERROR("qz init status is invalid, status=%d\n",
+        QZ_WARN("qz init status is invalid, status=%d\n",
                  g_process.qz_init_status);
         goto reset;
     }
@@ -492,7 +492,7 @@ static void exitFunc(void)
     int i = 0;
 
     if (0 != g_process.t_poll_heartbeat) {
-        QZ_DEBUG("cancel the thread!\n");
+        QZ_INFO("cancel the thread!\n");
         pthread_cancel(g_process.t_poll_heartbeat);
         pthread_join(g_process.t_poll_heartbeat, NULL);
     }
@@ -527,11 +527,11 @@ static unsigned int getWaitCnt(QzSession_T *sess)
     stopQat();                                                     \
     if (1 == sw_backup) {                                          \
         g_process.qz_init_status = QZ_NO_HW;                       \
-        QZ_ERROR("g_process.qz_init_status = QZ_NO_HW\n");         \
+        QZ_WARN("g_process.qz_init_status = QZ_NO_HW\n");          \
         rc = QZ_OK;                                                \
     } else if (0 == sw_backup) {                                   \
         g_process.qz_init_status = QZ_NOSW_NO_HW;                  \
-        QZ_ERROR("g_process.qz_init_status = QZ_NOSW_NO_HW\n");    \
+        QZ_WARN("g_process.qz_init_status = QZ_NOSW_NO_HW\n");     \
         rc = hw_status;                                            \
     }                                                              \
     goto done;
@@ -649,7 +649,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
 
     if (CPA_FALSE == g_process.qat_available) {
-        QZ_ERROR("Error no hardware, switch to SW if permitted status = %d\n", status);
+        QZ_WARN("Error no hardware, switch to SW if permitted status = %d\n", status);
         BACKOUT(QZ_NOSW_NO_HW);
     }
 #endif
@@ -673,7 +673,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         QZ_ERROR("Error in cpaDcGetNumInstances status = %d\n", status);
         BACKOUT(QZ_NOSW_NO_INST_ATTACH);
     }
-    QZ_DEBUG("Number of instance: %u\n", g_process.num_instances);
+    QZ_INFO("Number of instance: %u\n", g_process.num_instances);
 
     g_process.dc_inst_handle =
         malloc(g_process.num_instances * sizeof(CpaInstanceHandle));
@@ -751,7 +751,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         status = cpaDcInstanceSetNotificationCb(g_process.dc_inst_handle[index],
                                                 dcEventCallback, (void *)index);
         if (CPA_STATUS_SUCCESS != status) {
-            QZ_ERROR("Error in cpaDcInstanceSetNotificationCb status = %d\n", status);
+            QZ_WARN("Error in cpaDcInstanceSetNotificationCb status = %d\n", status);
             QZ_HW_BACKOUT(QZ_NOSW_NO_INST_ATTACH);
         }
     }
@@ -759,10 +759,10 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     /* Start device heartbeat event detect thread */
     if (unlikely(0 != pthread_create(&g_process.t_poll_heartbeat, NULL,
                                      PollingHeartBeat, NULL))) {
-        QZ_ERROR("Error Start polling heartbeat events thread failed!\n");
+        QZ_WARN("Error Start polling heartbeat events thread failed!\n");
         g_process.t_poll_heartbeat = 0;
     }
-    QZ_DEBUG("the polling event thread id is %d\n", g_process.t_poll_heartbeat);
+    QZ_DEBUG("the polling event thread id is %lu\n", g_process.t_poll_heartbeat);
 
     clearDevices(qat_hw);
     free(qat_hw);
@@ -906,7 +906,7 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
     dest_sz = DEST_SZ(src_sz);
     sw_backup = params->sw_backup;
 
-    QZ_DEBUG("getInstMem: Setting up memory for inst %d\n", i);
+    QZ_MEM_PRINT("getInstMem: Setting up memory for inst %d\n", i);
     status = cpaDcBufferListGetMetaSize(g_process.dc_inst_handle[i], 1,
                                         &(g_process.qz_inst[i].buff_meta_size));
     QZ_INST_MEM_STATUS_CHECK(status, i);
@@ -1251,7 +1251,7 @@ int qzSetupHW(QzSession_T *sess, int i)
 
     if (0 ==  g_process.qz_inst[i].cpa_sess_setup) {
         /*setup and start DC session*/
-        QZ_DEBUG("setup and start DC session %d\n", i);
+        QZ_INFO("setup and start DC session %d\n", i);
 
         qz_sess->sess_status =
             cpaDcGetSessionSize(g_process.dc_inst_handle[i],
@@ -1270,7 +1270,7 @@ int qzSetupHW(QzSession_T *sess, int i)
             goto done_sess;
         }
 
-        QZ_DEBUG("cpaDcInitSession %d\n", i);
+        QZ_INFO("cpaDcInitSession %d\n", i);
         qz_sess->sess_status =
             cpaDcInitSession(g_process.dc_inst_handle[i],
                              g_process.qz_inst[i].cpaSess,
@@ -1376,7 +1376,7 @@ static void *doCompressIn(void *in)
     struct timespec sleep_time;
     sleep_time.tv_sec = 0;
     sleep_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
-    QZ_DEBUG("Always enable CnV\n");
+    QZ_TEST("Always enable CnV\n");
 
     i = qz_sess->inst_hint;
     j = -1;
@@ -1432,7 +1432,7 @@ static void *doCompressIn(void *in)
                 }
 
                 if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
-                    QZ_ERROR("instance %d retry count:%d exceed the max count: %d\n",
+                    QZ_WARN("instance %d retry count:%d exceed the max count: %d\n",
                              i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
                     break;
                 }
@@ -1441,7 +1441,7 @@ static void *doCompressIn(void *in)
             g_process.qz_inst[i].num_retries = 0;
 
             if (unlikely(CPA_STATUS_SUCCESS != rc)) {
-                QZ_ERROR("Inst %d, buffer %d, Error in compIn offload: %d\n", i, j, rc);
+                QZ_WARN("Inst %d, buffer %d, Error in compIn offload: %d\n", i, j, rc);
                 compInBufferCleanUp(i, j);
                 rc = compInSWFallback(i, j, sess, src_ptr, src_send_sz);
                 if (QZ_WAIT_SW_PENDING == rc) {
@@ -1815,7 +1815,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
          || qz_sess->sess_params.comp_lvl == 9
 #endif
        ) {
-        QZ_DEBUG("compression src_len=%u, sess_params.input_sz_thrshold = %u, "
+        QZ_INFO("compression src_len=%u, sess_params.input_sz_thrshold = %u, "
                  "process.qz_init_status = %d, sess->hw_session_stat = %ld, "
                  " switch to software.\n",
                  *src_len, qz_sess->sess_params.input_sz_thrshold,
@@ -1839,12 +1839,12 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
         /*Make this a s/w compression*/
     }
 
-    QZ_DEBUG("qzCompress: inst is %d\n", i);
+    QZ_INFO("qzCompress: inst is %d\n", i);
     qz_sess->inst_hint = i;
 
     if (likely(0 ==  g_process.qz_inst[i].mem_setup ||
                0 ==  g_process.qz_inst[i].cpa_sess_setup)) {
-        QZ_DEBUG("Getting HW resources  for inst %d\n", i);
+        QZ_INFO("Getting HW resources  for inst %d\n", i);
         rc = qzSetupHW(sess, i);
         if (unlikely(QZ_OK != rc)) {
             qzReleaseInstance(i);
@@ -1924,7 +1924,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     *src_len = GET_LOWER_32BITS(qz_sess->qz_in_len);
     sess->total_in += qz_sess->qz_in_len;
     sess->total_out += qz_sess->qz_out_len;
-    QZ_DEBUG("\n********* total_in = %lu total_out = %lu src_len = %u dest_len = %u\n",
+    QZ_INFO("*** total_in = %lu total_out = %lu src_len = %u dest_len = %u ***\n",
              sess->total_in, sess->total_out, *src_len, *dest_len);
     assert(*dest_len == qz_sess->qz_out_len);
 
@@ -1939,7 +1939,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     return sess->thd_sess_stat;
 
 sw_compression:
-    QZ_DEBUG("The thread : %lu, Compress API SW fallback due to HW limitaions!\n",
+    QZ_INFO("The thread : %lu, Compress API SW fallback due to HW limitaions!\n",
              pthread_self());
     return qzSWCompress(sess, src, src_len, dest, dest_len, last);
 err_exit:
@@ -2053,7 +2053,7 @@ static void *doDecompressIn(void *in)
                 }
 
                 if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
-                    QZ_ERROR("instance %lu retry count:%d exceed the max count: %d\n",
+                    QZ_WARN("instance %lu retry count:%d exceed the max count: %d\n",
                              i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
                     break;
                 }
@@ -2062,7 +2062,7 @@ static void *doDecompressIn(void *in)
             g_process.qz_inst[i].num_retries = 0;
 
             if (unlikely(CPA_STATUS_SUCCESS != rc)) {
-                QZ_ERROR("Inst %ld, buffer %d, Error in decompIn offload: %d\n", i, j, rc);
+                QZ_WARN("Inst %ld, buffer %d, Error in decompIn offload: %d\n", i, j, rc);
                 decompInBufferCleanUp(i, j);
                 tmp_src_avail_len = src_avail_len;
                 tmp_dest_avail_len = dest_avail_len;
@@ -2333,7 +2333,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         sess->hw_session_stat == QZ_NO_HW                               ||
         !(isQATProcessable(src, src_len, qz_sess))                      ||
         qz_sess->inflate_stat == InflateOK) {
-        QZ_DEBUG("decompression src_len=%u, hdr->extra.qz_e.src_sz = %u, "
+        QZ_INFO("decompression src_len=%u, hdr->extra.qz_e.src_sz = %u, "
                  "g_process.qz_init_status = %d, sess->hw_session_stat = %ld, "
                  "isQATProcessable = %d, switch to software.\n",
                  *src_len,  hdr->extra.qz_e.src_sz,
@@ -2356,7 +2356,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
     i = qzGrabInstance(qz_sess->inst_hint, &(qz_sess->sess_params));
     if (unlikely(i == -1)) {
         if (qz_sess->sess_params.sw_backup == 1) {
-            QZ_DEBUG("Don't grab HW instance, fallback to sw\n");
+            QZ_INFO("Don't grab HW instance, fallback to sw\n");
             goto sw_decompression;
         } else {
             sess->hw_session_stat = QZ_NO_INST_ATTACH;
@@ -2365,12 +2365,12 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         }
         /*Make this a s/w compression*/
     }
-    QZ_DEBUG("qzDecompress: inst is %d\n", i);
+    QZ_INFO("qzDecompress: inst is %d\n", i);
     qz_sess->inst_hint = i;
 
     if (likely(0 ==  g_process.qz_inst[i].mem_setup ||
                0 ==  g_process.qz_inst[i].cpa_sess_setup)) {
-        QZ_DEBUG("Getting HW resources for inst %d\n", i);
+        QZ_INFO("Getting HW resources for inst %d\n", i);
         rc = qzSetupHW(sess, i);
         if (unlikely(QZ_OK != rc)) {
             qzReleaseInstance(i);
@@ -2456,13 +2456,13 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
     sess->total_in += qz_sess->qz_in_len;
     sess->total_out += qz_sess->qz_out_len;
 
-    QZ_DEBUG("total_in=%lu total_out=%lu src_len=%u dest_len=%u rc=%d\n",
+    QZ_INFO("*** total_in=%lu total_out=%lu src_len=%u dest_len=%u rc=%d ***\n",
              sess->total_in, sess->total_out, *src_len, *dest_len, rc);
 
     return sess->thd_sess_stat;
 
 sw_decompression:
-    QZ_DEBUG("The thread : %lu, DeCompress API SW fallback due to HW limitations!\n",
+    QZ_INFO("The thread : %lu, DeCompress API SW fallback due to HW limitations!\n",
              pthread_self());
     return qzSWDecompressMulti(sess, src, src_len, dest, dest_len);
 err_exit:

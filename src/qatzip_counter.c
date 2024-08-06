@@ -58,12 +58,12 @@ void dumpCounters(QzInstance_T *inst)
     int i;
 
     if (inst->mem_setup == 0) {
-        QZ_PRINT("\tNot in use\n");
+        QZ_INFO("\tNot in use\n");
         return;
     }
 
     for (i = 0; i < inst->dest_count; i++) {
-        QZ_PRINT("\tbuffer %d\t ses %ld\t %ld %ld %ld %ld\n",
+        QZ_INFO("\tbuffer %d\t ses %ld\t %ld %ld %ld %ld\n",
                  i, inst->stream[i].seq, inst->stream[i].src1,
                  inst->stream[i].src2, inst->stream[i].sink1,
                  inst->stream[i].sink2);
@@ -75,8 +75,8 @@ void dumpAllCounters(void)
     int i;
 
     for (i = 0; i <  g_process.num_instances; i++) {
-        QZ_PRINT("Instance %d\n", i);
+        QZ_INFO("Instance %d\n", i);
         dumpCounters(&g_process.qz_inst[i]);
-        QZ_PRINT("\n");
+        QZ_INFO("\n");
     }
 }

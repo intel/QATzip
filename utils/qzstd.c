@@ -64,6 +64,7 @@ void qzstd_help()
         "  -d,       decompress",
         "  -h,       show help information",
         "  -L,       set compression level of QAT",
+        "  -g,       set qatzip loglevel(none|error|warn|info|debug)",
         "  -o,       set output file name",
         "  -C,       set zstd block size && QAT hw buffer size",
         "  -r,       set max in-flight request number",
@@ -367,7 +368,7 @@ int compressFile(int in_file, int out_file)
 
     do {
         bytes_read = read(in_file, src_buffer, src_buffer_size);
-        QZ_PRINT("Reading input file (%u Bytes)\n", bytes_read);
+        QZ_INFO("Reading input file (%u Bytes)\n", bytes_read);
         puts("compressing...");
 
         dst_buffer_size = max_dst_buffer_size;
@@ -474,7 +475,7 @@ int decompressFile(int in_file, int out_file)
 
     do {
         bytes_read = read(in_file, src_buffer, src_buffer_size);
-        QZ_PRINT("Reading input file (%lu Bytes)\n", bytes_read);
+        QZ_INFO("Reading input file (%lu Bytes)\n", bytes_read);
         puts("Decompressing...");
 
         ZSTD_inBuffer input = { src_buffer, bytes_read, 0 };
@@ -527,11 +528,11 @@ void QzstdDisplayStats(double time, off_t insize, off_t outsize,
         double compressionRatio = ((double)insize) / ((double)outsize);
         double spaceSavings = 1 - ((double)outsize) / ((double)insize);
 
-        QZ_PRINT("Time taken:    %9.3lf ms\n", time / 1000);
-        QZ_PRINT("Throughput:    %9.3lf Mbit/s\n", throughput);
+        QZ_INFO("Time taken:    %9.3lf ms\n", time / 1000);
+        QZ_INFO("Throughput:    %9.3lf Mbit/s\n", throughput);
         if (is_compress) {
-            QZ_PRINT("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
-            QZ_PRINT("Compression ratio: %.3lf : 1\n", compressionRatio);
+            QZ_INFO("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
+            QZ_INFO("Compression ratio: %.3lf : 1\n", compressionRatio);
         }
     }
 }

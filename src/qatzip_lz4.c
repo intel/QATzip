@@ -72,20 +72,20 @@ int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len)
     //Skippable frames
     if ((hdr->magic & 0xFFFFFFF0U) == QZ_LZ4_MAGIC_SKIPPABLE) {
         /*for skippalbe frames, fallback to software decompression */
-        QZ_DEBUG("qzVerifyLZ4FrameHeader: skip frames, switch to software.\n");
+        QZ_WARN("qzVerifyLZ4FrameHeader: skip frames, switch to software.\n");
         return  QZ_FORCE_SW;
     }
 
     //Unknown magic number
     if (hdr->magic != QZ_LZ4_MAGIC) {
-        QZ_DEBUG("qzVerifyLZ4FrameHeader: unknown lz4 frame magic number %x.\n",
+        QZ_ERROR("qzVerifyLZ4FrameHeader: unknown lz4 frame magic number %x.\n",
                  hdr->magic);
         return QZ_FAIL;
     }
 
     //No support for unknown lz4 version
     if ((hdr->flag_desc >> 6 & 0x3) != QZ_LZ4_VERSION) {
-        QZ_DEBUG("qzVerifyLZ4FrameHeader: unknown lz4 frame version number.\n");
+        QZ_ERROR("qzVerifyLZ4FrameHeader: unknown lz4 frame version number.\n");
         return QZ_FAIL;
     }
 
@@ -93,7 +93,7 @@ int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len)
         (hdr->flag_desc >> 4 & 0x1) != QZ_LZ4_BLK_CKS_FLAG ||
         (hdr->flag_desc >> 2 & 0x1) != QZ_LZ4_CNT_CKS_FLAG ||
         (hdr->flag_desc >> 3 & 0x1) != QZ_LZ4_CNT_SIZE_FLAG) {
-        QZ_DEBUG("qzVerifyLZ4FrameHeader: unsupported lz4 frame header \
+        QZ_WARN("qzVerifyLZ4FrameHeader: unsupported lz4 frame header \
                  switch to software.\n");
         return QZ_FORCE_SW;
     }
