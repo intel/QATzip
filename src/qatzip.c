@@ -1070,7 +1070,6 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
         return QZ_PARAMS;
     }
 
-    sess->hw_session_stat = QZ_FAIL;
     if (sess->internal == NULL) {
         sess->internal = calloc(1, sizeof(QzSess_T));
         if (unlikely(NULL == sess->internal)) {
@@ -1081,6 +1080,7 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
         return QZ_DUPLICATE;
     }
 
+    sess->hw_session_stat = QZ_FAIL;
     qz_sess = (QzSess_T *)sess->internal;
     qzSetParams(params, &qz_sess->sess_params);
 
@@ -1113,7 +1113,6 @@ int qzSetupSessionDeflate(QzSession_T *sess,  QzSessionParamsDeflate_T *params)
         return QZ_PARAMS;
     }
 
-    sess->hw_session_stat = QZ_FAIL;
     if (sess->internal == NULL) {
         sess->internal = calloc(1, sizeof(QzSess_T));
         if (unlikely(NULL == sess->internal)) {
@@ -1124,6 +1123,7 @@ int qzSetupSessionDeflate(QzSession_T *sess,  QzSessionParamsDeflate_T *params)
         return QZ_DUPLICATE;
     }
 
+    sess->hw_session_stat = QZ_FAIL;
     qz_sess = (QzSess_T *)sess->internal;
     qzSetParamsDeflate(params, &qz_sess->sess_params);
 
@@ -1157,7 +1157,6 @@ int qzSetupSessionLZ4(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
         return QZ_PARAMS;
     }
 
-    sess->hw_session_stat = QZ_FAIL;
     if (sess->internal == NULL) {
         sess->internal = calloc(1, sizeof(QzSess_T));
         if (unlikely(NULL == sess->internal)) {
@@ -1168,6 +1167,7 @@ int qzSetupSessionLZ4(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
         return QZ_DUPLICATE;
     }
 
+    sess->hw_session_stat = QZ_FAIL;
     qz_sess = (QzSess_T *)sess->internal;
     qzSetParamsLZ4(params, &qz_sess->sess_params);
 
@@ -1200,7 +1200,6 @@ int qzSetupSessionLZ4S(QzSession_T *sess,  QzSessionParamsLZ4S_T *params)
         return QZ_PARAMS;
     }
 
-    sess->hw_session_stat = QZ_FAIL;
     if (sess->internal == NULL) {
         sess->internal = calloc(1, sizeof(QzSess_T));
         if (unlikely(NULL == sess->internal)) {
@@ -1211,6 +1210,7 @@ int qzSetupSessionLZ4S(QzSession_T *sess,  QzSessionParamsLZ4S_T *params)
         return QZ_DUPLICATE;
     }
 
+    sess->hw_session_stat = QZ_FAIL;
     qz_sess = (QzSess_T *)sess->internal;
     qzSetParamsLZ4S(params, &qz_sess->sess_params);
 
@@ -1959,7 +1959,7 @@ err_exit:
 static void *doDecompressIn(void *in)
 {
     unsigned long i, tag;
-    int rc;
+    int rc = 0;
     int j;
     unsigned int done = 0;
     unsigned int remaining;
@@ -2326,8 +2326,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
     }
 
     QZ_DEBUG("qzDecompress data_fmt: %d\n", data_fmt);
-    if (data_fmt == DEFLATE_RAW ||
-        (data_fmt == DEFLATE_GZIP_EXT &&
+    if ((data_fmt == DEFLATE_GZIP_EXT &&
          hdr->extra.qz_e.src_sz < qz_sess->sess_params.input_sz_thrshold) ||
         g_process.qz_init_status == QZ_NO_HW                            ||
         sess->hw_session_stat == QZ_NO_HW                               ||

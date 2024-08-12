@@ -891,6 +891,14 @@ int isQATProcessable(const unsigned char *ptr,
     case LZ4_FH:
         rc = isQATLZ4Processable(ptr, src_len, qz_sess);
         break;
+    case DEFLATE_RAW:
+        if(*src_len < qz_sess->sess_params.input_sz_thrshold){
+            QZ_DEBUG("isQATProcessable: deflate_raw src_len is less than input threshhold\n");
+            rc = 0;
+        }else{
+            rc = 1;
+        }
+        break;
     default:
         rc = 0;
         break;
@@ -959,7 +967,7 @@ void compBufferSetup(int i, int j, QzSess_T *qz_sess,
     dest_receive_sz = *qz_sess->dest_sz > DEST_SZ(src_send_sz) ?
                       DEST_SZ(src_send_sz) - outputHeaderSz(data_fmt) :
                       *qz_sess->dest_sz - outputHeaderSz(data_fmt);
-
+    QZ_DEBUG("compBufferSetup dest_receive_sz = %d , src_send_sz = %d\n",dest_receive_sz,src_send_sz);
     g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes = src_send_sz;
     g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
         dest_receive_sz;
@@ -1161,6 +1169,12 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         compressed_sz = (unsigned char *)lz4Footer - src_ptr - qzLZ4HeaderSz();
         uncompressed_sz = qzLZ4Header->cnt_size;
         break;
+    case DEFLATE_RAW:
+        compressed_sz = *(qz_sess->src_sz);
+        uncompressed_sz = (qz_sess->sess_params.hw_buff_sz > *(qz_sess->dest_sz)) ?
+                          *(qz_sess->dest_sz) : qz_sess->sess_params.hw_buff_sz;
+        QZ_DEBUG("checkHeader: DEFLATE_RAW HW Decompression enabled uncompressed_sz is %u \n", uncompressed_sz);
+        break;
     default:
         return QZ_FAIL;
     }
@@ -1327,6 +1341,7 @@ int decompOutCheckSum(int i, int j, QzSession_T *sess,
 {
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     if ((qz_sess->sess_params.data_fmt != DEFLATE_4B) &&
+        (qz_sess->sess_params.data_fmt != DEFLATE_RAW) &&
         unlikely(resl->checksum !=
                  g_process.qz_inst[i].stream[j].checksum ||
                  resl->produced != g_process.qz_inst[i].stream[j].orgdatalen)) {
