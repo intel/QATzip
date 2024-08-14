@@ -96,6 +96,7 @@ extern void insertThread(unsigned int th_id,
 void logMessage(QzLogLevel_T level, const char* file, int line, const char* format, ...);
 
 #define LOG(level, format, ...) logMessage(level, __FILE__, __LINE__, format, ##__VA_ARGS__)
+#define QZ_PRINT(format, ...) LOG(LOG_NONE, format, ##__VA_ARGS__)
 #define QZ_ERROR(format, ...) LOG(LOG_ERROR, format, ##__VA_ARGS__)
 #define QZ_WARN(format, ...) LOG(LOG_WARNING, format, ##__VA_ARGS__)
 #define QZ_INFO(format, ...) LOG(LOG_INFO, format, ##__VA_ARGS__)

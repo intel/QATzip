@@ -210,6 +210,9 @@ void logMessage(QzLogLevel_T level, const char* file, int line, const char* form
 
     switch (level)
     {
+    case LOG_NONE:
+        output = stderr;
+        break;
     case LOG_ERROR:
     case LOG_WARNING:
         output = stderr;
@@ -826,8 +829,6 @@ void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      DataFormatInternal_T data_fmt)
 {
-    QZ_INFO("Generate header\n");
-
     switch (data_fmt) {
     case DEFLATE_4B:
         qz4BHeaderGen(ptr, res);
