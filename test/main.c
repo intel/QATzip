@@ -767,16 +767,16 @@ void *qzDecompressSwQz(void *arg)
     rate /= sec;// Gbps
     rc = pthread_mutex_lock(&g_lock_print);
     assert(0 == rc);
-    QZ_INFO("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
+    QZ_PRINT("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
              "bytes=%lu, %Lf Gbps", tid, verify_data, count, el_m, org_src_sz, rate);
-    QZ_INFO(", input_len=%lu, comp_len=%lu, ratio=%f%%",
+    QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%",
              org_src_sz, comp_out_sz,
              ((double)comp_out_sz / (double)org_src_sz) * 100);
-    QZ_INFO(", comp_len=%lu, sw_decomp_len=%lu",
+    QZ_PRINT(", comp_len=%lu, sw_decomp_len=%lu",
              comp_out_sz, decomp_sw_out_sz);
-    QZ_INFO(", comp_len=%lu, qz_decomp_len=%lu",
+    QZ_PRINT(", comp_len=%lu, qz_decomp_len=%lu",
              comp_out_sz, decomp_qz_out_sz);
-    QZ_INFO("\n");
+    QZ_PRINT("\n");
     rc = pthread_mutex_unlock(&g_lock_print);
     assert(0 == rc);
 
@@ -988,14 +988,14 @@ void *qzCompressDecompressWithFormatOption(void *arg)
     rate /= sec;// Gbps
     rc = pthread_mutex_lock(&g_lock_print);
     assert(0 == rc);
-    QZ_INFO("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
+    QZ_PRINT("[INFO] srv=BOTH, tid=%ld, verify=%d, count=%d, msec=%llu, "
              "bytes=%lu, %Lf Gbps", tid, verify_data, count, el_m, org_src_sz, rate);
-    QZ_INFO(", input_len=%lu, comp_len=%lu, ratio=%f%%",
+    QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%",
              org_src_sz, comp_out_sz,
              ((double)comp_out_sz / (double)org_src_sz) * 100);
-    QZ_INFO(", comp_len=%lu, decomp_len=%lu",
+    QZ_PRINT(", comp_len=%lu, decomp_len=%lu",
              comp_out_sz, decomp_out_sz);
-    QZ_INFO("\n");
+    QZ_PRINT("\n");
     rc = pthread_mutex_unlock(&g_lock_print);
     assert(0 == rc);
 
@@ -1499,31 +1499,31 @@ void *qzCompressAndDecompress(void *arg)
     if (0 != pthread_mutex_lock(&g_lock_print)) {
         goto done;
     }
-    QZ_INFO("[INFO] srv=");
+    QZ_PRINT("[INFO] srv=");
     if (COMP == service) {
-        QZ_INFO("COMP");
+        QZ_PRINT("COMP");
     } else if (DECOMP == service) {
-        QZ_INFO("DECOMP");
+        QZ_PRINT("DECOMP");
     } else if (BOTH == service) {
-        QZ_INFO("BOTH");
+        QZ_PRINT("BOTH");
     } else {
         QZ_ERROR("UNKNOWN\n");
         pthread_mutex_unlock(&g_lock_print);
         goto done;
     }
-    QZ_INFO(", tid=%ld, verify=%d, count=%d, msec=%llu, "
+    QZ_PRINT(", tid=%ld, verify=%d, count=%d, msec=%llu, "
              "bytes=%lu, %Lf Gbps",
              tid, verify_data, count, el_m, org_src_sz, rate);
     if (DECOMP != service) {
-        QZ_INFO(", input_len=%lu, comp_len=%lu, ratio=%f%%",
+        QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%",
                  org_src_sz, comp_out_sz,
                  ((double)comp_out_sz / (double)org_src_sz) * 100);
     }
     if (COMP != service) {
-        QZ_INFO(", comp_len=%lu, decomp_len=%lu",
+        QZ_PRINT(", comp_len=%lu, decomp_len=%lu",
                  comp_out_sz, decomp_out_sz);
     }
-    QZ_INFO("\n");
+    QZ_PRINT("\n");
     if (test_thread_safe_flag == 1) {
         if (thread_sleep == 0) {
             srand(time(NULL));
@@ -1977,7 +1977,7 @@ test_3_end:
     }
     QZ_DEBUG("*** Decompress Stream Test 4 PASS***\n");
 
-    QZ_INFO("Compress Stream and Decompress function test: PASS\n");
+    QZ_PRINT("Compress Stream and Decompress function test: PASS\n");
 
 exit:
     if (NULL != orig_src) {
@@ -2103,7 +2103,7 @@ void *qzCompressStreamOnCommonMem(void *thd_arg)
     rate = src_sz * test_arg->count * 8; // bits
     rate = rate / 1000000000.0; // gigbits
     rate = rate / sec;// Gbps
-    QZ_INFO("[%ld] elapsed microsec = %llu bytes = %lu rate = %Lf Gbps\n",
+    QZ_PRINT("[%ld] elapsed microsec = %llu bytes = %lu rate = %Lf Gbps\n",
              tid, el_m, src_sz, rate);
 
 done:
@@ -2374,7 +2374,7 @@ void *qzCompressStreamInvalidChunkSize(void *thd_arg)
         pthread_exit((void *)
                      "qzCompressStreamInvalidChunkSize input param check FAILED");
     }
-    QZ_INFO("qzCompressStreamInvalidChunkSize : PASS\n");
+    QZ_PRINT("qzCompressStreamInvalidChunkSize : PASS\n");
 
 done:
     timeCheck(5, tid);
@@ -2480,7 +2480,7 @@ void *qzCompressStreamInvalidQzStreamParam(void *thd_arg)
         dumpOutputData(comp_strm.out_sz, comp_strm.out, filename);
         qzEndStream(&sess, &comp_strm);
     }
-    QZ_INFO("qzCompressStreamInvalidQzStreamParam : PASS\n");
+    QZ_PRINT("qzCompressStreamInvalidQzStreamParam : PASS\n");
 
 done:
     if (gen_data) {
@@ -2953,7 +2953,7 @@ void *qzCompressDecompressSwQZMixed(void *arg)
         }
     }
 
-    QZ_INFO("HW/SW mixed function test: PASS\n");
+    QZ_PRINT("HW/SW mixed function test: PASS\n");
     return NULL;
 }
 
@@ -3579,7 +3579,7 @@ int qzFuncTests(void)
             return -1;
         }
     }
-    QZ_INFO("SWFailOverFunc test : Passed\n");
+    QZ_PRINT("SWFailOverFunc test : Passed\n");
 
     int (*qz_compress_negative_tests[])(void) = {
         qzCompressFailedAtBufferOverflow,
@@ -3591,7 +3591,7 @@ int qzFuncTests(void)
             return -1;
         }
     }
-    QZ_INFO("qzCompressNegative test : Passed\n");
+    QZ_PRINT("qzCompressNegative test : Passed\n");
 
 
     int (*qz_compress_crc_positive[])(void) = {
@@ -3604,7 +3604,7 @@ int qzFuncTests(void)
             return -1;
         }
     }
-    QZ_INFO("qz_compress_crc_positive test : Passed\n");
+    QZ_PRINT("qz_compress_crc_positive test : Passed\n");
     return 0;
 }
 
@@ -3955,6 +3955,7 @@ done:
     "                          If set common, memory of compress buffer will be allocated through malloc\n" \
     "                          If set pinned, memory of compress buffer will be allocated in huge page, the\n" \
     "                          allocation limit is 2M\n"                        \
+    "    -g, --loglevel        set qatzip loglevel(none|error|warn|info|debug)\n"  \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -4005,7 +4006,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:vh";
+    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:g:vh";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -4211,6 +4212,22 @@ int main(int argc, char *argv[])
                 compress_buf_type = COMMON_MEM;
             } else {
                 QZ_ERROR("Error compress_buf_type arg: %s\n", optarg);
+                return -1;
+            }
+            break;
+        case 'g':
+            if (strcmp(optarg, "none") == 0) {
+                qzSetLogLevel(LOG_NONE);
+            } else if (strcmp(optarg, "error") == 0) {
+                qzSetLogLevel(LOG_ERROR);
+            } else if (strcmp(optarg, "warn") == 0) {
+                qzSetLogLevel(LOG_WARNING);
+            } else if (strcmp(optarg, "info") == 0) {
+                qzSetLogLevel(LOG_INFO);
+            } else if (strcmp(optarg, "debug") == 0) {
+                qzSetLogLevel(LOG_DEBUG1);
+            } else {
+                QZ_ERROR("Error log level: %s\n", optarg);
                 return -1;
             }
             break;
@@ -4438,10 +4455,10 @@ int main(int argc, char *argv[])
     if (test == 18) {
         rc_check = qz_do_g_process_Check();
         if (QZ_OK == rc_check) {
-            QZ_INFO("Check g_process PASSED\n");
+            QZ_PRINT("Check g_process PASSED\n");
         } else {
             ret = -1;
-            QZ_INFO("Check g_process FAILED\n");
+            QZ_PRINT("Check g_process FAILED\n");
         }
     }
 
