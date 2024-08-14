@@ -528,11 +528,11 @@ void QzstdDisplayStats(double time, off_t insize, off_t outsize,
         double compressionRatio = ((double)insize) / ((double)outsize);
         double spaceSavings = 1 - ((double)outsize) / ((double)insize);
 
-        QZ_INFO("Time taken:    %9.3lf ms\n", time / 1000);
-        QZ_INFO("Throughput:    %9.3lf Mbit/s\n", throughput);
+        QZ_PRINT("Time taken:    %9.3lf ms\n", time / 1000);
+        QZ_PRINT("Throughput:    %9.3lf Mbit/s\n", throughput);
         if (is_compress) {
-            QZ_INFO("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
-            QZ_INFO("Compression ratio: %.3lf : 1\n", compressionRatio);
+            QZ_PRINT("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
+            QZ_PRINT("Compression ratio: %.3lf : 1\n", compressionRatio);
         }
     }
 }

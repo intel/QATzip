@@ -86,7 +86,7 @@ const unsigned int USDM_ALLOC_MAX_SZ = (2 * 1024 * 1024 - 5 * 1024);
 
 void tryHelp(void)
 {
-    QZ_INFO("Try `%s --help' for more information.\n", g_program_name);
+    QZ_PRINT("Try `%s --help' for more information.\n", g_program_name);
     exit(ERROR);
 }
 
@@ -119,9 +119,9 @@ void help(void)
     };
     char const *const *p = help_msg;
 
-    QZ_INFO("Usage: %s [OPTION]... [FILE]...\n", g_program_name);
+    QZ_PRINT("Usage: %s [OPTION]... [FILE]...\n", g_program_name);
     while (*p) {
-        QZ_INFO("%s\n", *p++);
+        QZ_PRINT("%s\n", *p++);
     }
 }
 
@@ -161,11 +161,11 @@ void displayStats(RunTimeList_T *time_list,
         double compressionRatio = ((double)insize) / ((double)outsize);
         double spaceSavings = 1 - ((double)outsize) / ((double)insize);
 
-        QZ_INFO("Time taken:    %9.3lf ms\n", us_diff / 1000);
-        QZ_INFO("Throughput:    %9.3lf Mbit/s\n", throughput);
+        QZ_PRINT("Time taken:    %9.3lf ms\n", us_diff / 1000);
+        QZ_PRINT("Throughput:    %9.3lf Mbit/s\n", throughput);
         if (is_compress) {
-            QZ_INFO("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
-            QZ_INFO("Compression ratio: %.3lf : 1\n", compressionRatio);
+            QZ_PRINT("Space Savings: %9.3lf %%\n", spaceSavings * 100.0);
+            QZ_PRINT("Compression ratio: %.3lf : 1\n", compressionRatio);
         }
     }
 }
@@ -758,9 +758,9 @@ void version()
 {
     char const *const *p = g_license_msg;
 
-    QZ_INFO("%s v%s\n", g_program_name, QZIP_VERSION);
+    QZ_PRINT("%s v%s\n", g_program_name, QZIP_VERSION);
     while (*p) {
-        QZ_INFO("%s\n", *p++);
+        QZ_PRINT("%s\n", *p++);
     }
 }
 
