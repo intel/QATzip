@@ -196,10 +196,9 @@ static bool g_perf_svm = false;
 
 static struct timeval g_timers[100][100];
 static struct timeval g_timer_start;
-extern void dumpAllCounters();
+extern void dumpAllCounters(void);
 static int test_thread_safe_flag = 0;
 extern processData_T g_process;
-extern int errno;
 
 QzBlock_T *parseFormatOption(char *buf)
 {
