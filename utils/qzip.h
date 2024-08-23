@@ -655,7 +655,7 @@ Qz7zStreamsInfo_T *resolveMainStreamsInfo(FILE *fp);
 Qz7zEndHeader_T *resolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader);
 
 /* create category list */
-QzCatagoryTable_T *createCatagoryList();
+QzCatagoryTable_T *createCatagoryList(void);
 int scanFilesIntoCatagory(Qz7zItemList_T *the_list);
 /*
  * generate functions
@@ -743,7 +743,7 @@ void displayStats(RunTimeList_T *time_list,
 
 void tryHelp(void);
 void help(void);
-void version();
+void version(void);
 char *qzipBaseName(char *fname);
 QzSuffix_T getSuffix(const char *filename);
 bool hasSuffix(const char *fname);
@@ -801,6 +801,5 @@ extern const unsigned int g_bufsz_expansion_ratio[4];
 extern char const g_short_opts[];
 extern const struct option g_long_opts[];
 extern const unsigned int USDM_ALLOC_MAX_SZ;
-extern int errno;
 
 #endif
