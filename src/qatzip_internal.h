@@ -448,7 +448,7 @@ void cleanUpInstMem(int i);
 
 void qzMemDestory(void);
 
-void streamBufferCleanup();
+void streamBufferCleanup(void);
 
 //lz4 functions
 unsigned long qzLZ4HeaderSz(void);
