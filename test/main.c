@@ -208,7 +208,7 @@ QzBlock_T *parseFormatOption(char *buf)
     char *token, *sub_token;
     char *saveptr, *sub_saveptr;
 
-    int i, j, fmt_idx;
+    __attribute__((unused)) int i, j, fmt_idx;
     unsigned int fmt_found = 0;
     QzBlock_T *blk = NULL;
     QzBlock_T *head, *prev, *r;
