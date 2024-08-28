@@ -1494,7 +1494,7 @@ static void *doCompressOut(void *in)
     int good = -1;
     CpaDcRqResults *resl;
     CpaStatus sts;
-    unsigned int sleep_cnt = 0;
+    unsigned int sleep_cnt __attribute__((unused)) = 0;
     QzSession_T *sess = (QzSession_T *) in;
     QzSess_T *qz_sess = (QzSess_T *) sess->internal;
     long dest_avail_len = (long)(*qz_sess->dest_sz - qz_sess->qz_out_len);
@@ -2123,7 +2123,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
     int rc = 0;
     CpaDcRqResults *resl;
     CpaStatus sts;
-    unsigned int sleep_cnt = 0;
+    unsigned int sleep_cnt __attribute__((unused)) = 0;
     unsigned int done = 0;
     unsigned int src_send_sz;
     unsigned int dest_avail_len;
