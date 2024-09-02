@@ -871,3 +871,4 @@ int decompOutSWFallback(int i, int j, QzSession_T *sess,
     *dest_avail_len -= dest_receive_sz;
     return QZ_OK;
 }
+
