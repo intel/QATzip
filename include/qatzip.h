@@ -80,7 +80,7 @@ extern"C" {
  *    and minor number definitions represent the complete version number for
  *    this interface.
  *****************************************************************************/
-#define QATZIP_API_VERSION_NUM_MINOR (5)
+#define QATZIP_API_VERSION_NUM_MINOR (6)
 
 /* Define a macro as an integer to test */
 #define QATZIP_API_VERSION    (QATZIP_API_VERSION_NUM_MAJOR * 10000 +      \
