@@ -259,6 +259,10 @@ make sure that you have installed zstd static lib.
 ```bash
     qzstd $your_input_file
 ```
+### Build Docker Image
+Also there is dockerfile available for QAT Compression Base which can be built
+into docker images.
+Please refer [here](dockerfiles/README.md) for more details.
 
 ## Test QATzip
 
@@ -317,6 +321,16 @@ Known issues relating to the QATzip are described in this section.
 | Implication | User use qzMalloc API to allocate continuous memory |
 | Resolution | Ensure qzMemDestory is invoked after qzFree, now we use attribute destructor to invoke qzMemDestory|
 | Affected OS | Linux |
+
+### QATAPP-33809
+| Title      |     Failures using standalone mode in multi-threaded application    |
+|----------|:-------------
+| Reference   | QATAPP-33809 |
+| Description | If a multi-threaded application using standalone mode (no qatmgr) calls icp_sal_userStart() in one thread and icp_sal_userStop() in a different thread, errors like "Incorrect thread xxx for section SSL_INT_X. Expected yyy" will be seen.  |
+| Implication | Standalone mode is typically used when running in a container and this error has been seen there. If icp_sal_userStop() is called in a separate thread, after this error is seen some resources, e.g. memory, will not be freed. As long as the process finishes after calling icp_sal_userStop(), the resources will be freed by the OS. However, if the process doesn't end and icp_sal_userStart() is called again, the behaviour will be undefined.|
+| Resolution | If running in standalone mode in a multi-threaded process, it's recommended to call icp_sal_userStart() and icp_sal_userStop() in the same thread to avoid seeing these errors.|
+| Affected OS | Linux |
+| Driver/Module | CPM-IA - General |
 
 ## Intended Audience
 
