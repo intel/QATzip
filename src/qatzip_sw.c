@@ -398,7 +398,7 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
     insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
 #endif
     QZ_INFO("Start qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
-             *src_len, *dest_len);
+            *src_len, *dest_len);
 
     *src_len = 0;
     *dest_len = 0;
@@ -423,7 +423,7 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
 
 out:
     QZ_INFO("Exit qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
-             *src_len, *dest_len);
+            *src_len, *dest_len);
     return ret;
 }
 
@@ -447,7 +447,7 @@ int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
     }
     *dest_len = total_out;
     QZ_INFO("Exit qzLZ4SWCompress: src_len %u dest_len %u\n",
-             *src_len, *dest_len);
+            *src_len, *dest_len);
 
     return QZ_OK;
 
@@ -466,7 +466,7 @@ int qzLZ4SWDecompress(QzSession_T *sess, const unsigned char *src,
     size_t ret = QZ_OK;
     QzSess_T *qz_sess = NULL;
     QZ_INFO("Enter qzLZ4SWDecompress: src_len %u dest_len %u\n",
-             *src_len, *dest_len);
+            *src_len, *dest_len);
 
     qz_sess = (QzSess_T *) sess->internal;
     if (qz_sess->dctx == NULL) {
@@ -504,7 +504,7 @@ int qzLZ4SWDecompress(QzSession_T *sess, const unsigned char *src,
     *src_len = in_sz;
     *dest_len = out_sz;
     QZ_INFO("Exit qzLZ4SWDecompress: src_len %u dest_len %u\n",
-             *src_len, *dest_len);
+            *src_len, *dest_len);
 
     return QZ_OK;
 
@@ -534,7 +534,7 @@ int qzSWDecompressMultiLZ4(QzSession_T *sess, const unsigned char *src,
     insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
 #endif
     QZ_INFO("Start qzSWDecompressMultiLz4: src_len %u dest_len %u\n",
-             *src_len, *dest_len);
+            *src_len, *dest_len);
 
     *src_len = 0;
     *dest_len = 0;
@@ -559,7 +559,7 @@ int qzSWDecompressMultiLZ4(QzSession_T *sess, const unsigned char *src,
 
 out:
     QZ_INFO("Exit qzSWDecompressMultiLz4: src_len %u dest_len %u\n",
-             *src_len, *dest_len);
+            *src_len, *dest_len);
     return ret;
 }
 

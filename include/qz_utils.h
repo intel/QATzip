@@ -93,7 +93,8 @@ extern void insertThread(unsigned int th_id,
 /*  QATzip log API
  *  could change the log level on runtime
  */
-void logMessage(QzLogLevel_T level, const char* file, int line, const char* format, ...);
+void logMessage(QzLogLevel_T level, const char *file, int line,
+                const char *format, ...);
 
 #ifdef __clang__
 /* The ', ##__VA_ARGS__' is a GNU extension and it's support by clang too,
