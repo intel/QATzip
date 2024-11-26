@@ -586,7 +586,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                         bytes_read = fread(src_buffer, 1, src_buffer_size,
                                            src_file);
                         QZ_INFO("Reading input file %s (%u Bytes)\n",
-                                 src_file_name, bytes_read);
+                                src_file_name, bytes_read);
                     }
                 } else {
                     bytes_read = file_remaining;
@@ -784,7 +784,8 @@ int deleteSourceFile(Qz7zItemList_T *list)
 Qz7zSignatureHeader_T *resolveSignatureHeader(FILE *fp)
 {
     int n;
-    Qz7zSignatureHeader_T *sheader = qzMalloc(sizeof(Qz7zSignatureHeader_T), QZ_AUTO_SELECT_NUMA_NODE,
+    Qz7zSignatureHeader_T *sheader = qzMalloc(sizeof(Qz7zSignatureHeader_T),
+                                     QZ_AUTO_SELECT_NUMA_NODE,
                                      PINNED_MEM);
     if (sheader) {
         n = fread(&sheader->signature, sizeof(unsigned char), 6, fp);
@@ -812,7 +813,8 @@ Qz7zSignatureHeader_T *resolveSignatureHeader(FILE *fp)
 #define QZ7Z_DEVELOP_ID_SHIFT         16
 Qz7zArchiveProperty_T *resolveArchiveProperties(FILE *fp)
 {
-    Qz7zArchiveProperty_T *property = qzMalloc(sizeof(Qz7zArchiveProperty_T), QZ_AUTO_SELECT_NUMA_NODE,
+    Qz7zArchiveProperty_T *property = qzMalloc(sizeof(Qz7zArchiveProperty_T),
+                                      QZ_AUTO_SELECT_NUMA_NODE,
                                       PINNED_MEM);
     if (!property) {
         QZ_ERROR("malloc property error\n");
@@ -862,7 +864,8 @@ error:
 
 Qz7zPackInfo_T *resolvePackInfo(FILE *fp)
 {
-    Qz7zPackInfo_T  *pack = qzMalloc(sizeof(Qz7zPackInfo_T), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    Qz7zPackInfo_T  *pack = qzMalloc(sizeof(Qz7zPackInfo_T),
+                                     QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
     if (!pack) {
         QZ_ERROR("malloc pack error\n");
         return NULL;
@@ -870,7 +873,8 @@ Qz7zPackInfo_T *resolvePackInfo(FILE *fp)
 
     pack->PackPos = getU64FromBytes(fp);
     pack->NumPackStreams = getU64FromBytes(fp);
-    pack->PackSize = qzMalloc(pack->NumPackStreams * sizeof(uint64_t), QZ_AUTO_SELECT_NUMA_NODE,
+    pack->PackSize = qzMalloc(pack->NumPackStreams * sizeof(uint64_t),
+                              QZ_AUTO_SELECT_NUMA_NODE,
                               PINNED_MEM);
     if (!pack->PackSize) {
         goto error;
@@ -904,7 +908,8 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
 {
     unsigned char c;
     int i_folder = 0;
-    Qz7zCodersInfo_T *coders = qzMalloc(sizeof(Qz7zCodersInfo_T), QZ_AUTO_SELECT_NUMA_NODE,
+    Qz7zCodersInfo_T *coders = qzMalloc(sizeof(Qz7zCodersInfo_T),
+                                        QZ_AUTO_SELECT_NUMA_NODE,
                                         PINNED_MEM);
     if (!coders) {
         QZ_ERROR("malloc coders\n");
@@ -917,7 +922,8 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
     }
 
     coders->numFolders = getU64FromBytes(fp);
-    coders->folders = qzMalloc(coders->numFolders * sizeof(Qz7zFolderInfo_T), QZ_AUTO_SELECT_NUMA_NODE,
+    coders->folders = qzMalloc(coders->numFolders * sizeof(Qz7zFolderInfo_T),
+                               QZ_AUTO_SELECT_NUMA_NODE,
                                PINNED_MEM);
     if (!coders->folders) {
         QZ_ERROR("malloc folders error\n");
@@ -930,13 +936,15 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
             size_t n;
             unsigned int id_size;
             p->numCoders = readByte(fp);
-            p->coder_list = qzMalloc(sizeof(Qz7zCoder_T), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+            p->coder_list = qzMalloc(sizeof(Qz7zCoder_T), QZ_AUTO_SELECT_NUMA_NODE,
+                                     PINNED_MEM);
             if (!p->coder_list) {
                 goto error;
             }
             p->coder_list->coderFirstByte.uc = readByte(fp);
             id_size = p->coder_list->coderFirstByte.st.CodecIdSize;
-            p->coder_list->codecID = qzMalloc(id_size, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+            p->coder_list->codecID = qzMalloc(id_size, QZ_AUTO_SELECT_NUMA_NODE,
+                                              PINNED_MEM);
             if (!p->coder_list->codecID) {
                 QZ_ERROR("malloc error\n");
                 goto error;
@@ -961,7 +969,8 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
         goto error;
     }
 
-    coders->unPackSize = qzMalloc(coders->numFolders * sizeof(uint64_t), QZ_AUTO_SELECT_NUMA_NODE,
+    coders->unPackSize = qzMalloc(coders->numFolders * sizeof(uint64_t),
+                                  QZ_AUTO_SELECT_NUMA_NODE,
                                   PINNED_MEM);
     if (!coders->unPackSize) {
         QZ_ERROR("malloc error\n");
@@ -993,7 +1002,8 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
     int unpacksize_resolved = 0;
     int digests_resolved = 0;
 
-    Qz7zSubstreamsInfo_T *substreams = qzMalloc(sizeof(Qz7zSubstreamsInfo_T), QZ_AUTO_SELECT_NUMA_NODE,
+    Qz7zSubstreamsInfo_T *substreams = qzMalloc(sizeof(Qz7zSubstreamsInfo_T),
+                                       QZ_AUTO_SELECT_NUMA_NODE,
                                        PINNED_MEM);
     if (!substreams) {
         QZ_ERROR("malloc error\n");
@@ -1065,7 +1075,8 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
                 goto error;
             }
 
-            substreams->digests = qzMalloc(sizeof(Qz7zDigest_T), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+            substreams->digests = qzMalloc(sizeof(Qz7zDigest_T), QZ_AUTO_SELECT_NUMA_NODE,
+                                           PINNED_MEM);
             if (!substreams->digests) {
                 QZ_ERROR("malloc error\n");
                 goto error;
@@ -1080,7 +1091,8 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
             QZ_DEBUG(" read allaredefined : 111 total: %d\n", total);
 
             substreams->digests->numDefined = total;
-            substreams->digests->crc = qzMalloc(total * sizeof(uint32_t), QZ_AUTO_SELECT_NUMA_NODE,
+            substreams->digests->crc = qzMalloc(total * sizeof(uint32_t),
+                                                QZ_AUTO_SELECT_NUMA_NODE,
                                                 PINNED_MEM);
             if (!substreams->digests->crc) {
                 QZ_ERROR("malloc error\n");
@@ -1240,7 +1252,8 @@ Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp)
     uint64_t dir_num;
     uint64_t file_num;
 
-    Qz7zFilesInfo_Dec_T *files = qzMalloc(sizeof(Qz7zFilesInfo_Dec_T), QZ_AUTO_SELECT_NUMA_NODE,
+    Qz7zFilesInfo_Dec_T *files = qzMalloc(sizeof(Qz7zFilesInfo_Dec_T),
+                                          QZ_AUTO_SELECT_NUMA_NODE,
                                           PINNED_MEM);
     if (!files) {
         QZ_ERROR("malloc error\n");
@@ -1943,7 +1956,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
                 src_buffer = src_buffer_orig;
                 bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
                 QZ_INFO("Reading input file %s (%u Bytes)\n", src_file_name,
-                         bytes_read);
+                        bytes_read);
             } else {
                 bytes_read = file_remaining;
             }
@@ -2408,7 +2421,8 @@ QzListHead_T *qzListCreate(int num_per_node)
 
 Qz7zSignatureHeader_T *generateSignatureHeader(void)
 {
-    Qz7zSignatureHeader_T  *header = qzMalloc(sizeof(Qz7zSignatureHeader_T), QZ_AUTO_SELECT_NUMA_NODE,
+    Qz7zSignatureHeader_T  *header = qzMalloc(sizeof(Qz7zSignatureHeader_T),
+                                     QZ_AUTO_SELECT_NUMA_NODE,
                                      PINNED_MEM);
 
     if (!header) {
@@ -2427,7 +2441,8 @@ Qz7zSignatureHeader_T *generateSignatureHeader(void)
 Qz7zPackInfo_T *generatePackInfo(Qz7zItemList_T *the_list,
                                  size_t compressed_size)
 {
-    Qz7zPackInfo_T *pack = qzMalloc(sizeof(Qz7zPackInfo_T), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    Qz7zPackInfo_T *pack = qzMalloc(sizeof(Qz7zPackInfo_T),
+                                    QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
     if (!pack) {
         QZ_ERROR("malloc error\n");
         return NULL;
@@ -2438,7 +2453,8 @@ Qz7zPackInfo_T *generatePackInfo(Qz7zItemList_T *the_list,
     pack->PackPos = 0;
     pack->NumPackStreams = the_list->table->cat_num;
 
-    pack->PackSize = qzMalloc(pack->NumPackStreams * sizeof(uint64_t), QZ_AUTO_SELECT_NUMA_NODE,
+    pack->PackSize = qzMalloc(pack->NumPackStreams * sizeof(uint64_t),
+                              QZ_AUTO_SELECT_NUMA_NODE,
                               PINNED_MEM);
     if (!pack->PackSize) {
         qzFree(pack);
@@ -2453,14 +2469,16 @@ Qz7zPackInfo_T *generatePackInfo(Qz7zItemList_T *the_list,
 static Qz7zCoder_T *generateCoder(void)
 {
 
-    Qz7zCoder_T *coder = qzMalloc(sizeof(Qz7zCoder_T), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    Qz7zCoder_T *coder = qzMalloc(sizeof(Qz7zCoder_T), QZ_AUTO_SELECT_NUMA_NODE,
+                                  PINNED_MEM);
     if (!coder) {
         QZ_ERROR("malloc error\n");
         return NULL;
     }
 
     coder->coderFirstByte.uc = 0x03; /* 0000 0011 */
-    coder->codecID = qzMalloc(3 * sizeof(unsigned char), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    coder->codecID = qzMalloc(3 * sizeof(unsigned char), QZ_AUTO_SELECT_NUMA_NODE,
+                              PINNED_MEM);
     if (!coder->codecID) {
         QZ_ERROR("malloc error\n");
         return NULL;
@@ -2504,7 +2522,8 @@ Qz7zFolderInfo_T *generateFolderInfo(Qz7zItemList_T *the_list, int n_folders)
 
 Qz7zCodersInfo_T *generateCodersInfo(Qz7zItemList_T *the_list)
 {
-    Qz7zCodersInfo_T *coders = qzMalloc(sizeof(Qz7zCodersInfo_T), QZ_AUTO_SELECT_NUMA_NODE,
+    Qz7zCodersInfo_T *coders = qzMalloc(sizeof(Qz7zCodersInfo_T),
+                                        QZ_AUTO_SELECT_NUMA_NODE,
                                         PINNED_MEM);
     if (!coders) {
         QZ_ERROR("malloc error\n");
@@ -2518,7 +2537,8 @@ Qz7zCodersInfo_T *generateCodersInfo(Qz7zItemList_T *the_list)
         qzFree(coders);
         return NULL;
     }
-    coders->unPackSize = qzMalloc(coders->numFolders * sizeof(uint64_t), QZ_AUTO_SELECT_NUMA_NODE,
+    coders->unPackSize = qzMalloc(coders->numFolders * sizeof(uint64_t),
+                                  QZ_AUTO_SELECT_NUMA_NODE,
                                   PINNED_MEM);
     if (!coders->unPackSize) {
         QZ_ERROR("malloc error\n");
@@ -2542,7 +2562,8 @@ Qz7zCodersInfo_T *generateCodersInfo(Qz7zItemList_T *the_list)
 
 Qz7zDigest_T *generateDigestInfo(QzListHead_T *head)
 {
-    Qz7zDigest_T *digests = qzMalloc(sizeof(Qz7zDigest_T), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    Qz7zDigest_T *digests = qzMalloc(sizeof(Qz7zDigest_T), QZ_AUTO_SELECT_NUMA_NODE,
+                                     PINNED_MEM);
     if (!digests) {
         QZ_ERROR("malloc error\n");
         return NULL;
@@ -2551,7 +2572,8 @@ Qz7zDigest_T *generateDigestInfo(QzListHead_T *head)
     digests->allAreDefined = 1;
     digests->numStreams = head->total;
     digests->numDefined = head->total;
-    digests->crc = qzMalloc(digests->numDefined * sizeof(uint32_t), QZ_AUTO_SELECT_NUMA_NODE,
+    digests->crc = qzMalloc(digests->numDefined * sizeof(uint32_t),
+                            QZ_AUTO_SELECT_NUMA_NODE,
                             PINNED_MEM);
     if (!digests->crc) {
         QZ_ERROR("malloc error\n");
@@ -2637,7 +2659,8 @@ Qz7zSubstreamsInfo_T *generateSubstreamsInfo(Qz7zItemList_T *the_list)
 
 Qz7zFilesInfo_T *generateFilesInfo(Qz7zItemList_T *the_list)
 {
-    Qz7zFilesInfo_T *filesInfo = qzMalloc(sizeof(Qz7zFilesInfo_T), QZ_AUTO_SELECT_NUMA_NODE,
+    Qz7zFilesInfo_T *filesInfo = qzMalloc(sizeof(Qz7zFilesInfo_T),
+                                          QZ_AUTO_SELECT_NUMA_NODE,
                                           PINNED_MEM);
     if (!filesInfo) {
         QZ_ERROR("malloc error\n");
@@ -2668,7 +2691,8 @@ Qz7zStreamsInfo_T *generateStreamsInfo(Qz7zItemList_T *the_list,
 
 Qz7zArchiveProperty_T *generatePropertyInfo(void)
 {
-    Qz7zArchiveProperty_T *property = qzMalloc(sizeof(Qz7zArchiveProperty_T), QZ_AUTO_SELECT_NUMA_NODE,
+    Qz7zArchiveProperty_T *property = qzMalloc(sizeof(Qz7zArchiveProperty_T),
+                                      QZ_AUTO_SELECT_NUMA_NODE,
                                       PINNED_MEM);
     if (!property) {
         QZ_ERROR("malloc error\n");

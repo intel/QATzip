@@ -64,9 +64,9 @@ void dumpCounters(QzInstance_T *inst)
 
     for (i = 0; i < inst->dest_count; i++) {
         QZ_INFO("\tbuffer %d\t ses %ld\t %ld %ld %ld %ld\n",
-                 i, inst->stream[i].seq, inst->stream[i].src1,
-                 inst->stream[i].src2, inst->stream[i].sink1,
-                 inst->stream[i].sink2);
+                i, inst->stream[i].seq, inst->stream[i].src1,
+                inst->stream[i].src2, inst->stream[i].sink1,
+                inst->stream[i].sink2);
     }
 }
 

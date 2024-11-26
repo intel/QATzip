@@ -322,7 +322,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         if (read_more) {
             bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
             QZ_INFO("Reading input file %s (%u Bytes)\n", src_file_name,
-                     bytes_read);
+                    bytes_read);
         } else {
             bytes_read = file_remaining;
         }

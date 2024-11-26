@@ -269,7 +269,7 @@ QzBlock_T *parseFormatOption(char *buf)
     i = 1;
     while (blk) {
         QZ_INFO("[INFO] Block%d:  format -%8s, \tsize - %d\n",
-                 i++, g_format_list[blk->fmt - 1].fmt_name, blk->size);
+                i++, g_format_list[blk->fmt - 1].fmt_name, blk->size);
         blk = blk->next;
     }
 
@@ -619,8 +619,10 @@ void *qzDecompressSwQz(void *arg)
 
     src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
     comp_out = qzMalloc(comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
-    decomp_sw_out = qzMalloc(decomp_sw_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
-    decomp_qz_out = qzMalloc(decomp_qz_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_sw_out = qzMalloc(decomp_sw_out_sz, QZ_AUTO_SELECT_NUMA_NODE,
+                             PINNED_MEM);
+    decomp_qz_out = qzMalloc(decomp_qz_out_sz, QZ_AUTO_SELECT_NUMA_NODE,
+                             PINNED_MEM);
 
     if (!src || !comp_out || !decomp_sw_out || !decomp_qz_out) {
         QZ_ERROR("Malloc failed\n");
@@ -1053,7 +1055,7 @@ void *qzSetupParamFuncTest(void *arg)
         goto end;
     }
     QZ_INFO("With default params, input_len:%lu, output_len:%lu.\n",
-             src_sz, test_dest_sz);
+            src_sz, test_dest_sz);
     test_dest_sz = dest_sz;
 
     // Negative Test
@@ -3740,7 +3742,7 @@ void *forkResourceCheck(void *arg)
     QZ_DEBUG("Hello from forkResourceCheck\n");
     QZ_INFO("This is parent process, my pid = %d\n", getpid());
     QZ_INFO("Before qzInit, qz_init_status in parent process is %d\n",
-             g_process.qz_init_status);
+            g_process.qz_init_status);
     if (!((TestArg_T *)arg)->init_engine_disabled) {
         rc = qzInit(&sess, ((TestArg_T *)arg)->sw_backup);
         if (QZ_INIT_FAIL(rc)) {
@@ -3751,9 +3753,9 @@ void *forkResourceCheck(void *arg)
     pid = fork();
     if (pid > 0) {
         QZ_INFO("After qzInit, qz_init_status in parent process is %d\n",
-                 g_process.qz_init_status);
+                g_process.qz_init_status);
         QZ_INFO("instID in parent process is %s\n",
-                 g_process.qz_inst[0].instance_info.instID);
+                g_process.qz_inst[0].instance_info.instID);
         hp_params_fd = open(MAX_HUGEPAGE_FILE, O_RDONLY);
         if (hp_params_fd < 0) {
             QZ_ERROR("Open %s failed\n", MAX_HUGEPAGE_FILE);
@@ -3773,7 +3775,7 @@ void *forkResourceCheck(void *arg)
             goto done;
         }
         QZ_INFO("After qzInit, number_huge_pages in parent process is %d\n",
-                 (int)number_huge_pages);
+                (int)number_huge_pages);
         close(hp_params_fd);
         wait(&status);
     } else if (pid == 0) {
@@ -3782,16 +3784,16 @@ void *forkResourceCheck(void *arg)
         QZ_INFO("This is child process, my ppid = %d\n", getppid());
         g_process.qz_init_status = QZ_NONE;
         QZ_INFO("Before qzInit, qz_init_status in child process is %d\n",
-                 g_process.qz_init_status);
+                g_process.qz_init_status);
         if (!((TestArg_T *)arg)->init_engine_disabled) {
             rc = qzInit(&sess, ((TestArg_T *)arg)->sw_backup);
             if (QZ_INIT_FAIL(rc)) {
                 pthread_exit((void *)"qzInit failed");
             }
             QZ_INFO("After qzInit, qz_init_status in child process is %d\n",
-                     g_process.qz_init_status);
+                    g_process.qz_init_status);
             QZ_INFO("instID in child process is %s\n",
-                     g_process.qz_inst[0].instance_info.instID);
+                    g_process.qz_inst[0].instance_info.instID);
         }
         hp_params_fd = open(MAX_HUGEPAGE_FILE, O_RDONLY);
         if (hp_params_fd < 0) {
@@ -3812,7 +3814,7 @@ void *forkResourceCheck(void *arg)
             goto done;
         }
         QZ_INFO("After qzInit, number_huge_pages in child process is %d\n",
-                 (int)number_huge_pages);
+                (int)number_huge_pages);
         close(hp_params_fd);
         exit(0);
     } else {
@@ -4367,9 +4369,11 @@ int main(int argc, char *argv[])
         if (compress_buf_type == PINNED_MEM) {
             test_arg[i].comp_out_sz = test_arg[i].src_sz;
             test_arg[i].src = input_buf;
-            test_arg[i].comp_out = qzMalloc(test_arg[i].comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+            test_arg[i].comp_out = qzMalloc(test_arg[i].comp_out_sz,
+                                            QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
             test_arg[i].decomp_out_sz = test_arg[i].src_sz;
-            test_arg[i].decomp_out = qzMalloc(test_arg[i].decomp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+            test_arg[i].decomp_out = qzMalloc(test_arg[i].decomp_out_sz,
+                                              QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         } else {
             test_arg[i].comp_out_sz = test_arg[i].src_sz * 2;
             test_arg[i].src = input_buf;
