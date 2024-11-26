@@ -369,7 +369,7 @@ static unsigned int copyStreamInput(QzStream_T *strm, unsigned char *in)
     cpy_cnt = (strm->in_sz > avail_in) ? avail_in : strm->in_sz;
     QZ_MEMCPY(stream_buf->in_buf + strm->pending_in, in, cpy_cnt, strm->in_sz);
     QZ_INFO("Copy to input from %p, to %p, count %u\n",
-             in, stream_buf->in_buf + strm->pending_in, cpy_cnt);
+            in, stream_buf->in_buf + strm->pending_in, cpy_cnt);
 
     strm->pending_in += cpy_cnt;
     strm->in_sz -= cpy_cnt;

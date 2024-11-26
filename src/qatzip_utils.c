@@ -148,12 +148,12 @@ static void doDumpThreadInfo(ThreadList_T *node,
         QZ_INFO("%s num_th %u\n", serv_title, num_node);
         while (node) {
             QZ_INFO("th_id: %u comp_hw_count: %u comp_sw_count: %u "
-                     "decomp_hw_count: %u decomp_sw_count: %u\n",
-                     node->thread_id,
-                     node->comp_hw_count,
-                     node->comp_sw_count,
-                     node->decomp_hw_count,
-                     node->decomp_sw_count);
+                    "decomp_hw_count: %u decomp_sw_count: %u\n",
+                    node->thread_id,
+                    node->comp_hw_count,
+                    node->comp_sw_count,
+                    node->decomp_hw_count,
+                    node->decomp_sw_count);
             i++;
             node = node->next;
             if (i == num_node) {
@@ -182,23 +182,34 @@ void dumpThreadInfo(void)
 
 QzLogLevel_T currentLogLevel = LOG_WARNING;
 
-void qzSetLogLevel(QzLogLevel_T level) {
+void qzSetLogLevel(QzLogLevel_T level)
+{
     currentLogLevel = level;
 }
 
-const char* getLogLevelString(QzLogLevel_T level) {
+const char *getLogLevelString(QzLogLevel_T level)
+{
     switch (level) {
-        case LOG_ERROR: return "ERROR";
-        case LOG_WARNING: return "WARNING";
-        case LOG_INFO: return "INFO";
-        case LOG_DEBUG1: return "DEBUG";
-        case LOG_DEBUG2: return "TEST";
-        case LOG_DEBUG3: return "MEM";
-        default: return "UNKNOWN";
+    case LOG_ERROR:
+        return "ERROR";
+    case LOG_WARNING:
+        return "WARNING";
+    case LOG_INFO:
+        return "INFO";
+    case LOG_DEBUG1:
+        return "DEBUG";
+    case LOG_DEBUG2:
+        return "TEST";
+    case LOG_DEBUG3:
+        return "MEM";
+    default:
+        return "UNKNOWN";
     }
 }
 
-void logMessage(QzLogLevel_T level, const char* file, int line, const char* format, ...) {
+void logMessage(QzLogLevel_T level, const char *file, int line,
+                const char *format, ...)
+{
 
     if (level > currentLogLevel) return;
 
@@ -208,15 +219,15 @@ void logMessage(QzLogLevel_T level, const char* file, int line, const char* form
     strftime(time_buffer, 26, "%Y-%m-%d %H:%M:%S", tm_info);
     FILE *output = stderr;
 
-    switch (level)
-    {
+    switch (level) {
     case LOG_NONE:
         output = stderr;
         break;
     case LOG_ERROR:
     case LOG_WARNING:
         output = stderr;
-        fprintf(output, "[%s] [%s] (%s:%d): ", getLogLevelString(level), time_buffer, file, line);
+        fprintf(output, "[%s] [%s] (%s:%d): ", getLogLevelString(level), time_buffer,
+                file, line);
         break;
     case LOG_INFO:
     case LOG_DEBUG1:
@@ -893,10 +904,10 @@ int isQATProcessable(const unsigned char *ptr,
         rc = isQATLZ4Processable(ptr, src_len, qz_sess);
         break;
     case DEFLATE_RAW:
-        if(*src_len < qz_sess->sess_params.input_sz_thrshold){
+        if (*src_len < qz_sess->sess_params.input_sz_thrshold) {
             QZ_DEBUG("isQATProcessable: deflate_raw src_len is less than input threshhold\n");
             rc = 0;
-        }else{
+        } else {
             rc = 1;
         }
         break;
@@ -968,7 +979,8 @@ void compBufferSetup(int i, int j, QzSess_T *qz_sess,
     dest_receive_sz = *qz_sess->dest_sz > DEST_SZ(src_send_sz) ?
                       DEST_SZ(src_send_sz) - outputHeaderSz(data_fmt) :
                       *qz_sess->dest_sz - outputHeaderSz(data_fmt);
-    QZ_DEBUG("compBufferSetup dest_receive_sz = %d , src_send_sz = %d\n",dest_receive_sz,src_send_sz);
+    QZ_DEBUG("compBufferSetup dest_receive_sz = %d , src_send_sz = %d\n",
+             dest_receive_sz, src_send_sz);
     g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes = src_send_sz;
     g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes =
         dest_receive_sz;
@@ -1174,7 +1186,8 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         compressed_sz = *(qz_sess->src_sz);
         uncompressed_sz = (qz_sess->sess_params.hw_buff_sz > *(qz_sess->dest_sz)) ?
                           *(qz_sess->dest_sz) : qz_sess->sess_params.hw_buff_sz;
-        QZ_DEBUG("checkHeader: DEFLATE_RAW HW Decompression enabled uncompressed_sz is %u \n", uncompressed_sz);
+        QZ_DEBUG("checkHeader: DEFLATE_RAW HW Decompression enabled uncompressed_sz is %u \n",
+                 uncompressed_sz);
         break;
     default:
         return QZ_FAIL;

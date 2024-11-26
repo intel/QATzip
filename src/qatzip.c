@@ -475,7 +475,7 @@ static void stopQat(void)
         (void)icp_sal_userStop();
     } else {
         QZ_WARN("qz init status is invalid, status=%d\n",
-                 g_process.qz_init_status);
+                g_process.qz_init_status);
         goto reset;
     }
 
@@ -927,7 +927,8 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
 
         if (0 != g_process.qz_inst[i].buff_meta_size) {
             g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData =
-                qzMalloc((size_t)(g_process.qz_inst[i].buff_meta_size), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+                qzMalloc((size_t)(g_process.qz_inst[i].buff_meta_size),
+                         QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
             QZ_INST_MEM_CHECK(
                 g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData,
                 i);
@@ -982,7 +983,8 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
 
         if (0 != g_process.qz_inst[i].buff_meta_size) {
             g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData =
-                qzMalloc(g_process.qz_inst[i].buff_meta_size, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+                qzMalloc(g_process.qz_inst[i].buff_meta_size, QZ_AUTO_SELECT_NUMA_NODE,
+                         PINNED_MEM);
             QZ_INST_MEM_CHECK(g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData, i);
         } else {
             g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData = NULL;
@@ -1010,7 +1012,8 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
 
         if (0 != g_process.qz_inst[i].buff_meta_size) {
             g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData =
-                qzMalloc(g_process.qz_inst[i].buff_meta_size, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+                qzMalloc(g_process.qz_inst[i].buff_meta_size, QZ_AUTO_SELECT_NUMA_NODE,
+                         PINNED_MEM);
             QZ_INST_MEM_CHECK(g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData, i);
         } else {
             g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData = NULL;
@@ -1433,7 +1436,7 @@ static void *doCompressIn(void *in)
 
                 if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
                     QZ_WARN("instance %d retry count:%d exceed the max count: %d\n",
-                             i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
+                            i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
                     break;
                 }
             } while (rc == CPA_STATUS_RETRY);
@@ -1816,10 +1819,10 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
 #endif
        ) {
         QZ_INFO("compression src_len=%u, sess_params.input_sz_thrshold = %u, "
-                 "process.qz_init_status = %d, sess->hw_session_stat = %ld, "
-                 " switch to software.\n",
-                 *src_len, qz_sess->sess_params.input_sz_thrshold,
-                 g_process.qz_init_status, sess->hw_session_stat);
+                "process.qz_init_status = %d, sess->hw_session_stat = %ld, "
+                " switch to software.\n",
+                *src_len, qz_sess->sess_params.input_sz_thrshold,
+                g_process.qz_init_status, sess->hw_session_stat);
         goto sw_compression;
     } else if (sess->hw_session_stat != QZ_OK &&
                sess->hw_session_stat != QZ_NO_INST_ATTACH) {
@@ -1925,7 +1928,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     sess->total_in += qz_sess->qz_in_len;
     sess->total_out += qz_sess->qz_out_len;
     QZ_INFO("*** total_in = %lu total_out = %lu src_len = %u dest_len = %u ***\n",
-             sess->total_in, sess->total_out, *src_len, *dest_len);
+            sess->total_in, sess->total_out, *src_len, *dest_len);
     assert(*dest_len == qz_sess->qz_out_len);
 
     //trigger post-processing
@@ -1940,7 +1943,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
 
 sw_compression:
     QZ_INFO("The thread : %lu, Compress API SW fallback due to HW limitaions!\n",
-             pthread_self());
+            pthread_self());
     return qzSWCompress(sess, src, src_len, dest, dest_len, last);
 err_exit:
     if (NULL != src_len) {
@@ -2054,7 +2057,7 @@ static void *doDecompressIn(void *in)
 
                 if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
                     QZ_WARN("instance %lu retry count:%d exceed the max count: %d\n",
-                             i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
+                            i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
                     break;
                 }
             } while (rc == CPA_STATUS_RETRY);
@@ -2333,11 +2336,11 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         !(isQATProcessable(src, src_len, qz_sess))                      ||
         qz_sess->inflate_stat == InflateOK) {
         QZ_INFO("decompression src_len=%u, hdr->extra.qz_e.src_sz = %u, "
-                 "g_process.qz_init_status = %d, sess->hw_session_stat = %ld, "
-                 "isQATProcessable = %d, switch to software.\n",
-                 *src_len,  hdr->extra.qz_e.src_sz,
-                 g_process.qz_init_status, sess->hw_session_stat,
-                 isQATProcessable(src, src_len, qz_sess));
+                "g_process.qz_init_status = %d, sess->hw_session_stat = %ld, "
+                "isQATProcessable = %d, switch to software.\n",
+                *src_len,  hdr->extra.qz_e.src_sz,
+                g_process.qz_init_status, sess->hw_session_stat,
+                isQATProcessable(src, src_len, qz_sess));
 
         /* If sw_backup is 1, fallback to software compression. */
         if (qz_sess->sess_params.sw_backup == 1) {
@@ -2456,13 +2459,13 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
     sess->total_out += qz_sess->qz_out_len;
 
     QZ_INFO("*** total_in=%lu total_out=%lu src_len=%u dest_len=%u rc=%d ***\n",
-             sess->total_in, sess->total_out, *src_len, *dest_len, rc);
+            sess->total_in, sess->total_out, *src_len, *dest_len, rc);
 
     return sess->thd_sess_stat;
 
 sw_decompression:
     QZ_INFO("The thread : %lu, DeCompress API SW fallback due to HW limitations!\n",
-             pthread_self());
+            pthread_self());
     return qzSWDecompressMulti(sess, src, src_len, dest, dest_len);
 err_exit:
     if (NULL != src_len) {

@@ -773,7 +773,7 @@ typedef void *QzMetadataBlob_T;
  *      This is an emum for qatzip log trace level
  *
  *****************************************************************************/
-typedef enum QzLogLevel_E{
+typedef enum QzLogLevel_E {
     LOG_NONE = 0,
     LOG_FATAL,
     LOG_ERROR,
