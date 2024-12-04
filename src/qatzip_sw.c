@@ -344,6 +344,8 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
         break;
     case Z_STREAM_END:
         ret = QZ_OK;
+        QZ_DEBUG("inflate success with Z_STREAM_END\n");
+        qz_sess->force_sw = 0;
         qz_sess->inflate_stat = InflateEnd;
         break;
     case Z_DATA_ERROR:
@@ -394,6 +396,7 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
     const unsigned int output_len = *dest_len;
     unsigned int cur_input_len = input_len;
     unsigned int cur_output_len = output_len;
+    QzSess_T *qz_sess = (QzSess_T *) sess->internal;
 #ifdef QATZIP_DEBUG
     insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
 #endif
@@ -419,8 +422,14 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
         cur_output_len = output_len - total_out;
         *src_len  = total_in;
         *dest_len = total_out;
+        if (0 == qz_sess->force_sw) {
+            goto next;
+        }
     }
 
+next:
+    QZ_DEBUG("Z_STREAM_END done\n");
+    return QZ_OK;
 out:
     QZ_INFO("Exit qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
             *src_len, *dest_len);
