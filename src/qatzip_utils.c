@@ -516,6 +516,16 @@ int qzCheckParamsDeflate(QzSessionParamsDeflate_T *params)
     return QZ_OK;
 }
 
+int qzCheckParamsDeflateExt(QzSessionParamsDeflateExt_T *params)
+{
+    assert(params);
+
+    if (qzCheckParamsDeflate(&params->deflate_params) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+    return QZ_OK;
+}
+
 int qzCheckParamsLZ4(QzSessionParamsLZ4_T *params)
 {
     assert(params);
@@ -648,6 +658,24 @@ void qzSetParamsDeflate(QzSessionParamsDeflate_T *params,
     internal_params->huffman_hdr = params->huffman_hdr;
 }
 
+/**
+ * Set deflate ext session params into internal params
+ */
+void qzSetParamsDeflateExt(QzSessionParamsDeflateExt_T *params,
+                           QzSessionParamsInternal_T *internal_params)
+{
+    assert(params);
+    assert(internal_params);
+
+    qzSetParamsDeflate(&params->deflate_params, internal_params);
+
+    /*if (params->zlib_format == 1) {
+        internal_params->data_fmt = DEFLATE_ZLIB;
+    }*/
+    internal_params->stop_decompression_stream_end =
+        params->stop_decompression_stream_end;
+}
+
 void qzSetParamsLZ4(QzSessionParamsLZ4_T *params,
                     QzSessionParamsInternal_T *internal_params)
 {
@@ -750,6 +778,24 @@ void qzGetParamsDeflate(QzSessionParamsInternal_T *internal_params,
 
     params->huffman_hdr = internal_params->huffman_hdr;
     params->common_params.comp_algorithm = QZ_DEFLATE;
+}
+
+/**
+ * Get deflateExt session params from internal params
+ */
+void qzGetParamsDeflateExt(QzSessionParamsInternal_T *internal_params,
+                           QzSessionParamsDeflateExt_T *params)
+{
+    assert(params);
+    assert(internal_params);
+
+    qzGetParamsDeflate(internal_params, &params->deflate_params);
+    if (internal_params->data_fmt == DEFLATE_ZLIB) {
+        // params->zlib_format == 1; // enable when zlib pr
+    }
+
+    params->stop_decompression_stream_end =
+        internal_params->stop_decompression_stream_end;
 }
 
 /**
@@ -1373,4 +1419,26 @@ int decompOutCheckSum(int i, int j, QzSession_T *sess,
         return sess->thd_sess_stat;
     }
     return QZ_OK;
+}
+
+void setDeflateEndOfStream(QzSess_T *qz_sess, unsigned char val)
+{
+    QzDeflateExtCustomData_T  *data = (QzDeflateExtCustomData_T *)
+                                      qz_sess->qzdeflateExtData;
+    if (data != NULL) {
+        data->end_of_stream = val;
+        QZ_DEBUG("\tHW setDeflateEndOfStream: setting end_of_stream to %d \n", val);
+    }
+}
+
+unsigned char getDeflateEndOfStream(QzSess_T *qz_sess)
+{
+    QzDeflateExtCustomData_T  *data = (QzDeflateExtCustomData_T *)
+                                      qz_sess->qzdeflateExtData;
+    if (data != NULL) {
+        QZ_DEBUG("\tHW getDeflateEndOfStream:  end_of_stream  %d \n",
+                 data->end_of_stream);
+        return data->end_of_stream;
+    }
+    return 0;
 }

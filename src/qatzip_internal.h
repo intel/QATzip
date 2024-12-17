@@ -226,6 +226,8 @@ typedef enum DataFormatInternal_E {
     /**< Data is in LZ4 format with frame headers */
     LZ4S_BK,
     /**< Data is in LZ4s sequences with block header, it's only for post processed */
+    DEFLATE_ZLIB,
+    /**< Data is in  deflate wrapped by zlib header and footer */
 } DataFormatInternal_T;
 
 // Include all support session parameters
@@ -274,6 +276,9 @@ typedef struct QzSessionParamsInternal_S {
     /**< 0 means disable sensitive mode, 1 means enable sensitive mode*/
     unsigned int lz4s_mini_match;
     /**< Set lz4s dictionary mini match, which would be 3 or 4 */
+    unsigned char stop_decompression_stream_end;
+    /* stop decompression at end the stream, default is 0 */
+    //unsigned char zlib_format;
 } QzSessionParamsInternal_T;
 
 typedef struct QzSess_S {
@@ -313,6 +318,8 @@ typedef struct QzSess_S {
     z_stream *deflate_strm;
     DeflateState_T deflate_stat;
     LZ4F_dctx *dctx;
+    void *qzdeflateExtData;
+    /**< An opaque pointer containing extended results for deflate session*/
 } QzSess_T;
 
 typedef struct QzStreamBuf_S {
@@ -374,6 +381,11 @@ typedef struct QzMem_S {
     int numa;
 } QzMem_T;
 
+// custom deflateExt data structure
+typedef struct QzDeflateExtCustomData_S {
+    unsigned char end_of_stream;
+} QzDeflateExtCustomData_T;
+
 #pragma pack(push, 1)
 /* lz4 frame header */
 typedef struct QzLZ4H_S {
@@ -430,6 +442,8 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
                         unsigned int *compressed_buffer_len);
 
 unsigned char getSwBackup(QzSession_T *sess);
+void setDeflateEndOfStream(QzSess_T *sess, unsigned char val);
+unsigned char getDeflateEndOfStream(QzSess_T *qz_sess);
 
 #ifdef ADF_PCI_API
 extern CpaStatus icp_adf_get_numDevices(Cpa32U *);
@@ -474,6 +488,7 @@ int qzCheckParams(QzSessionParams_T *params);
 int qzCheckParamsDeflate(QzSessionParamsDeflate_T *params);
 int qzCheckParamsLZ4(QzSessionParamsLZ4_T *params);
 int qzCheckParamsLZ4S(QzSessionParamsLZ4S_T *params);
+int qzCheckParamsDeflateExt(QzSessionParamsDeflateExt_T *params);
 
 void qzGetParams(QzSessionParamsInternal_T *internal_params,
                  QzSessionParams_T *params);
@@ -483,6 +498,8 @@ void qzGetParamsLZ4(QzSessionParamsInternal_T *internal_params,
                     QzSessionParamsLZ4_T *params);
 void qzGetParamsLZ4S(QzSessionParamsInternal_T *internal_params,
                      QzSessionParamsLZ4S_T *params);
+void qzGetParamsDeflateExt(QzSessionParamsInternal_T *internal_params,
+                           QzSessionParamsDeflateExt_T *params);
 
 void qzSetParamsLZ4S(QzSessionParamsLZ4S_T *params,
                      QzSessionParamsInternal_T *internal_params);
@@ -492,7 +509,8 @@ void qzSetParamsDeflate(QzSessionParamsDeflate_T *params,
                         QzSessionParamsInternal_T *internal_params);
 void qzSetParams(QzSessionParams_T *params,
                  QzSessionParamsInternal_T *internal_params);
-
+void qzSetParamsDeflateExt(QzSessionParamsDeflateExt_T *params,
+                           QzSessionParamsInternal_T *internal_params);
 /*  SW Fallback for HW request offload failed or
     HW respond in Error status
  */
