@@ -331,6 +331,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
     }
 
     zlib_ret = inflate(stream, Z_SYNC_FLUSH);
+    setDeflateEndOfStream(qz_sess, 0);
     switch (zlib_ret) {
     case Z_OK:
         if (QZ_LOW_DEST_MEM == sess->thd_sess_stat) {
@@ -347,6 +348,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
         QZ_DEBUG("inflate success with Z_STREAM_END\n");
         qz_sess->force_sw = 0;
         qz_sess->inflate_stat = InflateEnd;
+        setDeflateEndOfStream(qz_sess, 1);
         break;
     case Z_DATA_ERROR:
         QZ_ERROR("ERR: inflate failed with Z_DATA_ERROR\n");
@@ -422,6 +424,11 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
         cur_output_len = output_len - total_out;
         *src_len  = total_in;
         *dest_len = total_out;
+        if (getDeflateEndOfStream(qz_sess) == 1 &&
+            qz_sess->sess_params.stop_decompression_stream_end == 1) {
+            goto out;
+        }
+
         if (0 == qz_sess->force_sw) {
             goto next;
         }

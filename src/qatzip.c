@@ -109,7 +109,8 @@ QzSessionParamsInternal_T g_sess_params_internal_default = {
     .polling_mode      = QZ_PERIODICAL_POLLING,
     .lz4s_mini_match   = 3,
     .qzCallback        = NULL,
-    .qzCallback_external = NULL
+    .qzCallback_external = NULL,
+    .stop_decompression_stream_end = 0
 };
 pthread_mutex_t g_sess_params_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -1141,6 +1142,62 @@ int qzSetupSessionDeflate(QzSession_T *sess,  QzSessionParamsDeflate_T *params)
 
 }
 
+int qzSetupSessionDeflateExt(QzSession_T *sess,
+                             QzSessionParamsDeflateExt_T *params)
+{
+    int rc = QZ_OK;
+    QzSess_T *qz_sess;
+    QzSessionParamsDeflateExt_T temp = {{{0}}};
+
+    if (unlikely(NULL == sess)) {
+        return QZ_PARAMS;
+    }
+
+    if (NULL == params) {
+        rc = qzGetDefaultsDeflateExt(&temp);
+        params = &temp;
+    }
+
+    if (qzCheckParamsDeflateExt(params) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    if (sess->internal == NULL) {
+        sess->internal = calloc(1, sizeof(QzSess_T));
+        if (unlikely(NULL == sess->internal)) {
+            sess->hw_session_stat = QZ_NOSW_LOW_MEM;
+            return QZ_NOSW_LOW_MEM;
+        }
+    } else {
+        return QZ_DUPLICATE;
+    }
+
+    sess->hw_session_stat = QZ_FAIL;
+    qz_sess = (QzSess_T *)sess->internal;
+    if (qz_sess->qzdeflateExtData != NULL) {
+        free(qz_sess->qzdeflateExtData);
+        qz_sess->qzdeflateExtData = NULL;
+    }
+    qz_sess->qzdeflateExtData = calloc(1, sizeof(QzDeflateExtCustomData_T));
+    if (unlikely(NULL == qz_sess->qzdeflateExtData)) {
+        QZ_ERROR("qz_sess qzdeflateExtData NULL ");
+    }
+    qzSetParamsDeflateExt(params, &qz_sess->sess_params);
+    rc = qzSetupSessionInternal(sess);
+    if (rc < 0) {
+        if (qz_sess->qzdeflateExtData != NULL) {
+            free(qz_sess->qzdeflateExtData);
+            qz_sess->qzdeflateExtData = NULL;
+        }
+        free(sess->internal);
+        sess->internal = NULL;
+        return rc;
+    }
+
+    return rc;
+
+}
+
 int qzSetupSessionLZ4(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
 {
     int rc = QZ_OK;
@@ -2090,7 +2147,8 @@ static void *doDecompressIn(void *in)
         qz_sess->seq++;
         qz_sess->submitted++;
 
-        if (qz_sess->stop_submitting) {
+        if (qz_sess->stop_submitting ||
+            qz_sess->sess_params.stop_decompression_stream_end == 1) {
             remaining = 0;
         }
 
@@ -2199,6 +2257,10 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                                            outputFooterSz(data_fmt));
                     qz_sess->qz_out_len += resl->produced;
                     dest_avail_len -= resl->produced;
+                    if (resl->endOfLastBlock == CPA_TRUE) {
+                        QZ_DEBUG("\tHW DecompOut: endOfLastBlock \n");
+                        setDeflateEndOfStream(qz_sess, 1);
+                    }
                 }
 
                 decompOutProcessedRespond(i, j, qz_sess);
@@ -2301,6 +2363,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         goto err_exit;
     }
 
+    // akanksha here i need to check whether we need to add new data fmt for deflateExt session creation( for zlib we have to but in normat deflate raw case??)
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         if (g_sess_params_internal_default.data_fmt == LZ4_FH) {
@@ -2314,8 +2377,9 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
             goto err_exit;
         }
     }
-
     qz_sess = (QzSess_T *)(sess->internal);
+    // by default end of stream is set to 0
+    setDeflateEndOfStream(qz_sess, 0);
 
     DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
     if (unlikely(data_fmt != DEFLATE_RAW &&
@@ -2545,6 +2609,20 @@ int qzGetStatus(QzSession_T *sess, QzStatus_T *status)
     return QZ_OK;
 }
 
+int qzGetDeflateEndOfStream(QzSession_T *sess, unsigned char *endofstream)
+{
+    if (sess == NULL || endofstream == NULL) {
+        return QZ_PARAMS;
+    }
+    if (sess->internal != NULL) {
+        QzSess_T *qz_sess;
+        qz_sess = (QzSess_T *)sess->internal;
+        *endofstream = getDeflateEndOfStream(qz_sess);
+        return QZ_OK;
+    }
+    return QZ_PARAMS;
+}
+
 int qzSetDefaults(QzSessionParams_T *defaults)
 {
     if (defaults == NULL) {
@@ -2574,6 +2652,23 @@ int qzSetDefaultsDeflate(QzSessionParamsDeflate_T *defaults)
 
     pthread_mutex_lock(&g_sess_params_lock);
     qzSetParamsDeflate(defaults, &g_sess_params_internal_default);
+    pthread_mutex_unlock(&g_sess_params_lock);
+
+    return QZ_OK;
+}
+
+int qzSetDefaultsDeflateExt(QzSessionParamsDeflateExt_T *defaults)
+{
+    if (defaults == NULL) {
+        return QZ_PARAMS;
+    }
+
+    if (qzCheckParamsDeflateExt(defaults) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    pthread_mutex_lock(&g_sess_params_lock);
+    qzSetParamsDeflateExt(defaults, &g_sess_params_internal_default);
     pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;
@@ -2634,6 +2729,19 @@ int qzGetDefaultsDeflate(QzSessionParamsDeflate_T *defaults)
 
     pthread_mutex_lock(&g_sess_params_lock);
     qzGetParamsDeflate(&g_sess_params_internal_default, defaults);
+    pthread_mutex_unlock(&g_sess_params_lock);
+
+    return QZ_OK;
+}
+
+int qzGetDefaultsDeflateExt(QzSessionParamsDeflateExt_T *defaults)
+{
+    if (defaults == NULL) {
+        return QZ_PARAMS;
+    }
+
+    pthread_mutex_lock(&g_sess_params_lock);
+    qzGetParamsDeflateExt(&g_sess_params_internal_default, defaults);
     pthread_mutex_unlock(&g_sess_params_lock);
 
     return QZ_OK;

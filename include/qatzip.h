@@ -560,6 +560,14 @@ typedef struct QzSessionParamsLZ4S_S {
     /**< Set lz4s dictionary mini match, which would be 3 or 4 */
 } QzSessionParamsLZ4S_T;
 
+typedef struct QzSessionParamsDeflateExt_S {
+    QzSessionParamsDeflate_T deflate_params;
+    /* stop decompression at end the stream, default is 0. */
+    unsigned char stop_decompression_stream_end;
+    /**< zlib format, default 0 if zlib format value will be 1*/
+    unsigned char zlib_format;
+} QzSessionParamsDeflateExt_T;
+
 #define QZ_HUFF_HDR_DEFAULT          QZ_DYNAMIC_HDR
 #define QZ_DIRECTION_DEFAULT         QZ_DIR_BOTH
 #define QZ_DATA_FORMAT_DEFAULT       QZ_DEFLATE_GZIP_EXT
@@ -978,6 +986,8 @@ QATZIP_API int qzSetupSessionLZ4(QzSession_T *sess,
 QATZIP_API int qzSetupSessionLZ4S(QzSession_T *sess,
                                   QzSessionParamsLZ4S_T *params);
 
+QATZIP_API int qzSetupSessionDeflateExt(QzSession_T *sess,
+                                        QzSessionParamsDeflateExt_T *params);
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -1714,6 +1724,13 @@ QATZIP_API int qzGetStatus(QzSession_T *sess, QzStatus_T *status);
 
 /**
  *****************************************************************************
+ return end of stream.
+ *****************************************************************************/
+QATZIP_API int qzGetDeflateEndOfStream(QzSession_T *sess,
+                                       unsigned char *endofstream);
+
+/**
+ *****************************************************************************
  * @ingroup qatZip
  *      Get the maximum compressed output length
  *
@@ -1804,6 +1821,9 @@ QATZIP_API int qzSetDefaultsLZ4(QzSessionParamsLZ4_T *defaults);
 
 QATZIP_API int qzSetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
 
+QATZIP_API int qzSetDefaultsDeflateExt(QzSessionParamsDeflateExt_T *defaults);
+
+
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -1849,6 +1869,7 @@ QATZIP_API int qzGetDefaultsLZ4(QzSessionParamsLZ4_T *defaults);
 
 QATZIP_API int qzGetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
 
+QATZIP_API int qzGetDefaultsDeflateExt(QzSessionParamsDeflateExt_T *defaults);
 /**
  *****************************************************************************
  * @ingroup qatZip
