@@ -447,6 +447,56 @@ done:
     }
 }
 
+
+int qzSetupDeflateExt(QzSession_T *sess, TestArg_T *arg)
+{
+    int status;
+
+    QzSessionParamsDeflateExt_T params = {{{0}}};
+    status = qzGetDefaultsDeflateExt(&params);
+    if (status < 0) {
+        QZ_ERROR("Get defaults params error with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    switch (arg->test_format) {
+    case TEST_DEFLATE:
+        params.deflate_params.data_fmt = QZ_DEFLATE_RAW;
+        break;
+    case TEST_GZIP:
+        params.deflate_params.data_fmt = QZ_DEFLATE_GZIP;
+        break;
+    case TEST_GZIPEXT:
+        params.deflate_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        break;
+    case TEST_DEFLATE_4B:
+        params.deflate_params.data_fmt = QZ_DEFLATE_4B;
+        break;
+    default:
+        QZ_ERROR("Unsupported data format\n");
+        return QZ_FAIL;
+    }
+    params.deflate_params.huffman_hdr = arg->huffman_hdr;
+    params.deflate_params.common_params.comp_lvl = arg->comp_lvl;
+    params.deflate_params.common_params.comp_algorithm = QZ_DEFLATE;
+    params.deflate_params.common_params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
+    params.deflate_params.common_params.direction = QZ_DIR_BOTH;
+    params.deflate_params.common_params.polling_mode = QZ_BUSY_POLLING;
+    params.deflate_params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
+    params.deflate_params.common_params.max_forks = arg->max_forks;
+    params.deflate_params.common_params.sw_backup = arg->sw_backup;
+    params.deflate_params.common_params.strm_buff_sz = QZ_STRM_BUFF_SZ_DEFAULT;
+
+    status = qzSetupSessionDeflateExt(sess, &params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    return QZ_OK;
+}
+
+
 int qzSetupDeflate(QzSession_T *sess, TestArg_T *arg)
 {
     int status;
@@ -550,6 +600,38 @@ int qzSetupLZ4S(QzSession_T *sess, TestArg_T *arg)
 
     return QZ_OK;
 }
+
+int qzInitSetupsessionExt(QzSession_T *sess, TestArg_T *arg)
+{
+    int rc = QZ_OK;
+
+    if (!((TestArg_T *)arg)->init_engine_disabled) {
+        rc = qzInit(sess, arg->sw_backup);
+        if (QZ_INIT_FAIL(rc)) {
+            return rc;
+        }
+    }
+
+    if (!((TestArg_T *)arg)->init_sess_disabled) {
+        switch (arg->test_format) {
+        case TEST_DEFLATE:
+        case TEST_GZIP:
+        case TEST_GZIPEXT:
+            QZ_DEBUG("calling  qzSetupDeflateExt \n");
+            rc = qzSetupDeflateExt(sess, arg);
+            break;
+        default:
+            QZ_ERROR("Unsupported data format\n");
+            return QZ_FAIL;
+        }
+        if (QZ_SETUP_SESSION_FAIL(rc)) {
+            return rc;
+        }
+    }
+
+    return rc;
+}
+
 
 int qzInitSetupsession(QzSession_T *sess, TestArg_T *arg)
 {
@@ -1202,6 +1284,465 @@ end:
     pthread_exit((void *)NULL);
 }
 
+void *qzTestEndOfStreamDetection(void *arg)
+{
+    /*
+    1. create  a random  block of data
+    2. compress it.
+    3. send entire block for decompression and check End of stream
+    4. it should return true.
+    5. clear the decompression buffer.
+    6. send only part of compressed data for decompression.
+    7. query end of stream which should return false
+    8. close the session
+    */
+    int rc;
+    QzSession_T sess = {0};
+    uint8_t *orig_src, *comp_src, *decomp_src;
+    size_t orig_sz, src_sz, comp_sz, decomp_sz, comp_sz_partial;
+    QzSessionParamsDeflateExt_T params = {{{0}}};
+    unsigned char *endofstream = (unsigned char *) malloc(sizeof(char));
+
+    orig_sz = comp_sz = decomp_sz = 64 * 1024; /*64K*/
+    orig_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    comp_src = qzMalloc(comp_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+
+    if (orig_src == NULL ||
+        comp_src == NULL ||
+        decomp_src == NULL) {
+        QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
+        goto done;
+    }
+
+    rc = qzInit(&sess, 0);
+    if (QZ_INIT_HW_FAIL(rc)) {
+        QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
+        goto done;
+    }
+    rc = qzGetDefaultsDeflateExt(&params);
+    if (rc < 0) {
+        QZ_ERROR("Get defaults params error with error: %d\n",
+                 rc);
+        goto done;
+    }
+    params.deflate_params.data_fmt = QZ_DEFLATE_RAW;
+    params.deflate_params.huffman_hdr = ((TestArg_T *)arg)->huffman_hdr;
+    params.deflate_params.common_params.comp_lvl = ((TestArg_T *)arg)->comp_lvl;
+    params.deflate_params.common_params.comp_algorithm = QZ_DEFLATE;
+    params.deflate_params.common_params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
+    params.deflate_params.common_params.direction = QZ_DIR_BOTH;
+    params.deflate_params.common_params.polling_mode = QZ_BUSY_POLLING;
+    params.deflate_params.common_params.req_cnt_thrshold = ((
+                TestArg_T *)arg)->req_cnt_thrshold;
+    params.deflate_params.common_params.max_forks = ((TestArg_T *)arg)->max_forks;
+    params.deflate_params.common_params.sw_backup = 0;
+    params.deflate_params.common_params.strm_buff_sz = QZ_STRM_BUFF_SZ_DEFAULT;
+    rc = qzSetupSessionDeflateExt(&sess, &params);
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
+        QZ_ERROR("qzSetupSessionDeflateExt for testing %s error, return: %d\n",
+                 __func__, rc);
+        goto done;
+    }
+
+    genRandomData(orig_src, orig_sz);
+
+
+    /*do compress Data*/
+    src_sz = orig_sz;
+    rc = qzCompress(&sess, orig_src, (uint32_t *)(&src_sz), comp_src,
+                    (uint32_t *)(&comp_sz), 1);
+    if (rc != QZ_OK || src_sz != orig_sz) {
+        QZ_ERROR("ERROR: qzTestEndOfStreamDetectionCompression FAILED with return value: %d\n",
+                 rc);
+        QZ_ERROR("ERROR: qzTestEndOfStreamDetection After Compression src_sz: %lu != org_src_sz: %lu \n!",
+                 src_sz,
+                 orig_sz);
+        goto done;
+    }
+    /*do decompress Data*/
+    rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
+                      (uint32_t *)(&decomp_sz));
+    if (rc != QZ_OK) {
+        QZ_ERROR("FAILED: Decompression success with Error\n");
+        goto done;
+    }
+    rc = qzGetDeflateEndOfStream(&sess, endofstream);
+    QZ_DEBUG("qzGetDeflateEndOfStream return: %d\n", *endofstream);
+    assert(*endofstream == 1);
+
+    //send only half of the compressed stream for decompression. and check if eos is not found.
+    //clear the existing decompressed buffer.
+    memset(decomp_src, 0, decomp_sz);
+    comp_sz_partial = 1100;
+    rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz_partial), decomp_src,
+                      (uint32_t *)(&decomp_sz));
+    if (rc != QZ_OK) {
+        QZ_ERROR("FAILED: Decompression success with Error\n");
+        goto done;
+    }
+    rc = qzGetDeflateEndOfStream(&sess, endofstream);
+    QZ_DEBUG("qzGetDeflateEndOfStream return: %d\n", *endofstream);
+    assert(*endofstream == 0);
+
+    rc = 0;
+
+done:
+    qzFree(orig_src);
+    qzFree(comp_src);
+    qzFree(decomp_src);
+    (void)qzTeardownSession(&sess);
+    pthread_exit((void *)NULL);
+}
+
+void *qzCompressAndDecompressExt(void *arg)
+{
+    int rc = -1, k;
+    unsigned char *src, *comp_out, *decomp_out;
+    int *compressed_blocks_sz = NULL;
+    size_t src_sz, comp_out_sz, decomp_out_sz;
+    size_t block_size, in_sz, out_sz, consumed, produced;
+    size_t num_blocks;
+    struct timeval ts, te;
+    unsigned long long ts_m, te_m, el_m;
+    long double sec, rate;
+    const size_t org_src_sz = ((TestArg_T *)arg)->src_sz;
+    const size_t org_comp_out_sz = ((TestArg_T *)arg)->comp_out_sz;
+    const long tid = ((TestArg_T *)arg)->thd_id;
+    const ServiceType_T service = ((TestArg_T *)arg)->service;
+    const int verify_data = ((TestArg_T *)arg)->verify_data;
+    const int count = ((TestArg_T *)arg)->count;
+    const int gen_data = ((TestArg_T *)arg)->gen_data;
+    int thread_sleep = ((TestArg_T *)arg)->thread_sleep;
+    QzSession_T sess = {0};
+
+    if (!org_src_sz) {
+        pthread_exit((void *)"input size is 0\n");
+    }
+    src_sz = org_src_sz;
+    comp_out_sz = org_comp_out_sz;
+    decomp_out_sz = org_src_sz;
+
+    QZ_DEBUG("Hello from qzCompressAndDecompressExt tid=%ld, count=%d, service=%d, "
+             "verify_data=%d\n",
+             tid, count, service, verify_data);
+
+    rc = qzInitSetupsessionExt(&sess, (TestArg_T *)arg);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+#ifndef ENABLE_THREAD_BARRIER
+        g_ready_thread_count++;
+        pthread_cond_signal(&g_ready_cond);
+#endif
+        pthread_exit((void *)"qzInit failed");
+    }
+
+    //timeCheck(3, tid);
+    /*  The sleep is for enabling the sw fallback in test. sw fallback simulate hang will happen
+        when detect process generate the 'fatal events'. but detect will happen every seconds.
+        The sleep will guarantee that test capture the 'fatal events' and fallback
+    */
+    if (thread_sleep > 0) {
+        usleep(thread_sleep);
+    }
+    QZ_DEBUG("qzInitSetupsessionExt rc = %d\n", rc);
+
+    if (gen_data && !g_perf_svm) {
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        comp_out = qzMalloc(comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        decomp_out = qzMalloc(decomp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    } else {
+        src = g_perf_svm ? malloc(src_sz) : ((TestArg_T *)arg)->src;
+        comp_out = g_perf_svm ? malloc(comp_out_sz) : ((TestArg_T *)arg)->comp_out;
+        decomp_out = g_perf_svm ? malloc(decomp_out_sz) : ((TestArg_T *)
+                     arg)->decomp_out;
+    }
+
+    if (!src || !comp_out || !decomp_out) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+
+    if (g_perf_svm && g_input_file_name) {
+        memcpy(src, ((TestArg_T *)arg)->src, src_sz);
+    }
+
+    el_m = 0;
+    if (gen_data) {
+        QZ_DEBUG("Gen Data... src_sz = %lu\n", src_sz);
+        genRandomData(src, src_sz);
+    }
+    //timeCheck(4, tid);
+
+    block_size = ((TestArg_T *)arg)->block_size;
+    if (-1 == block_size) {
+        block_size = src_sz;
+    }
+
+    num_blocks = src_sz / block_size + (src_sz % block_size ? 1 : 0);
+    compressed_blocks_sz = malloc(sizeof(int) * num_blocks);
+    if (NULL == compressed_blocks_sz) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+    memset(compressed_blocks_sz, 0, sizeof(int) * num_blocks);
+    // Compress the data for testing
+    if (DECOMP == service) {
+        consumed = 0;
+        produced = 0;
+
+        for (int i = 0; i < num_blocks; i ++) {
+            in_sz =  block_size < (org_src_sz - consumed) ? block_size :
+                     (org_src_sz - consumed);
+            out_sz = comp_out_sz - produced;
+            rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
+                            comp_out + produced,
+                            (uint32_t *)(&out_sz), 1);
+            if (rc != QZ_OK) {
+                QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+                dumpInputData(in_sz, src + consumed);
+                goto done;
+            }
+
+            consumed = consumed + in_sz;
+            produced = produced + out_sz;
+            compressed_blocks_sz[i] = out_sz;
+        }
+
+        src_sz = consumed;
+        comp_out_sz = produced;
+        if (src_sz != org_src_sz) {
+            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                     org_src_sz);
+            dumpInputData(src_sz, src);
+            goto done;
+        }
+        QZ_DEBUG("DEBUG: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                 org_src_sz);
+    }
+
+#ifdef ENABLE_THREAD_BARRIER
+    pthread_barrier_wait(&g_bar);
+#else
+    /* mutex lock for thread count */
+    rc = pthread_mutex_lock(&g_cond_mutex);
+    if (rc != 0) {
+        QZ_ERROR("Failure to release Mutex Lock, status = %d\n", rc);
+        goto done;
+    }
+    g_ready_thread_count++;
+    rc = pthread_cond_signal(&g_ready_cond);
+    if (rc != 0) {
+        QZ_ERROR("Failure to pthread_cond_signal, status = %d\n", rc);
+        goto done;
+    }
+    while (!g_ready_to_start) {
+        rc = pthread_cond_wait(&g_start_cond, &g_cond_mutex);
+        if (rc != 0) {
+            QZ_ERROR("Failure to pthread_cond_wait, status = %d\n", rc);
+            goto done;
+        }
+    }
+    rc = pthread_mutex_unlock(&g_cond_mutex);
+    if (rc != 0) {
+        QZ_ERROR("Failure to release Mutex Lock, status = %d\n", rc);
+        goto done;
+    }
+#endif
+
+    // Start the testing
+    for (k = 0; k < count; k++) {
+        (void)gettimeofday(&ts, NULL);
+        if (DECOMP != service) {
+            comp_out_sz = org_comp_out_sz;
+            QZ_DEBUG("thread %ld before Compressed %lu bytes into %lu\n", tid, src_sz,
+                     comp_out_sz);
+            consumed = 0;
+            produced = 0;
+
+            for (int i = 0; i < num_blocks; i ++) {
+                in_sz =  block_size < (org_src_sz - consumed) ? block_size :
+                         (org_src_sz - consumed);
+                out_sz = comp_out_sz - produced;
+
+                rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
+                                comp_out + produced,
+                                (uint32_t *)(&out_sz), 1);
+                if (rc != QZ_OK) {
+                    QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+                    dumpInputData(in_sz, src + consumed);
+                    goto done;
+                }
+
+                consumed = consumed + in_sz;
+                produced = produced + out_sz;
+                compressed_blocks_sz[i] = out_sz;
+            }
+
+            src_sz = consumed;
+            comp_out_sz = produced;
+            if (src_sz != org_src_sz) {
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                         org_src_sz);
+                dumpInputData(src_sz, src);
+                goto done;
+            }
+            QZ_DEBUG("thread %ld after Compressed %lu bytes into %lu\n", tid, src_sz,
+                     comp_out_sz);
+        }
+
+        if (COMP != service) {
+            QZ_DEBUG("thread %ld before Decompressed %lu bytes into %lu\n", tid,
+                     comp_out_sz,
+                     decomp_out_sz);
+            consumed = 0;
+            produced = 0;
+
+            for (int i = 0; i < num_blocks; i ++) {
+                in_sz = compressed_blocks_sz[i];
+                out_sz = decomp_out_sz - produced;
+                rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
+                                  decomp_out + produced, (uint32_t *)(&out_sz));
+                if (rc != QZ_OK) {
+                    QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+                    dumpInputData(src_sz, src);
+                    goto done;
+                }
+                consumed += in_sz;
+                produced += out_sz;
+            }
+
+            decomp_out_sz = produced;
+            if (decomp_out_sz != org_src_sz) {
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                         decomp_out_sz, org_src_sz);
+                dumpInputData(src_sz, src);
+                goto done;
+            }
+            QZ_DEBUG("thread %ld after Decompressed %lu bytes into %lu\n", tid, comp_out_sz,
+                     decomp_out_sz);
+        }
+
+        (void)gettimeofday(&te, NULL);
+
+        if (verify_data && COMP != service) {
+            QZ_DEBUG("verify data..\n");
+            if (memcmp(src, decomp_out, org_src_sz)) {
+                QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu \n!", tid,
+                         src_sz);
+                dumpInputData(src_sz, src);
+                goto done;
+            }
+
+            if (BOTH == service) {
+                QZ_DEBUG("reset data..\n");
+                memset(comp_out, 0, comp_out_sz);
+                memset(decomp_out, 0, decomp_out_sz);
+            }
+        }
+        ts_m = (ts.tv_sec * 1000000) + ts.tv_usec;
+        te_m = (te.tv_sec * 1000000) + te.tv_usec;
+        el_m += te_m - ts_m;
+    }
+
+    /*  Verify the last compress is enough
+        decompress data for verify
+    */
+    if (verify_data && COMP == service) {
+        QZ_DEBUG("verify compress thread %ld, before Decompressed %lu bytes into %lu\n",
+                 tid, comp_out_sz, decomp_out_sz);
+        consumed = 0;
+        produced = 0;
+
+        for (int i = 0; i < num_blocks; i ++) {
+            in_sz = compressed_blocks_sz[i];
+            out_sz = decomp_out_sz - produced;
+            rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
+                              decomp_out + produced, (uint32_t *)(&out_sz));
+            if (rc != QZ_OK) {
+                QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+                dumpInputData(src_sz, src);
+                goto done;
+            }
+            consumed += in_sz;
+            produced += out_sz;
+        }
+
+        QZ_DEBUG("verify compressed data..\n");
+        decomp_out_sz = produced;
+        if (decomp_out_sz != org_src_sz ||
+            memcmp(src, decomp_out, org_src_sz)) {
+            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                     decomp_out_sz, org_src_sz);
+            dumpInputData(src_sz, src);
+            goto done;
+        }
+    }
+
+    //timeCheck(5, tid);
+    sec = (long double)(el_m);
+    sec = sec / 1000000.0;
+    rate = org_src_sz;
+    rate /= 1024;
+    rate *= 8;// Kbits
+    if (BOTH == service) {
+        rate *= 2;
+    }
+    rate *= count;
+    rate /= 1024 * 1024; // gigbits
+    rate /= sec;// Gbps
+    if (0 != pthread_mutex_lock(&g_lock_print)) {
+        goto done;
+    }
+    QZ_INFO("[INFO] srv=");
+    if (COMP == service) {
+        QZ_INFO("COMP");
+    } else if (DECOMP == service) {
+        QZ_INFO("DECOMP");
+    } else if (BOTH == service) {
+        QZ_INFO("BOTH");
+    } else {
+        QZ_ERROR("UNKNOWN\n");
+        pthread_mutex_unlock(&g_lock_print);
+        goto done;
+    }
+    QZ_INFO(", tid=%ld, verify=%d, count=%d, msec=%llu, "
+            "bytes=%lu, %Lf Gbps",
+            tid, verify_data, count, el_m, org_src_sz, rate);
+    if (DECOMP != service) {
+        QZ_INFO(", input_len=%lu, comp_len=%lu, ratio=%f%%",
+                org_src_sz, comp_out_sz,
+                ((double)comp_out_sz / (double)org_src_sz) * 100);
+    }
+    if (COMP != service) {
+        QZ_INFO(", comp_len=%lu, decomp_len=%lu",
+                comp_out_sz, decomp_out_sz);
+    }
+    QZ_INFO("\n");
+    if (test_thread_safe_flag == 1) {
+        if (thread_sleep == 0) {
+            srand(time(NULL));
+            thread_sleep = (rand() % 500 + 1) * 1000;
+        }
+        usleep(thread_sleep);
+    }
+    pthread_mutex_unlock(&g_lock_print);
+
+done:
+    if (gen_data && !g_perf_svm) {
+        qzFree(src);
+        qzFree(comp_out);
+        qzFree(decomp_out);
+    } else if (g_perf_svm) {
+        free(src);
+        free(comp_out);
+        free(decomp_out);
+    }
+    if (compressed_blocks_sz != NULL) {
+        free(compressed_blocks_sz);
+    }
+    (void)qzTeardownSession(&sess);
+    pthread_exit((void *)NULL);
+}
 
 void *qzCompressAndDecompress(void *arg)
 {
@@ -1280,12 +1821,11 @@ void *qzCompressAndDecompress(void *arg)
         genRandomData(src, src_sz);
     }
     //timeCheck(4, tid);
-
     block_size = ((TestArg_T *)arg)->block_size;
+
     if (-1 == block_size) {
         block_size = src_sz;
     }
-
     num_blocks = src_sz / block_size + (src_sz % block_size ? 1 : 0);
     compressed_blocks_sz = malloc(sizeof(int) * num_blocks);
     if (NULL == compressed_blocks_sz) {
@@ -1293,7 +1833,6 @@ void *qzCompressAndDecompress(void *arg)
         goto done;
     }
     memset(compressed_blocks_sz, 0, sizeof(int) * num_blocks);
-
     // Compress the data for testing
     if (DECOMP == service) {
         consumed = 0;
@@ -1419,6 +1958,8 @@ void *qzCompressAndDecompress(void *arg)
             }
 
             decomp_out_sz = produced;
+            QZ_DEBUG("DEBUG: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                     decomp_out_sz, org_src_sz);
             if (decomp_out_sz != org_src_sz) {
                 QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
                          decomp_out_sz, org_src_sz);
@@ -4309,6 +4850,12 @@ int main(int argc, char *argv[])
     case 22:
         qzThdOps = qzDecompressStreamWithBufferError;
         break;
+    case 23:
+        qzThdOps = qzCompressAndDecompressExt;
+        break;
+    case 24:
+        qzThdOps = qzTestEndOfStreamDetection;
+        break;
     default:
         goto done;
     }
@@ -4324,7 +4871,7 @@ int main(int argc, char *argv[])
 
         input_buf_len = GET_LOWER_32BITS((file_state.st_size > QATZIP_MAX_HW_SZ ?
                                           QATZIP_MAX_HW_SZ : file_state.st_size));
-        if (test == 4 || test == 10 || test == 11 || test == 12) {
+        if (test == 4 || test == 10 || test == 11 || test == 12 || test == 23) {
             input_buf_len = GET_LOWER_32BITS(file_state.st_size);
         }
         if (compress_buf_type == PINNED_MEM) {
@@ -4409,7 +4956,7 @@ int main(int argc, char *argv[])
 
 #ifndef ENABLE_THREAD_BARRIER
     /*for qzCompressAndDecompress test*/
-    if (test == 4 || test == 18) {
+    if (test == 4 || test == 18 || test == 23) {
         ret = pthread_mutex_lock(&g_cond_mutex);
         if (ret != 0) {
             QZ_ERROR("Failure to get Mutex Lock, status = %d\n", ret);
