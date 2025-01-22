@@ -1,10 +1,10 @@
-.TH QZIP 1 local
+.TH QATZIP-TEST 1 local
 .SH NAME
-qzip \- compress or decompress with qat acceleration
+qatzip-test \- test app for compression or decompression function and perf with qat acceleration
 .SH SYNOPSIS
 .ll +8
-.B qzip
-.RB [ " \-AdfhHkLCro " ]
+.B qatzip-test
+.RB [ " \-m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:g:vh " ]
 [
 .I "name \&..."
 ]
@@ -14,42 +14,63 @@ qzip \- compress or decompress with qat acceleration
 QATzip is a user space library which builds on top of the Intel QuickAssist
 Technology user space library, to provide extended accelerated compression and
 decompression services by offloading the actual compression and decompression
-request(s) to the Intel Chipset Series. QATzip produces data using the standard
-gzip format (RFC1952) with extended headers. The data can be decompressed with a
-compliant gzip implementation. QATzip is design to take full advantage of the
-performance provided by Intel&reg; QuickAssist Technology.
+request(s) to the Intel Chipset Series.
+qatzip-test is the test tool for validating QATzip user space library's functional
+and performance. It could construct different testing scenarios by combining
+various software selectable parameters, then Capture and analyze performance data
+The parameters include different compression data formats, block size, hw buffer
+size, test threads and so on...
+qatzip-test tool is design to take full advantage of the performance provided
+by Intel&reg; QuickAssist Technology.
 
 .SH OPTIONS
 .TP
-.B \-A --algorithm
-set algorithm type, currently only support deflate
+.B \-m
+set test mode for different function of qatzip
+    1 test memcpy feature
+    2 test Memory
+    3 test comp/decomp by default parameters
+    4 test comp/decomp by configurable parameters
+    5 test comp/decomp by format parameters
+    test set default configurable parameters
 .TP
-.B \-d --decompress
-decompress
+.B \-i
+input source file, default by random generate data
 .TP
-.B \-f --force
-force overwrite of output file and compress links
+.B \-t
+maximum forks permitted in the current thread
 .TP
-.B \-h --help
-give this help
+.B \-l
+Test case loop count, default is 2
 .TP
-.B \-H --huffmanhdr
-set huffman header type
+.B \-v
+verify, disabled by default
 .TP
-.B \-k --keep
-Keep (don't delete) input files during compression or decompression.
+.B \-e
+enable/disable QAT HW. enabled by default
 .TP
-.B \-L --level
-set compression level
+.B \-s
+enable/disable QAT session setup, enabled by default
 .TP
-.B \-C --chunksz
-set chunk size
+.B \-A
+set compression algorithm, deflate/lz4/lz4s
 .TP
-.B \-r
-set max in-flight request number
+.B \-B
+enable/disable QATzip sw fallback
 .TP
-.B \-o
-set output file name
+.B \-C
+set HW buffer size
+.B \-b
+set API source block size
+.TP
+.B \-D
+set compression or decompression, comp | decomp | both
+.TP
+.B \-O
+set data format, deflate | gzip | gzipext | deflate_4B | lz4 | lz4s
+.TP
+.B \-T
+set huffman tree type, static | dynamic
 
 .SH COPYRIGHT
 .nf
