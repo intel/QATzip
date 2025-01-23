@@ -1230,8 +1230,7 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         break;
     case DEFLATE_RAW:
         compressed_sz = *(qz_sess->src_sz);
-        uncompressed_sz = (qz_sess->sess_params.hw_buff_sz > *(qz_sess->dest_sz)) ?
-                          *(qz_sess->dest_sz) : qz_sess->sess_params.hw_buff_sz;
+        uncompressed_sz = *(qz_sess->dest_sz);
         QZ_DEBUG("checkHeader: DEFLATE_RAW HW Decompression enabled uncompressed_sz is %u \n",
                  uncompressed_sz);
         break;

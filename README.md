@@ -158,7 +158,7 @@ This release was validated on the following:
 * For zstd format compression, qzstd only supports `hw_buffer_sz` which is less than 128KB.
 * Stream APIs only support "DEFLATE_GZIP", "DEFLATE_GZIP_EXT", "DEFLATE_RAW" for compression
   and "DEFLATE_GZIP", "DEFLATE_GZIP_EXT" for decompression now.
-* DEFLATE_RAW hardware decompression is supported and input data must be complete deflate block. If input data is not complete block and software backup is enabled decompression will fallback on software else failure will be returned.
+* DEFLATE_RAW hardware decompression is supported, if want to offload to HW, then the input data must be single complete deflate block and it's uncompressed size have to smaller than the HW buffer size, otherwise, it would fallback to sw(The API's input dest len have to set down by the customer). If input data is multi-blocks and software backup is enabled, then it would fallback to sw.
 
 ## Installation Instructions
 
