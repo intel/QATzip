@@ -2251,7 +2251,8 @@ void *qzCompressAndDecompress(void *arg)
 
             for (int i = 0; i < num_blocks; i ++) {
                 in_sz = compressed_blocks_sz[i];
-                out_sz = decomp_out_sz - produced;
+                out_sz = block_size < (decomp_out_sz - produced) ? block_size :
+                         (decomp_out_sz - produced);
                 rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
                                   decomp_out + produced, (uint32_t *)(&out_sz));
                 if (rc != QZ_OK) {
