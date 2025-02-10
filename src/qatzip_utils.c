@@ -264,7 +264,7 @@ void logMessage(QzLogLevel_T level, const char *file, int line,
         output = qzDebugLogFile;
     }
 
-    if (level <= LOG_DEBUG3) {
+    if (level != LOG_NONE) {
         fprintf(output, "[%s] [%s] (%s:%d): ", getLogLevelString(level), time_buffer,
                 file, line);
     }
