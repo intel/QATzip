@@ -221,7 +221,8 @@ int doProcessBuffer(QzSession_T *sess,
             ret = qzDecompress(sess, src + consumed, &block_src_len,
                                dst + produced, &block_dest_len);
             if (QZ_DATA_ERROR == ret ||
-                (QZ_BUF_ERROR == ret && 0 == block_src_len)) {
+                (QZ_BUF_ERROR == ret && 0 == block_src_len) ||
+                (QZ_OK == ret && block_src_len < *src_len)) {
                 done = 1;
             }
         }
@@ -401,12 +402,13 @@ exit:
         exit(ret);
     }
 }
+
 int qzipSetupSessionDeflate(QzSession_T *sess, QzipParams_T *params)
 {
     int status;
-    QzSessionParamsDeflate_T deflate_params;
+    QzSessionParamsDeflateExt_T deflate_params_ext;
 
-    status = qzGetDefaultsDeflate(&deflate_params);
+    status = qzGetDefaultsDeflateExt(&deflate_params_ext);
     if (status < 0) {
         QZ_ERROR("Session setup failed with error: %d\n", status);
         return ERROR;
@@ -414,32 +416,37 @@ int qzipSetupSessionDeflate(QzSession_T *sess, QzipParams_T *params)
 
     switch (params->data_fmt) {
     case QZIP_DEFLATE_4B:
-        deflate_params.data_fmt = QZ_DEFLATE_4B;
+        deflate_params_ext.deflate_params.data_fmt = QZ_DEFLATE_4B;
         break;
     case QZIP_DEFLATE_GZIP:
-        deflate_params.data_fmt = QZ_DEFLATE_GZIP;
+        deflate_params_ext.deflate_params.data_fmt = QZ_DEFLATE_GZIP;
         break;
     case QZIP_DEFLATE_GZIP_EXT:
-        deflate_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        deflate_params_ext.deflate_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
         break;
     case QZIP_DEFLATE_RAW:
-        deflate_params.data_fmt = QZ_DEFLATE_RAW;
+        deflate_params_ext.deflate_params.data_fmt = QZ_DEFLATE_RAW;
+        deflate_params_ext.stop_decompression_stream_end = 1;
         break;
     default:
         QZ_ERROR("Unsupported data format\n");
         return ERROR;
     }
 
-    deflate_params.huffman_hdr = params->huffman_hdr;
-    deflate_params.common_params.direction = params->direction;
-    deflate_params.common_params.comp_lvl = params->comp_lvl;
-    deflate_params.common_params.comp_algorithm = params->comp_algorithm;
-    deflate_params.common_params.hw_buff_sz = params->hw_buff_sz;
-    deflate_params.common_params.polling_mode = params->polling_mode;
-    deflate_params.common_params.req_cnt_thrshold = params->req_cnt_thrshold;
-    deflate_params.common_params.is_sensitive_mode = params->is_sensitive_mode;
+    deflate_params_ext.deflate_params.huffman_hdr = params->huffman_hdr;
+    deflate_params_ext.deflate_params.common_params.direction = params->direction;
+    deflate_params_ext.deflate_params.common_params.comp_lvl = params->comp_lvl;
+    deflate_params_ext.deflate_params.common_params.comp_algorithm =
+        params->comp_algorithm;
+    deflate_params_ext.deflate_params.common_params.hw_buff_sz = params->hw_buff_sz;
+    deflate_params_ext.deflate_params.common_params.polling_mode =
+        params->polling_mode;
+    deflate_params_ext.deflate_params.common_params.req_cnt_thrshold =
+        params->req_cnt_thrshold;
+    deflate_params_ext.deflate_params.common_params.is_sensitive_mode =
+        params->is_sensitive_mode;
 
-    status = qzSetupSessionDeflate(sess, &deflate_params);
+    status = qzSetupSessionDeflateExt(sess, &deflate_params_ext);
     if (status < 0) {
         QZ_ERROR("Session setup failed with error: %d\n", status);
         return ERROR;
