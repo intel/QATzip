@@ -351,8 +351,6 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
         break;
     case Z_STREAM_END:
         ret = QZ_OK;
-        QZ_DEBUG("inflate success with Z_STREAM_END\n");
-        qz_sess->force_sw = 0;
         qz_sess->inflate_stat = InflateEnd;
         setDeflateEndOfStream(qz_sess, 1);
         break;
@@ -434,15 +432,8 @@ int qzSWDecompressMultiGzip(QzSession_T *sess, const unsigned char *src,
             qz_sess->sess_params.stop_decompression_stream_end == 1) {
             goto out;
         }
-
-        if (0 == qz_sess->force_sw) {
-            goto next;
-        }
     }
 
-next:
-    QZ_DEBUG("Z_STREAM_END done\n");
-    return QZ_OK;
 out:
     QZ_INFO("Exit qzSWDecompressMultiGzip: src_len %u dest_len %u\n",
             *src_len, *dest_len);
