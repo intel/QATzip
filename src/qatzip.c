@@ -2241,7 +2241,8 @@ static void *doDecompressIn(void *in)
         as we cannot identify the stream boundries.Job size can be as big as QAT HW buffer*/
 
         if (qz_sess->stop_submitting ||
-            qz_sess->sess_params.stop_decompression_stream_end == 1) {
+            (getDeflateEndOfStream(qz_sess) == 1 &&
+             qz_sess->sess_params.stop_decompression_stream_end == 1)) {
             remaining = 0;
         }
 
@@ -2706,6 +2707,11 @@ int qzTeardownSession(QzSession_T *sess)
         if (unlikely(NULL != qz_sess->SWT.latency_array)) {
             free(qz_sess->SWT.latency_array);
             qz_sess->SWT.latency_array = NULL;
+        }
+
+        if (qz_sess->qzdeflateExtData != NULL) {
+            free(qz_sess->qzdeflateExtData);
+            qz_sess->qzdeflateExtData = NULL;
         }
 
         // Delete the async relative job and queue
