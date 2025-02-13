@@ -265,8 +265,13 @@ static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
     case DEFLATE_GZIP:
     case DEFLATE_GZIP_EXT:
     case DEFLATE_RAW:
+    case DEFLATE_ZLIB:
         session_setup_data->compType = CPA_DC_DEFLATE;
-        session_setup_data->checksum = CPA_DC_CRC32;
+        if (params->data_fmt == DEFLATE_ZLIB) {
+            session_setup_data->checksum = CPA_DC_ADLER32;
+        } else {
+            session_setup_data->checksum = CPA_DC_CRC32;
+        }
         session_setup_data->autoSelectBestHuffmanTree =
             CPA_DC_ASB_UNCOMP_STATIC_DYNAMIC_WITH_STORED_HDRS;
         if (params->huffman_hdr == QZ_DYNAMIC_HDR) {
@@ -519,11 +524,42 @@ int qzCheckParamsDeflate(QzSessionParamsDeflate_T *params)
 int qzCheckParamsDeflateExt(QzSessionParamsDeflateExt_T *params)
 {
     assert(params);
-
-    if (qzCheckParamsDeflate(&params->deflate_params) != QZ_OK) {
+    if (qzCheckParamsCommon(&params->deflate_params.common_params) != QZ_OK) {
         return QZ_PARAMS;
     }
+
+    if (params->deflate_params.common_params.comp_algorithm != QZ_DEFLATE) {
+        QZ_ERROR("Invalid comp_algorithm value\n");
+        return QZ_PARAMS;
+    }
+
+    if (params->deflate_params.huffman_hdr > QZ_STATIC_HDR) {
+        QZ_ERROR("Invalid huffman_hdr value\n");
+        return QZ_PARAMS;
+    }
+
+    if ((params->deflate_params.common_params.comp_lvl < QZ_LZS_COMP_LVL_MINIMUM) ||
+        (params->deflate_params.common_params.comp_lvl >
+         QZ_DEFLATE_COMP_LVL_MAXIMUM_Gen3)) {
+        QZ_ERROR("Invalid comp_lvl value\n");
+        return QZ_PARAMS;
+    }
+    QZ_DEBUG(" data_fmt value = %d , zlib_format = %d ",
+             params->deflate_params.data_fmt, params->zlib_format);
+    if ((params->zlib_format == 0) &&
+        (params->deflate_params.data_fmt > QZ_DEFLATE_RAW)) {
+        QZ_ERROR("Invalid data_fmt value\n");
+        return QZ_PARAMS;
+    }
+
     return QZ_OK;
+    /*
+        if (qzCheckParamsDeflate(&params->deflate_params) != QZ_OK) {
+            return QZ_PARAMS;
+        }
+
+        return QZ_OK;
+    */
 }
 
 int qzCheckParamsLZ4(QzSessionParamsLZ4_T *params)
@@ -669,9 +705,10 @@ void qzSetParamsDeflateExt(QzSessionParamsDeflateExt_T *params,
 
     qzSetParamsDeflate(&params->deflate_params, internal_params);
 
-    /*if (params->zlib_format == 1) {
+    if (params->zlib_format == 1) {
         internal_params->data_fmt = DEFLATE_ZLIB;
-    }*/
+        internal_params->zlib_format = 1;
+    }
     internal_params->stop_decompression_stream_end =
         params->stop_decompression_stream_end;
 }
@@ -791,11 +828,12 @@ void qzGetParamsDeflateExt(QzSessionParamsInternal_T *internal_params,
 
     qzGetParamsDeflate(internal_params, &params->deflate_params);
     if (internal_params->data_fmt == DEFLATE_ZLIB) {
-        // params->zlib_format == 1; // enable when zlib pr
+        internal_params->zlib_format = 1;
     }
 
     params->stop_decompression_stream_end =
         internal_params->stop_decompression_stream_end;
+    params->zlib_format = internal_params->zlib_format;
 }
 
 /**
@@ -845,6 +883,9 @@ inline unsigned long outputFooterSz(DataFormatInternal_T data_fmt)
     case LZ4S_BK:
         size = 0;
         break;
+    case DEFLATE_ZLIB:
+        size = stdZlibFooterSz();
+        break;
     case DEFLATE_GZIP_EXT:
     default:
         size = stdGzipFooterSz();
@@ -872,6 +913,9 @@ unsigned long outputHeaderSz(DataFormatInternal_T data_fmt)
         break;
     case LZ4S_BK:
         size = qzLZ4SBlockHeaderSz();
+        break;
+    case DEFLATE_ZLIB:
+        size = stdZlibHeaderSz();
         break;
     case DEFLATE_GZIP_EXT:
     default:
@@ -901,6 +945,9 @@ void outputHeaderGen(unsigned char *ptr,
     case LZ4S_BK:
         qzLZ4SBlockHeaderGen(ptr, res);
         break;
+    case DEFLATE_ZLIB:
+        stdZlibHeaderGen(ptr, res);
+        break;
     case DEFLATE_GZIP_EXT:
     default:
         qzGzipHeaderGen(ptr, res);
@@ -920,6 +967,9 @@ inline void outputFooterGen(QzSess_T *qz_sess,
         qzLZ4FooterGen(ptr, res);
         break;
     case LZ4S_BK:
+        break;
+    case DEFLATE_ZLIB:
+        qzZlibFooterGen(ptr, res);
         break;
     case DEFLATE_GZIP_EXT:
     default:
@@ -944,6 +994,7 @@ int isQATProcessable(const unsigned char *ptr,
     case DEFLATE_4B:
     case DEFLATE_GZIP:
     case DEFLATE_GZIP_EXT:
+    case DEFLATE_ZLIB:
         rc = isQATDeflateProcessable(ptr, src_len, qz_sess);
         break;
     case LZ4_FH:
@@ -1200,6 +1251,8 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         if ((unsigned char *)qzFooter == src_ptr + src_avail_len - stdGzipFooterSz()) {
             isEndWithFooter = 1;
         }
+        QZ_DEBUG("checkHeader: DEFLATE_GZIP compressed_sz = %u , uncompressed_sz = %u \n",
+                 compressed_sz, uncompressed_sz);
         break;
     case DEFLATE_GZIP_EXT:
         if (QZ_OK != qzGzipHeaderExt(src_ptr, hdr)) {
@@ -1207,6 +1260,9 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         }
         compressed_sz = (long)(hdr->extra.qz_e.dest_sz);
         uncompressed_sz = (long)(hdr->extra.qz_e.src_sz);
+        QZ_DEBUG("checkHeader: DEFLATE_GZIP_EXT compressed_sz = %u , uncompressed_sz = %u \n",
+                 compressed_sz, uncompressed_sz);
+
         break;
     case DEFLATE_4B:
         compressed_sz = *(int *)src_ptr;
@@ -1233,6 +1289,13 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         uncompressed_sz = *(qz_sess->dest_sz);
         QZ_DEBUG("checkHeader: DEFLATE_RAW HW Decompression enabled uncompressed_sz is %u \n",
                  uncompressed_sz);
+        break;
+    case DEFLATE_ZLIB:
+        compressed_sz = src_avail_len - stdZlibFooterSz() - stdZlibHeaderSz();
+        uncompressed_sz = (qz_sess->sess_params.hw_buff_sz > dest_avail_len) ?
+                          dest_avail_len : qz_sess->sess_params.hw_buff_sz;
+        QZ_DEBUG("checkHeader DEFLATE_ZLIB: compressed_sz %u  uncompressed_sz %u \n",
+                 compressed_sz, uncompressed_sz);
         break;
     default:
         return QZ_FAIL;
@@ -1278,6 +1341,7 @@ void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
 {
     StdGzF_T *qzFooter = NULL;
     QzLZ4F_T *lz4Footer = NULL;
+    StdZlibF_T *zlibFooter = NULL;
     unsigned int src_send_sz = 0;
     unsigned int dest_receive_sz = 0;
     int src_mem_type = qzMemFindAddr(src_ptr);
@@ -1314,6 +1378,11 @@ void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
         lz4Footer = (QzLZ4F_T *)(src_ptr + src_send_sz); //TODO
         g_process.qz_inst[i].stream[j].checksum = lz4Footer->cnt_cksum;
         g_process.qz_inst[i].stream[j].orgdatalen = hdr->extra.qz_e.src_sz;
+    } else if (DEFLATE_ZLIB == data_fmt) {
+        zlibFooter = (StdZlibF_T *)(src_ptr + src_send_sz);
+        g_process.qz_inst[i].stream[j].checksum = zlibFooter->adler32;
+        g_process.qz_inst[i].stream[j].orgdatalen =
+            hdr->extra.qz_e.src_sz; //uncompressed size stored in checkheader
     }
 
     /*set up src dest buffers*/
@@ -1399,15 +1468,41 @@ int decompOutCheckSum(int i, int j, QzSession_T *sess,
                       CpaDcRqResults *resl)
 {
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    //alder32_swap to read the checksum in proper order.
+    if (qz_sess->sess_params.data_fmt == DEFLATE_ZLIB) {
+        if (resl->consumed <
+            g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes) {
+            // we need to refetch trailer from the end of consumed length which is the stream end
+            unsigned char *src_ptr = qz_sess->src + qz_sess->qz_in_len + outputHeaderSz(
+                                         qz_sess->sess_params.data_fmt);
+            StdZlibF_T *zlibFooter = (StdZlibF_T *)(src_ptr + resl->consumed);
+            g_process.qz_inst[i].stream[j].checksum = zlibFooter->adler32;
+            if (qz_sess->single_thread &&
+                (qz_sess->sess_params.stop_decompression_stream_end == 1)) {
+                qz_sess->last_submitted = 0;
+            }
+            QZ_DEBUG("src_ptr  %p  qz_sess->qz_in_len %lu data checksum %x\n",
+                     src_ptr, qz_sess->qz_in_len,
+                     g_process.qz_inst[i].stream[j].checksum);
+        } else {
+            qz_sess->last_submitted = 1;
+        }
+        g_process.qz_inst[i].stream[j].checksum = ntohl(
+                    g_process.qz_inst[i].stream[j].checksum);
+        QZ_DEBUG("After resp checksum: %x data checksum %x\n", resl->checksum,
+                 g_process.qz_inst[i].stream[j].checksum);
+    }
     if ((qz_sess->sess_params.data_fmt != DEFLATE_4B) &&
         (qz_sess->sess_params.data_fmt != DEFLATE_RAW) &&
         unlikely(resl->checksum !=
                  g_process.qz_inst[i].stream[j].checksum ||
-                 resl->produced != g_process.qz_inst[i].stream[j].orgdatalen)) {
+                 (resl->produced != g_process.qz_inst[i].stream[j].orgdatalen &&
+                  qz_sess->sess_params.data_fmt != DEFLATE_ZLIB))) {
         QZ_ERROR("Error in check footer, inst %d, stream %d\n", i, j);
-        QZ_DEBUG("resp checksum: %x data checksum %x\n",
+        QZ_DEBUG("resp checksum: %x data checksum %x data_fmt %d\n",
                  resl->checksum,
-                 g_process.qz_inst[i].stream[j].checksum);
+                 g_process.qz_inst[i].stream[j].checksum,
+                 qz_sess->sess_params.data_fmt);
         QZ_DEBUG("resp produced :%d data produced: %d\n",
                  resl->produced,
                  g_process.qz_inst[i].stream[j].orgdatalen);
