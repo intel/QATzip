@@ -110,7 +110,8 @@ QzSessionParamsInternal_T g_sess_params_internal_default = {
     .lz4s_mini_match   = 3,
     .qzCallback        = NULL,
     .qzCallback_external = NULL,
-    .stop_decompression_stream_end = 0
+    .stop_decompression_stream_end = 0,
+    .zlib_format       = 0
 };
 pthread_mutex_t g_sess_params_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -312,6 +313,7 @@ static inline int qzCheckInstCap(CpaDcInstanceCapabilities *inst_cap,
     case DEFLATE_GZIP:
     case DEFLATE_GZIP_EXT:
     case DEFLATE_RAW:
+    case DEFLATE_ZLIB:
     default:
         if (!inst_cap->statelessDeflateCompression ||
             !inst_cap->statelessDeflateDecompression ||
@@ -528,11 +530,11 @@ static unsigned int getWaitCnt(QzSession_T *sess)
     stopQat();                                                     \
     if (1 == sw_backup) {                                          \
         g_process.qz_init_status = QZ_NO_HW;                       \
-        QZ_WARN("g_process.qz_init_status = QZ_NO_HW\n");          \
+        QZ_WARN("g_process.qz_init_status = QZ_NO_HW\n");         \
         rc = QZ_OK;                                                \
     } else if (0 == sw_backup) {                                   \
         g_process.qz_init_status = QZ_NOSW_NO_HW;                  \
-        QZ_WARN("g_process.qz_init_status = QZ_NOSW_NO_HW\n");     \
+        QZ_WARN("g_process.qz_init_status = QZ_NOSW_NO_HW\n");    \
         rc = hw_status;                                            \
     }                                                              \
     goto done;
@@ -1447,7 +1449,8 @@ static void *doCompressIn(void *in)
     remaining = *qz_sess->src_sz - qz_sess->qz_in_len;
     src_send_sz = (remaining < hw_buff_sz) ? remaining : hw_buff_sz;
 
-    QZ_DEBUG("doCompressIn: Need to g_process %u bytes\n", remaining);
+    QZ_DEBUG("doCompressIn: Need to g_process %u hw_buff_sz %u bytes\n", remaining,
+             hw_buff_sz);
 
     while (!done) {
         if (g_process.qz_inst[i].heartbeat != CPA_STATUS_SUCCESS) {
@@ -1468,7 +1471,6 @@ static void *doCompressIn(void *in)
                 }
             } while (-1 == j);
             QZ_DEBUG("getUnusedBuffer returned %d\n", j);
-
             g_process.qz_inst[i].stream[j].src1++; /*update stream src1*/
             compBufferSetup(i, j, qz_sess, src_ptr, remaining, hw_buff_sz, src_send_sz);
             g_process.qz_inst[i].stream[j].src2++;/*this buffer is in use*/
@@ -1835,13 +1837,14 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     if (QZ_INIT_FAIL(rc)) {
         goto err_exit;
     }
-
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         if (g_sess_params_internal_default.data_fmt == LZ4_FH) {
             rc = qzSetupSessionLZ4(sess, NULL);
         } else if (g_sess_params_internal_default.data_fmt == LZ4S_BK) {
             rc = qzSetupSessionLZ4S(sess, NULL);
+        } else if (g_sess_params_internal_default.data_fmt == DEFLATE_ZLIB) {
+            rc = qzSetupSessionDeflateExt(sess, NULL);
         } else {
             rc = qzSetupSessionDeflate(sess, NULL);
         }
@@ -1851,13 +1854,16 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     }
 
     qz_sess = (QzSess_T *)(sess->internal);
-
+    if (g_sess_params_internal_default.data_fmt == DEFLATE_ZLIB) {
+        qz_sess->sess_params.data_fmt = DEFLATE_ZLIB;
+    }
     DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
     if (unlikely(data_fmt != DEFLATE_4B &&
                  data_fmt != DEFLATE_RAW &&
                  data_fmt != DEFLATE_GZIP &&
                  data_fmt != DEFLATE_GZIP_EXT &&
                  data_fmt != LZ4_FH &&
+                 data_fmt != DEFLATE_ZLIB &&
                  data_fmt != LZ4S_BK)) {
         QZ_ERROR("Unknown data format: %d\n", data_fmt);
         rc = QZ_UNSUPPORTED_FMT;
@@ -2146,6 +2152,9 @@ static void *doDecompressIn(void *in)
         /* update qz_sess status */
         qz_sess->seq++;
         qz_sess->submitted++;
+        /*stop_decompression_stream_end is valid for gzip and gzip ext where multiple decompress requests can be submitted.
+        Given we can identify streams/chunk with header and footer. Zlib and deflate raw always takes decompression as a single job
+        as we cannot identify the stream boundries.Job size can be as big as QAT HW buffer*/
 
         if (qz_sess->stop_submitting ||
             qz_sess->sess_params.stop_decompression_stream_end == 1) {
@@ -2250,8 +2259,10 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                     if (QZ_OK != decompOutCheckSum(i, j, sess, resl)) {
                         continue;
                     }
-
-                    src_send_sz = g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
+                    /*
+                    changed src_send_sz to actual data consumed by HW.
+                    */
+                    src_send_sz = resl->consumed;
                     qz_sess->next_dest += resl->produced;
                     qz_sess->qz_in_len += (outputHeaderSz(data_fmt) + src_send_sz +
                                            outputFooterSz(data_fmt));
@@ -2362,14 +2373,14 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
     if (QZ_INIT_FAIL(rc)) {
         goto err_exit;
     }
-
-    // akanksha here i need to check whether we need to add new data fmt for deflateExt session creation( for zlib we have to but in normat deflate raw case??)
     /*check if setupSession called*/
     if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
         if (g_sess_params_internal_default.data_fmt == LZ4_FH) {
             rc = qzSetupSessionLZ4(sess, NULL);
         } else if (g_sess_params_internal_default.data_fmt == LZ4S_BK) {
             rc = qzSetupSessionLZ4S(sess, NULL);
+        } else if (g_sess_params_internal_default.data_fmt == DEFLATE_ZLIB) {
+            rc = qzSetupSessionDeflateExt(sess, NULL);
         } else {
             rc = qzSetupSessionDeflate(sess, NULL);
         }
@@ -2377,7 +2388,11 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
             goto err_exit;
         }
     }
+
     qz_sess = (QzSess_T *)(sess->internal);
+    if (g_sess_params_internal_default.data_fmt == DEFLATE_ZLIB) {
+        qz_sess->sess_params.data_fmt = DEFLATE_ZLIB;
+    }
     // by default end of stream is set to 0
     setDeflateEndOfStream(qz_sess, 0);
 
@@ -2386,6 +2401,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
                  data_fmt != DEFLATE_4B &&
                  data_fmt != DEFLATE_GZIP &&
                  data_fmt != LZ4_FH &&
+                 data_fmt != DEFLATE_ZLIB &&
                  data_fmt != DEFLATE_GZIP_EXT)) {
         QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
         rc = QZ_UNSUPPORTED_FMT;
@@ -2803,7 +2819,12 @@ static unsigned int qzDeflateBound(unsigned int src_sz, QzSession_T *sess)
     /* Calculate how many gzip/gzip-ext headers and footers will be generated. */
     chunk_cnt = src_sz / hw_buffer_sz + src_sz %
                 hw_buffer_sz ? 1 : 0;
-    dest_sz += chunk_cnt * (qzGzipHeaderSz() + stdGzipFooterSz());
+    if (qz_sess->sess_params.data_fmt == DEFLATE_ZLIB) {
+        dest_sz += chunk_cnt * outputHeaderSz(qz_sess->sess_params.data_fmt) +
+                   chunk_cnt * outputFooterSz(qz_sess->sess_params.data_fmt);
+    } else {
+        dest_sz += chunk_cnt * (qzGzipHeaderSz() + stdGzipFooterSz());
+    }
 
     return dest_sz;
 }
@@ -2890,6 +2911,7 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
     case DEFLATE_GZIP:
     case DEFLATE_GZIP_EXT:
     case DEFLATE_4B:
+    case DEFLATE_ZLIB:
         dest_sz = qzDeflateBound(src_sz, sess);
         break;
     case LZ4_FH:

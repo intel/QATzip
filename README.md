@@ -159,6 +159,8 @@ This release was validated on the following:
 * Stream APIs only support "DEFLATE_GZIP", "DEFLATE_GZIP_EXT", "DEFLATE_RAW" for compression
   and "DEFLATE_GZIP", "DEFLATE_GZIP_EXT" for decompression now.
 * DEFLATE_RAW hardware decompression is supported, if want to offload to HW, then the input data must be single complete deflate block and it's uncompressed size have to smaller than the HW buffer size, otherwise, it would fallback to sw(The API's input dest len have to set down by the customer). If input data is multi-blocks and software backup is enabled, then it would fallback to sw.
+* DEFLATE_ZLIB hardware compresssion and  decompression is supported, if want to offload to HW, then the input data must be single complete deflate block and it's compressed size have to smaller or equal than the HW buffer size, otherwise, it would fallback to sw(The API's input dest len have to set down by the customer). If input data is multi-blocks then only first complete block will be decompressed by HW and user need to call decompress with next block.
+
 
 ## Installation Instructions
 

@@ -132,7 +132,8 @@ typedef enum {
     TEST_GZIPEXT,
     TEST_DEFLATE_4B,
     TEST_LZ4,
-    TEST_LZ4S
+    TEST_LZ4S,
+    TEST_ZLIB
 } TEST_FORMAT_T;
 
 typedef struct CPUCore_S {
@@ -472,6 +473,10 @@ int qzSetupDeflateExt(QzSession_T *sess, TestArg_T *arg)
     case TEST_DEFLATE_4B:
         params.deflate_params.data_fmt = QZ_DEFLATE_4B;
         break;
+    case TEST_ZLIB:
+        params.deflate_params.data_fmt = QZ_DEFLATE_RAW;
+        params.zlib_format = 1;
+        break;
     default:
         QZ_ERROR("Unsupported data format\n");
         return QZ_FAIL;
@@ -479,13 +484,11 @@ int qzSetupDeflateExt(QzSession_T *sess, TestArg_T *arg)
     params.deflate_params.huffman_hdr = arg->huffman_hdr;
     params.deflate_params.common_params.comp_lvl = arg->comp_lvl;
     params.deflate_params.common_params.comp_algorithm = QZ_DEFLATE;
-    params.deflate_params.common_params.hw_buff_sz = QZ_HW_BUFF_MAX_SZ;
-    params.deflate_params.common_params.direction = QZ_DIR_BOTH;
-    params.deflate_params.common_params.polling_mode = QZ_BUSY_POLLING;
+    params.deflate_params.common_params.hw_buff_sz = arg->hw_buff_sz;
+    params.deflate_params.common_params.polling_mode = arg->polling_mode;
     params.deflate_params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
     params.deflate_params.common_params.max_forks = arg->max_forks;
     params.deflate_params.common_params.sw_backup = arg->sw_backup;
-    params.deflate_params.common_params.strm_buff_sz = QZ_STRM_BUFF_SZ_DEFAULT;
 
     status = qzSetupSessionDeflateExt(sess, &params);
     if (status < 0) {
@@ -617,6 +620,7 @@ int qzInitSetupsessionExt(QzSession_T *sess, TestArg_T *arg)
         case TEST_DEFLATE:
         case TEST_GZIP:
         case TEST_GZIPEXT:
+        case TEST_ZLIB:
             QZ_DEBUG("calling  qzSetupDeflateExt \n");
             rc = qzSetupDeflateExt(sess, arg);
             break;
@@ -656,6 +660,9 @@ int qzInitSetupsession(QzSession_T *sess, TestArg_T *arg)
             break;
         case TEST_LZ4S:
             rc = qzSetupLZ4S(sess, arg);
+            break;
+        case TEST_ZLIB:
+            rc = qzSetupDeflateExt(sess, arg);
             break;
         default:
             QZ_ERROR("Unsupported data format\n");
@@ -1103,6 +1110,7 @@ void *qzSetupParamFuncTest(void *arg)
     size_t src_sz, dest_sz, test_dest_sz;;
     int rc;
     QzSession_T sess = {0};
+
 
     src_sz = 256 * 1024;
     test_dest_sz = dest_sz = 256 * 1024 * 2;
@@ -4483,7 +4491,9 @@ done:
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
-    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s\n"\
+    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s | zlib\n"\
+    "                          For zlib and deflate raw the block size must be same \n"\
+    "                          as HW buffer size, e.g '-b' and '-C' should be same. \n" \
     "    -T huffmanType        static | dynamic\n"                              \
     "    -r req_cnt_thrshold   max in-flight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
@@ -4616,6 +4626,8 @@ int main(int argc, char *argv[])
                 args.test_format = TEST_LZ4;
             } else if (strcmp(optarg, "lz4s") == 0) {
                 args.test_format = TEST_LZ4S;
+            } else if (strcmp(optarg, "zlib") == 0) {
+                args.test_format = TEST_ZLIB;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;

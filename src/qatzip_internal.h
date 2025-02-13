@@ -48,6 +48,7 @@ extern"C" {
 #include <stdatomic.h>
 #include <zlib.h>
 #include <lz4frame.h>
+#include <arpa/inet.h>
 
 /**
  *  define release version
@@ -128,11 +129,22 @@ extern"C" {
 #define QZ_LZ4_STOREDBLOCK_FLAG 0x80000000U
 #define QZ_LZ4_STORED_HEADER_SIZE 4
 
+//https://stackoverflow.com/questions/9050260/what-does-a-zlib-header-look-like
+//https://datatracker.ietf.org/doc/html/rfc1950
+//zlib header CMF
+#define QZ_ZLIB_HEADER_CMF              0x78
+// zlib magic header FLG with different compression level
+#define QZ_ZLIB_HEADER_FLG_LOW          0x01
+#define QZ_ZLIB_HEADER_FLG_FAST         0x5E
+#define QZ_ZLIB_HEADER_FLG_DEFAULT      0x9C
+#define QZ_ZLIB_HEADER_FLG_BEST         0xDA
+
+
 #define DATA_FORMAT_DEFAULT     DEFLATE_GZIP_EXT
 #define IS_DEFLATE_RAW(fmt)  (DEFLATE_RAW == (fmt))
 #define IS_DEFLATE(fmt) \
         (DEFLATE_RAW == (fmt) || DEFLATE_GZIP == (fmt) || \
-        DEFLATE_GZIP_EXT == (fmt) || DEFLATE_4B == (fmt))
+        DEFLATE_GZIP_EXT == (fmt) || DEFLATE_4B == (fmt) || DEFLATE_ZLIB == (fmt))
 
 typedef struct QzCpaStream_S {
     signed long seq;
@@ -278,7 +290,7 @@ typedef struct QzSessionParamsInternal_S {
     /**< Set lz4s dictionary mini match, which would be 3 or 4 */
     unsigned char stop_decompression_stream_end;
     /* stop decompression at end the stream, default is 0 */
-    //unsigned char zlib_format;
+    unsigned char zlib_format;
 } QzSessionParamsInternal_T;
 
 typedef struct QzSess_S {
@@ -386,6 +398,16 @@ typedef struct QzDeflateExtCustomData_S {
     unsigned char end_of_stream;
 } QzDeflateExtCustomData_T;
 
+typedef struct StdZLIBH_S {
+    // (CMF) defines compression method and flags (in case of "deflate", the window size).
+    unsigned char cmf;
+    unsigned char flags;
+} StdZlibH_T;
+
+typedef struct StdZlibF_T {
+    uint32_t adler32; /* adler32 checksum */
+} StdZlibF_T;
+
 #pragma pack(push, 1)
 /* lz4 frame header */
 typedef struct QzLZ4H_S {
@@ -410,6 +432,8 @@ unsigned long qzGzipHeaderSz(void);
 unsigned long qz4BHeaderSz(void);
 unsigned long stdGzipHeaderSz(void);
 unsigned long stdGzipFooterSz(void);
+unsigned long stdZlibHeaderSz(void);
+unsigned long stdZlibFooterSz(void);
 unsigned long outputHeaderSz(DataFormatInternal_T data_fmt);
 unsigned long outputFooterSz(DataFormatInternal_T data_fmt);
 void qzGzipHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
@@ -424,6 +448,10 @@ void outputFooterGen(QzSess_T *qz_sess,
                      CpaDcRqResults *res,
                      DataFormatInternal_T data_fmt);
 void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr);
+void stdZlibHeaderGen(unsigned char *ptr, CpaDcRqResults *res);
+int qzVerifyZlibHeader(const unsigned char *ptr,
+                       const unsigned int *const src_len);
+void qzZlibFooterGen(unsigned char *ptr, CpaDcRqResults *res);
 
 int isQATProcessable(const unsigned char *ptr,
                      const unsigned int *const src_len,
@@ -455,7 +483,6 @@ void *qzMemSet(void *ptr, unsigned char filler, unsigned int count);
 
 unsigned char *findStdGzipFooter(const unsigned char *src_ptr,
                                  long src_avail_len);
-
 void removeSession(int i);
 
 void cleanUpInstMem(int i);
