@@ -73,6 +73,16 @@ inline unsigned long stdGzipFooterSz(void)
     return sizeof(StdGzF_T);
 }
 
+inline unsigned long stdZlibHeaderSz(void)
+{
+    return sizeof(StdZlibH_T);
+}
+
+inline unsigned long stdZlibFooterSz(void)
+{
+    return sizeof(StdZlibF_T);
+}
+
 void qzGzipHeaderExtraFieldGen(unsigned char *ptr, CpaDcRqResults *res)
 {
     QzExtraField_T *extra;
@@ -148,6 +158,14 @@ int isQATDeflateProcessable(const unsigned char *ptr,
             return 0;
         }
         return 1;
+    }
+
+    if (qz_sess->sess_params.data_fmt == DEFLATE_ZLIB) {
+        if (qzVerifyZlibHeader(ptr, src_len) == 1) {
+            return 1;
+        }
+        QZ_ERROR("isQATDeflateProcessable qzVerifyZlibHeader failed\n");
+        return 0;
     }
 
     /*check if HW can process*/
@@ -242,4 +260,48 @@ unsigned char *findStdGzipFooter(const unsigned char *src_ptr,
     return (void *)((unsigned char *)src_ptr + src_avail_len - stdGzipFooterSz());
 }
 
+void stdZlibHeaderGen(unsigned char *ptr, CpaDcRqResults *res)
+{
+    assert(ptr != NULL);
+    assert(res != NULL);
+    StdZlibH_T *hdr;
+    hdr = (StdZlibH_T *)ptr;
+    hdr->cmf = QZ_ZLIB_HEADER_CMF;
+    hdr->flags = QZ_ZLIB_HEADER_FLG_DEFAULT;
+}
+
+void qzZlibFooterGen(unsigned char *ptr, CpaDcRqResults *res)
+{
+    assert(NULL != ptr);
+    StdZlibF_T *ftr;
+    ftr = (StdZlibF_T *)ptr;
+    ftr->adler32 = htonl(res->checksum);
+    QZ_DEBUG("qzZlibFooterGen checksum = 0x%x\n", ftr->adler32);
+}
+
+int qzVerifyZlibHeader(const unsigned char *ptr,
+                       const unsigned int *const src_len)
+{
+    assert(ptr != NULL);
+    if (*src_len < stdZlibHeaderSz()) return 0;
+    StdZlibH_T *h = (StdZlibH_T *)ptr;
+    unsigned char CMF = h->cmf;
+    if ((CMF & 0x0F) != QZ_DEFLATE) {
+        QZ_ERROR("qzVerifyZlibHeader failed invalid CM\n");
+        return 0;
+    }
+    //check for window size, valid values are from 0-7.
+    if ((CMF >> 4) > 7) {
+        QZ_ERROR("qzVerifyZlibHeader failed invalid CINFO\n");
+        return 0;
+    }
+    //check for valid zlib flags.
+    unsigned char FLG = h->flags;
+    unsigned char FDICT = (FLG & 0x20) >> 5;
+    if ((FDICT != 0) || ((CMF * 256 + FLG) % 31 != 0)) {
+        QZ_ERROR("qzVerifyZlibHeader failed invalid FLG\n");
+        return 0;
+    }
+    return 1;
+}
 #pragma pack(pop)

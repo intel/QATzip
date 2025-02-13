@@ -133,6 +133,9 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
         case DEFLATE_RAW:
             windows_bits = -MAX_WBITS;
             break;
+        case DEFLATE_ZLIB:
+            windows_bits = MAX_WBITS;
+            break;
         case DEFLATE_GZIP:
         case DEFLATE_GZIP_EXT:
         default:
@@ -299,6 +302,9 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
     case DEFLATE_4B:
     case DEFLATE_RAW:
         windows_bits = -MAX_WBITS;
+        break;
+    case DEFLATE_ZLIB:
+        windows_bits = MAX_WBITS;
         break;
     case DEFLATE_GZIP:
     case DEFLATE_GZIP_EXT:
@@ -603,6 +609,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     case DEFLATE_GZIP:
     case DEFLATE_GZIP_EXT:
     case DEFLATE_4B:
+    case DEFLATE_ZLIB:
         ret = qzDeflateSWCompress(sess, src, src_len, dest, dest_len, last);
         break;
     case LZ4_FH:
@@ -641,6 +648,7 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     case DEFLATE_GZIP:
     case DEFLATE_GZIP_EXT:
     case DEFLATE_4B:
+    case DEFLATE_ZLIB:
         ret = qzDeflateSWDecompress(sess, src, src_len, dest, dest_len);
         break;
     case LZ4_FH:
@@ -679,6 +687,7 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
     case DEFLATE_GZIP:
     case DEFLATE_GZIP_EXT:
     case DEFLATE_4B:
+    case DEFLATE_ZLIB:
         ret = qzSWDecompressMultiGzip(sess, src, src_len, dest, dest_len);
         break;
     case LZ4_FH:
