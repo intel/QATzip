@@ -341,7 +341,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
     switch (zlib_ret) {
     case Z_OK:
         if (QZ_LOW_DEST_MEM == sess->thd_sess_stat) {
-            QZ_ERROR("ERR: inflate failed with Z_DATA_ERROR\n");
+            QZ_INFO("ERR: inflate failed with Z_DATA_ERROR\n");
             ret = QZ_DATA_ERROR;
             qz_sess->inflate_stat = InflateError;
             goto done;
@@ -357,12 +357,12 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
         setDeflateEndOfStream(qz_sess, 1);
         break;
     case Z_DATA_ERROR:
-        QZ_ERROR("ERR: inflate failed with Z_DATA_ERROR\n");
+        QZ_INFO("ERR: inflate failed with Z_DATA_ERROR\n");
         ret = QZ_DATA_ERROR;
         qz_sess->inflate_stat = InflateError;
         goto done;
     default:
-        QZ_ERROR("ERR: inflate failed with error code %d\n", ret);
+        QZ_INFO("ERR: inflate failed with error code %d\n", ret);
         ret = QZ_FAIL;
         qz_sess->inflate_stat = InflateError;
         goto done;
@@ -383,7 +383,7 @@ done:
              *dest_len);
     if (zlib_ret == Z_STREAM_END || QZ_LOW_DEST_MEM == sess->thd_sess_stat) {
         if (Z_OK != inflateEnd(stream)) {
-            QZ_ERROR("inflateEnd failed.\n");
+            QZ_INFO("inflateEnd failed.\n");
             ret = QZ_FAIL;
         }
         qz_sess->inflate_stat = InflateNull;
@@ -711,14 +711,14 @@ int compInSWFallback(int i, int j, QzSession_T *sess,
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, compressIn fatal ERROR!\n",
+        QZ_ERROR("The instance %d heartbeat down, Don't enable sw fallback, compressIn error!\n",
                  i);
         return QZ_FAIL;
     }
 
     if (qz_sess->single_thread) {
-        QZ_ERROR("The instance %d failure, single_thread, compressIn fatal ERROR!\n",
-                 i);
+        QZ_INFO("The instance %d fallback to sw, single_thread, back to API level fallback!\n",
+                i);
         return QZ_FAIL;
     }
 
@@ -742,7 +742,7 @@ int compInSWFallback(int i, int j, QzSession_T *sess,
              src_ptr, qz_sess->next_dest, src_send_sz, qz_sess->seq);
 
     if (unlikely(QZ_OK != rc)) {
-        QZ_ERROR("SW CompIn fallback failure! compress fatal ERROR!\n");
+        QZ_ERROR("SW CompIn fallback failure! compress error!\n");
         return QZ_FAIL;
     }
 
@@ -769,7 +769,7 @@ int compOutSWFallback(int i, int j, QzSession_T *sess,
     unsigned char *dest_ptr = g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, compressOut fatal ERROR!\n",
+        QZ_ERROR("The instance %d heartbeat down, Don't enable sw fallback, compressOut error!\n",
                  i);
         return QZ_FAIL;
     }
@@ -781,7 +781,7 @@ int compOutSWFallback(int i, int j, QzSession_T *sess,
     rc = qzSWCompress(sess, src_ptr, &src_send_sz, dest_ptr, &dest_receive_sz,
                       qz_sess->last);
     if (QZ_OK != rc) {
-        QZ_ERROR("SW CompOut fallback failure! compress fatal ERROR!\n");
+        QZ_ERROR("SW CompOut fallback failure! compress error!\n");
         return QZ_FAIL;
     }
 
@@ -808,14 +808,14 @@ int decompInSWFallback(int i, int j, QzSession_T *sess,
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, decompressIn fatal ERROR!\n",
+        QZ_ERROR("The instance %d heartbeat down, Don't enable sw fallback, decompressIn error!\n",
                  i);
         sess->thd_sess_stat = QZ_FAIL;
         return QZ_FAIL;
     }
 
     if (qz_sess->single_thread) {
-        QZ_ERROR("The instance %d failure, single thread, decompressIn fatal ERROR!\n",
+        QZ_ERROR("The instance %d fallback to sw, single_thread, back to API level fallback!\n",
                  i);
         sess->thd_sess_stat = QZ_FAIL;
         return QZ_FAIL;
@@ -838,7 +838,7 @@ int decompInSWFallback(int i, int j, QzSession_T *sess,
                         dest_ptr,
                         tmp_dest_avail_len);
     if (unlikely(QZ_OK != rc)) {
-        QZ_ERROR("SW deCompIn fallback failure! decompress fatal ERROR!\n");
+        QZ_ERROR("SW deCompIn fallback failure! decompress error!\n");
         sess->thd_sess_stat = QZ_FAIL;
         return QZ_FAIL;
     }
@@ -869,7 +869,7 @@ int decompOutSWFallback(int i, int j, QzSession_T *sess,
     src_send_sz += (outputHeaderSz(data_fmt) + outputFooterSz(data_fmt)) ;
 
     if (!qz_sess->sess_params.sw_backup) {
-        QZ_ERROR("The instance %d heartbeat is failure, Don't enable sw fallback, decompressOut fatal ERROR!\n",
+        QZ_ERROR("The instance %d heartbeat down, Don't enable sw fallback, decompressOut error!\n",
                  i);
         return QZ_FAIL;
     }
@@ -884,7 +884,7 @@ int decompOutSWFallback(int i, int j, QzSession_T *sess,
                         qz_sess->next_dest,
                         &dest_receive_sz);
     if (QZ_OK != rc) {
-        QZ_ERROR("SW deCompOut fallback failure! compress fatal ERROR!\n");
+        QZ_ERROR("SW deCompOut fallback failure! decompress error!\n");
         return QZ_FAIL;
     }
 
@@ -894,5 +894,79 @@ int decompOutSWFallback(int i, int j, QzSession_T *sess,
     qz_sess->qz_in_len += src_send_sz;
     qz_sess->qz_out_len += dest_receive_sz;
     *dest_avail_len -= dest_receive_sz;
+    return QZ_OK;
+}
+
+/* This func is the wrapper func of compression sw fallback
+ * but with latency measure and metrixUpdate, first it would
+ * update sw latency matrix with this time latency value.
+ * Then update HW latency matrix with zero, it's for regression
+ * back to HW, in case, qatzip would always stuck on Lsm SW
+ * fallback
+ */
+int compLSMFallback(QzSession_T *sess, const unsigned char *src,
+                    unsigned int *src_len, unsigned char *dest,
+                    unsigned int *dest_len, unsigned int last)
+{
+    int rc;
+    unsigned long s_time_stamp, e_time_stamp;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+
+    s_time_stamp = rdtsc();
+    /* sw fallback here */
+    rc = qzSWCompress(sess, src, src_len, dest, dest_len, last);
+
+    if (unlikely(QZ_OK != rc)) {
+        QZ_ERROR("SW LSM fallback failure! compress error!\n");
+        return QZ_FAIL;
+    }
+
+    e_time_stamp = rdtsc();
+    /* The reduction for sw latency here is for offloading more request to
+     * SW when QAT devcie is busy, maybe we could optimize this value in
+     * the future.
+     */
+    metrixUpdate(&qz_sess->SWT, (e_time_stamp - s_time_stamp) >> 2);
+    metrixUpdate(&qz_sess->RRT, 0);
+    metrixUpdate(&qz_sess->PPT, 0);
+    QZ_DEBUG("LSM mode, insert SWT %ld\n", (e_time_stamp - s_time_stamp));
+
+    return QZ_OK;
+}
+
+/* This func is the wrapper func of decompression sw fallback
+ * but with latency measure and metrixUpdate, first it would
+ * update sw latency matrix with this time latency value.
+ * Then update HW latency matrix with zero, it's for regression
+ * back to HW, in case, qatzip would always stuck on Lsm SW
+ * fallback
+ */
+int decompLSMFallback(QzSession_T *sess, const unsigned char *src,
+                      unsigned int *src_len, unsigned char *dest,
+                      unsigned int *dest_len)
+{
+    int rc;
+    unsigned long s_time_stamp, e_time_stamp;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+
+    s_time_stamp = rdtsc();
+    /* sw fallback here */
+    rc = qzSWDecompressMulti(sess, src, src_len, dest, dest_len);
+
+    if (unlikely(QZ_OK != rc)) {
+        QZ_ERROR("SW LSM fallback failure! decompress error!\n");
+        return QZ_FAIL;
+    }
+
+    e_time_stamp = rdtsc();
+    /* The reduction for sw latency here is for offloading more request to
+     * SW when QAT devcie is busy, maybe we could optimize this value in
+     * the future.
+     */
+    metrixUpdate(&qz_sess->SWT, (e_time_stamp - s_time_stamp) >> 2);
+    metrixUpdate(&qz_sess->RRT, 0);
+    metrixUpdate(&qz_sess->PPT, 0);
+    QZ_DEBUG("LSM mode, insert SWT %ld\n", (e_time_stamp - s_time_stamp));
+
     return QZ_OK;
 }
