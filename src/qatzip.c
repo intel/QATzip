@@ -87,7 +87,8 @@ const unsigned int g_polling_interval[] = { 10, 10, 20, 30, 60, 100, 200, 400,
 #define GET_BUFFER_SLEEP_NSEC   10
 #define QAT_SECTION_NAME_SIZE   32
 #define POLL_EVENT_INTERVAL_TIME 1000
-
+# define NSEC_TO_SEC 1000000000L
+struct timespec mb_poll_timeout_time = { 0, 10000000 };
 
 /******************************************************
 * If enable new compression algorithm, extend new params
@@ -117,13 +118,17 @@ pthread_mutex_t g_sess_params_lock = PTHREAD_MUTEX_INITIALIZER;
 
 processData_T g_process = {
     .qz_init_status = QZ_NONE,
-    .qat_available = QZ_NONE
+    .qat_available = QZ_NONE,
+    .async_req_key = PTHREAD_KEYS_MAX
 };
 pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 
 __thread ThreadData_T g_thread = {
     .ppid = 0,
 };
+
+/* Define default async request Queue size */
+int async_queue_size = 100;
 
 static int setInstance(unsigned int dev_id, QzInstanceList_T *new_instance,
                        QzHardware_T *qat_hw)
@@ -517,6 +522,10 @@ static void exitFunc(void)
         pthread_join(g_process.t_poll_heartbeat, NULL);
     }
 
+    if (PTHREAD_KEYS_MAX != g_process.async_req_key) {
+        pthread_key_delete(g_process.async_req_key);
+    }
+
     for (i = 0; i <  g_process.num_instances; i++) {
         removeSession(i);
         cleanUpInstMem(i);
@@ -584,6 +593,31 @@ const char *getSectionName(void)
     return section_name;
 }
 
+static void AsyncCtrlDestructor(void *arg)
+{
+    QzSession_T *sess = (QzSession_T *) arg;
+    QzSess_T *qz_sess = (QzSess_T *) sess->internal;
+    if (qz_sess == NULL) {
+        QZ_DEBUG("Teardown session have called\n");
+        return;
+    }
+
+    QzAsynctrl_T *async_ctrl = qz_sess->async_ctrl;
+
+    if (0 != async_ctrl->async_consume_t) {
+        async_ctrl->async_ctrl_init = 0;
+        pthread_join(async_ctrl->async_consume_t, NULL);
+    }
+
+    if (NULL != async_ctrl->async_req_ring) {
+        QzRingFree(async_ctrl->async_req_ring);
+    }
+
+    sem_destroy(&(async_ctrl->sem));
+    free(async_ctrl);
+    return;
+}
+
 /* Initialize the QAT hardware, get the QAT instance for current
  * process.
  * Note: return value doesn't same as qz_init_status, because return
@@ -638,6 +672,14 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     g_thread.pid = getpid();
     g_thread.ppid = getppid();
     init_timers();
+    /* Init all local thread key here */
+    if (unlikely(0 != pthread_key_create(&g_process.async_req_key,
+                                         AsyncCtrlDestructor))) {
+        QZ_ERROR("Init local thread key failed\n");
+        g_process.async_req_key = PTHREAD_KEYS_MAX;
+        BACKOUT(QZ_NOSW_NO_HW);
+    }
+
     g_process.sw_backup = sw_backup;
 
     if (waiting && wait_cnt > 0) {
@@ -1672,7 +1714,7 @@ static void *doCompressOut(void *in)
                         }
                     }
                     qz_sess->qz_out_len += resl->produced;
-                    outputFooterGen(qz_sess, resl, data_fmt);
+                    outputFooterGen(qz_sess->next_dest, resl, data_fmt);
                     qz_sess->next_dest += outputFooterSz(data_fmt);
                     qz_sess->qz_out_len += outputFooterSz(data_fmt);
                 }
@@ -1916,8 +1958,8 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
         return rc;
     }
 
-    unsigned long s_time_stamp, e_time_stamp;
-    s_time_stamp = rdtsc();
+    unsigned long start_time_stamp, end_time_stamp;
+    start_time_stamp = rdtsc();
 
     i = qzGrabInstance(qz_sess->inst_hint, &(qz_sess->sess_params));
     if (unlikely(i == -1)) {
@@ -1983,9 +2025,9 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
 
     qzReleaseInstance(i);
 
-    e_time_stamp = rdtsc();
+    end_time_stamp = rdtsc();
     if (qz_sess->sess_params.is_sensitive_mode == true) {
-        metrixUpdate(&qz_sess->RRT, (e_time_stamp - s_time_stamp));
+        metrixUpdate(&qz_sess->RRT, (end_time_stamp - start_time_stamp));
     }
 
     rc = sess->thd_sess_stat;
@@ -2117,6 +2159,11 @@ static void *doDecompressIn(void *in)
             do {
                 j = getUnusedBuffer(i, j);
 
+                /* if decompres is in single thread mode, no body gone consume the
+                 * buffer, it shows something wrong in program, need to exit with
+                 * error, otherwise, program will hang at the nanosleep, it would
+                 * never get the avaliable buffer.
+                 */
                 if (qz_sess->single_thread) {
                     if (unlikely((-1 == j) ||
                                  ((0 == qz_sess->seq % qz_sess->sess_params.req_cnt_thrshold) &&
@@ -2379,12 +2426,30 @@ int qzDecompress(QzSession_T *sess, const unsigned char *src,
                  unsigned int *src_len, unsigned char *dest,
                  unsigned int *dest_len)
 {
-    return qzDecompressExt(sess, src, src_len, dest, dest_len, NULL);
+    return qzDecompressCrcExt(sess, src, src_len, dest, dest_len, NULL, NULL);
 }
 
 int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
                     unsigned int *src_len, unsigned char *dest,
                     unsigned int *dest_len, uint64_t *ext_rc)
+{
+    return qzDecompressCrcExt(sess, src, src_len, dest, dest_len, NULL, ext_rc);
+}
+
+int qzDecompressCrc(QzSession_T *sess,
+                    const unsigned char *src,
+                    unsigned int *src_len,
+                    unsigned char *dest,
+                    unsigned int *dest_len,
+                    unsigned long *crc)
+{
+    return qzDecompressCrcExt(sess, src, src_len, dest, dest_len, crc, NULL);
+}
+
+int qzDecompressCrcExt(QzSession_T *sess, const unsigned char *src,
+                       unsigned int *src_len, unsigned char *dest,
+                       unsigned int *dest_len, unsigned long *crc,
+                       uint64_t *ext_rc)
 {
     int rc;
     int i, reqcnt;
@@ -2478,8 +2543,8 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         return rc;
     }
 
-    unsigned long s_time_stamp, e_time_stamp;
-    s_time_stamp = rdtsc();
+    unsigned long start_time_stamp, end_time_stamp;
+    start_time_stamp = rdtsc();
 
     i = qzGrabInstance(qz_sess->inst_hint, &(qz_sess->sess_params));
     if (unlikely(i == -1)) {
@@ -2545,9 +2610,9 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
 
     qzReleaseInstance(i);
 
-    e_time_stamp = rdtsc();
+    end_time_stamp = rdtsc();
     if (qz_sess->sess_params.is_sensitive_mode == true) {
-        metrixUpdate(&qz_sess->RRT, (e_time_stamp - s_time_stamp));
+        metrixUpdate(&qz_sess->RRT, (end_time_stamp - start_time_stamp));
     }
 
     QZ_DEBUG("PRoduced %lu bytes\n", sess->total_out);
@@ -2641,6 +2706,11 @@ int qzTeardownSession(QzSession_T *sess)
         if (unlikely(NULL != qz_sess->SWT.latency_array)) {
             free(qz_sess->SWT.latency_array);
             qz_sess->SWT.latency_array = NULL;
+        }
+
+        // Delete the async relative job and queue
+        if (NULL != qz_sess->async_ctrl) {
+            AsyncCtrlDestructor(sess);
         }
 
         free(sess->internal);
@@ -3006,4 +3076,1119 @@ int qzGetSoftwareComponentVersionList(QzSoftwareVersionInfo_T *api_info,
 {
     QZ_ERROR("qatzip don't support qzGetSoftwareComponentVersionList API yet!\n");
     return QZ_FAIL;
+}
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip Async API
+ *      Async API implement
+ *****************************************************************************/
+
+/* Get absolute time by relative time. */
+static void get_sem_wait_abs_time(struct timespec *polling_abs_timeout,
+                                  const struct timespec polling_timeout)
+{
+    clock_gettime(CLOCK_REALTIME, polling_abs_timeout); /* Get current real time. */
+    polling_abs_timeout->tv_sec += polling_timeout.tv_sec;
+    polling_abs_timeout->tv_nsec += polling_timeout.tv_nsec;
+    polling_abs_timeout->tv_sec += polling_abs_timeout->tv_nsec / NSEC_TO_SEC;
+    polling_abs_timeout->tv_nsec = polling_abs_timeout->tv_nsec % NSEC_TO_SEC;
+}
+
+/* This function call async callback function and process req pointer
+ * if sess is not null, then recover sess status to ok
+ */
+void CallAsyncbackfn(QzAsyncReq_T **req_pointer, int status, QzSession_T *sess)
+{
+    QzAsyncReq_T *req = *req_pointer;
+    if (status != QZ_OK) {
+        req->qzResults->src_len = 0;
+        req->qzResults->dest_len = 0;
+    }
+
+    req->qzResults->status = status;
+    req->qzAsyncallback(req->qzResults);
+    free(req);
+
+    *req_pointer = NULL;
+
+    if (sess) {
+        sess->thd_sess_stat = QZ_OK;
+    }
+}
+
+static int AsyncCompressIn(QzAsyncReq_T *req)
+{
+    unsigned long tag;
+    int i, j;
+    unsigned int done = 0;
+    unsigned int src_send_sz;
+    unsigned int remaining;
+    unsigned char *src_ptr;
+    unsigned int hw_buff_sz;
+    CpaStatus rc;
+    QzSession_T *sess = req->sess;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+
+    struct timespec sleep_time;
+    sleep_time.tv_sec = 0;
+    sleep_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
+    QZ_DEBUG("Always enable CnV\n");
+
+    i = qz_sess->inst_hint;
+    j = -1;
+
+    qz_sess->src = (unsigned char *)req->src;
+    qz_sess->src_sz = &(req->qzResults->src_len);
+    qz_sess->dest_sz = &(req->qzResults->dest_len);
+    qz_sess->next_dest = req->dest;
+    qz_sess->last = 1;
+    qz_sess->crc32 = req->qzResults->crc != NULL &&
+                     QZ_CRC32_VALID(req->qzResults->crc->valid_flags) ?
+                     (unsigned long *)req->qzResults->crc->in_crc.crc_32 : NULL;
+
+    /* For offlod request, src_ptr, remaining and src_send_sz will update */
+    hw_buff_sz = qz_sess->sess_params.hw_buff_sz;
+    src_ptr = qz_sess->src;
+    remaining = *qz_sess->src_sz;
+    src_send_sz = (remaining < hw_buff_sz) ? remaining : hw_buff_sz;
+
+    QZ_DEBUG("doCompressIn: Need to g_process %u bytes\n", remaining);
+
+    // don't support the sw fallback for async API
+    while (!done) {
+        /* HW offload */
+        do {
+            j = getUnusedBuffer(i, j);
+            if (unlikely(-1 == j)) {
+                nanosleep(&sleep_time, NULL);
+            }
+        } while (-1 == j);
+        QZ_DEBUG("getUnusedBuffer returned %d\n", j);
+
+        g_process.qz_inst[i].stream[j].src1++; /*update stream src1*/
+        compBufferSetup(i, j, qz_sess, src_ptr, remaining, hw_buff_sz, src_send_sz);
+        g_process.qz_inst[i].stream[j].req = req;
+        g_process.qz_inst[i].stream[j].src2++;/*this buffer is in use*/
+
+        do {
+            tag = ((unsigned long)i << 16) | (unsigned long)j;
+            QZ_DEBUG("Comp Sending %u bytes ,opData.flushFlag = %d, i = %d j = %d seq = %ld tag = %ld\n",
+                     g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes,
+                     g_process.qz_inst[i].stream[j].opData.flushFlag,
+                     i, j, g_process.qz_inst[i].stream[j].seq, tag);
+            rc = cpaDcCompressData2(g_process.dc_inst_handle[i],
+                                    g_process.qz_inst[i].cpaSess,
+                                    g_process.qz_inst[i].src_buffers[j],
+                                    g_process.qz_inst[i].dest_buffers[j],
+                                    &g_process.qz_inst[i].stream[j].opData,
+                                    &g_process.qz_inst[i].stream[j].res,
+                                    (void *)(tag));
+            if (unlikely(CPA_STATUS_RETRY == rc)) {
+                g_process.qz_inst[i].num_retries++;
+                usleep(g_polling_interval[qz_sess->polling_idx]);
+            }
+
+            if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
+                QZ_ERROR("instance %d retry count:%d exceed the max count: %d\n",
+                         i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
+                break;
+            }
+        } while (rc == CPA_STATUS_RETRY);
+
+        g_process.qz_inst[i].num_retries = 0;
+
+        if (unlikely(CPA_STATUS_SUCCESS != rc)) {
+            QZ_ERROR("Inst %d, buffer %d, Error in compIn offload: %d\n", i, j, rc);
+            compInBufferCleanUp(i, j);
+            goto err_exit;
+        }
+
+        QZ_DEBUG("remaining = %u, src_send_sz = %u, seq = %ld\n", remaining,
+                 src_send_sz,  qz_sess->seq);
+        /* update the request src info status */
+        src_ptr += src_send_sz;
+        remaining -= src_send_sz;
+        src_send_sz = (remaining < hw_buff_sz) ? remaining : hw_buff_sz;
+        /* update qz_sess status */
+        qz_sess->seq++;
+        qz_sess->submitted++;
+
+        if (unlikely(qz_sess->stop_submitting)) {
+            remaining = 0;
+        }
+
+        if (0 == remaining) {
+            done = 1;
+            // qz_sess->last_submitted = 1;
+        }
+    }
+
+    return QZ_OK;
+
+err_exit:
+    /*reset the qz_sess status*/
+    qz_sess->stop_submitting = 1;
+    // qz_sess->last_submitted = 1;
+    sess->thd_sess_stat = QZ_FAIL;
+    return QZ_FAIL;
+}
+
+/* The internal function to g_process the compression response
+ * from the QAT hardware
+ *   sess->thd_sess_stat only carry QZ_OK and QZ_FAIL and QZ_BUF_ERROR
+ */
+static void *AsyncCompressOut(void *in)
+{
+    int j = 0, good = -1;
+    CpaDcRqResults *resl;
+    CpaStatus sts;
+    unsigned int sleep_cnt = 0;
+
+    /* The req may have different size, some req would grab numbers of
+     * stream buffer, those two pointer is used to check if the preview
+     * request have process finished and called callback function.
+     */
+    QzAsyncReq_T *req = NULL;
+    QzAsyncReq_T *req_prv = NULL;
+    QzSession_T *sess = (QzSession_T *) in;
+    QzSess_T *qz_sess = (QzSess_T *) sess->internal;
+    unsigned long *qz_crc32 = NULL;
+
+    int i = qz_sess->inst_hint;
+    DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
+    QzPollingMode_T polling_mode = qz_sess->sess_params.polling_mode;
+
+    while (((qz_sess->last_submitted == 0) ||
+            (qz_sess->processed < qz_sess->submitted))) {
+        /* Poll for responses */
+        good = 0;
+        /*  For this call, return error, we have to make sure all stream buffer is reset
+        *   which is not just for RestoreSrcCpastreamBuffer, but also
+        *   make src1, src2, sink1, sink2 equal, and all switch.
+        */
+        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 0);
+        if (unlikely(CPA_STATUS_FAIL == sts)) {
+            /* this will cause the in-flight request is not finished */
+            QZ_ERROR("Error in DcPoll: %d\n", sts);
+            /* TODO: This would cause the background polling thread exit
+             * Maybe we should never let this happend, otherwise we need
+             * mechanism to check the status of this polling thread.
+             */
+            goto err_exit;
+        }
+
+        /*fake a retrieve*/
+        for (j = 0; j <  g_process.qz_inst[i].dest_count; j++) {
+            if ((g_process.qz_inst[i].stream[j].seq ==
+                 qz_sess->seq_in)                    &&
+                (g_process.qz_inst[i].stream[j].src1 ==
+                 g_process.qz_inst[i].stream[j].src2) &&
+                (g_process.qz_inst[i].stream[j].sink1 ==
+                 g_process.qz_inst[i].stream[j].src1)  &&
+                (g_process.qz_inst[i].stream[j].sink1 ==
+                 g_process.qz_inst[i].stream[j].sink2 + 1)) {
+
+                good = 1;
+                QZ_DEBUG("doCompressOut: Processing seqnumber %2.2d "
+                         "%2.2d %4.4ld, PID: %d, TID: %lu\n",
+                         i, j, g_process.qz_inst[i].stream[j].seq,
+                         getpid(), pthread_self());
+
+                req = g_process.qz_inst[i].stream[j].req;
+
+                /* Exception handling */
+                if ((sess->thd_sess_stat == QZ_BUF_ERROR || sess->thd_sess_stat == QZ_FAIL)) {
+                    /* The preview error request have complete, send failed status to callback
+                     * function, and change the session status to ok, start process new request
+                     */
+                    if (req_prv != NULL && req != req_prv) {
+                        CallAsyncbackfn(&req_prv, QZ_FAIL, sess);
+                    } else {
+                        compOutSkipErrorRespond(i, j, qz_sess);
+                        req_prv = req;
+                        /* if process equel to submit, it means a request definatly complete */
+                        if (qz_sess->processed == qz_sess->submitted) {
+                            CallAsyncbackfn(&req_prv, QZ_FAIL, sess);
+                        }
+                        /* if issue is from submit, only check if all submit processed */
+                        if (qz_sess->stop_submitting) {
+                            qz_sess->stop_submitting = 0;
+                        }
+                        continue;
+                    }
+                }
+
+                resl = &g_process.qz_inst[i].stream[j].res;
+                /*  res.status is passed into QAT by cpaDcCompressData2, and changed in
+                *   dcCompression_ProcessCallback, it's type is CpaDcReqStatus.
+                *   job_status is from the dccallback, it's type is CpaStatus.
+                *   Generally, the res.status should have more detailed info about device error
+                *   we assume fallback feature will always call callback func, as well as
+                *   cpaDcCompressData2 return success. res.status and job_status should
+                *   all return Error status, but with different error number.
+                */
+                if (unlikely(CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status ||
+                             CPA_DC_OK != resl->status)) {
+                    QZ_DEBUG("Error(%d) in callback: %d, %d, ReqStatus: %d\n",
+                             g_process.qz_inst[i].stream[j].job_status, i, j,
+                             g_process.qz_inst[i].stream[j].res.status);
+                    compOutSkipErrorRespond(i, j, qz_sess);
+                    /* Even one request failed, we still allow Compressin thread
+                     * to offload new request */
+                    sess->thd_sess_stat = QZ_FAIL;
+                    /* If it's last buffer of request, excute Exception handle directly */
+                    if (qz_sess->processed == qz_sess->submitted) {
+                        CallAsyncbackfn(&req, QZ_FAIL, sess);
+                        req_prv = NULL;
+                    }
+                    continue;
+                }
+
+                /* polled HW respond */
+                QZ_DEBUG("\tHW CompOut: consumed = %d, produced = %d, seq_in = %ld\n",
+                         resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq);
+
+                unsigned int dest_receive_sz = outputHeaderSz(data_fmt) + resl->produced +
+                                               outputFooterSz(data_fmt);
+                if (QZ_OK != AsyncCompOutCheckDestLen(i, j, sess, dest_receive_sz)) {
+                    if (qz_sess->processed == qz_sess->submitted) {
+                        CallAsyncbackfn(&req, QZ_FAIL, sess);
+                        req_prv = NULL;
+                    }
+                    continue;
+                }
+
+                /* Update qz_sess info and clean dest buffer */
+                outputHeaderGen(req->dest, resl, data_fmt);
+                req->dest += outputHeaderSz(data_fmt);
+                req->req_out_len += outputHeaderSz(data_fmt);
+
+                AsyncCompOutValidDestBufferCleanUp(i, j, resl->produced);
+                req->dest += resl->produced;
+                req->req_in_len += resl->consumed;
+
+                qz_crc32 = req->qzResults->crc != NULL &&
+                           QZ_CRC32_VALID(req->qzResults->crc->valid_flags) ?
+                           (unsigned long *)req->qzResults->crc->in_crc.crc_32 : NULL;
+
+                if (likely(NULL != qz_crc32 && IS_DEFLATE(data_fmt))) {
+                    if (0 == *(qz_crc32)) {
+                        *(qz_crc32) = resl->checksum;
+                    } else {
+                        *(qz_crc32) = crc32_combine(*(qz_crc32),
+                                                    resl->checksum,
+                                                    resl->consumed);
+                    }
+                }
+
+                req->req_out_len += resl->produced;
+                outputFooterGen(req->dest, resl, data_fmt);
+                req->dest += outputFooterSz(data_fmt);
+                req->req_out_len += outputFooterSz(data_fmt);
+
+                /* process finished! */
+                compOutProcessedRespond(i, j, qz_sess);
+                if (req->req_in_len == req->qzResults->src_len) {
+                    req->qzResults->dest_len = req->req_out_len;
+                    CallAsyncbackfn(&req, QZ_OK, NULL);
+                    req_prv = NULL;
+                } else {
+                    req_prv = req;
+                }
+                break;
+            }
+        }
+
+        if (QZ_PERIODICAL_POLLING == polling_mode) {
+            if (0 == good) {
+                qz_sess->polling_idx = (qz_sess->polling_idx >= POLLING_LIST_NUM - 1) ?
+                                       (POLLING_LIST_NUM - 1) :
+                                       (qz_sess->polling_idx + 1);
+
+                QZ_DEBUG("comp sleep for %d usec..., for inst %d\n",
+                         g_polling_interval[qz_sess->polling_idx], i);
+                usleep(g_polling_interval[qz_sess->polling_idx]);
+                sleep_cnt++;
+            } else {
+                qz_sess->polling_idx = (qz_sess->polling_idx == 0) ? (0) :
+                                       (qz_sess->polling_idx - 1);
+            }
+        }
+    }
+
+    QZ_DEBUG("Comp sleep_cnt: %u\n", sleep_cnt);
+    if (qz_sess->stop_submitting || qz_sess->last_submitted) {
+        qz_sess->last_processed = 1;
+    } else {
+        qz_sess->last_processed = 0;
+    }
+
+    pthread_exit((void *)NULL);
+
+err_exit:
+    sess->thd_sess_stat = QZ_FAIL;
+    qz_sess->stop_submitting = 1;
+    qz_sess->last_processed = 1;
+    /*clean stream buffer*/
+    for (j = 0; j < g_process.qz_inst[i].dest_count; j++) {
+        RestoreSrcCpastreamBuffer(i, j);
+        RestoreDestCpastreamBuffer(i, j);
+        ResetCpastreamSink(i, j);
+    }
+    pthread_exit((void *)NULL);
+}
+
+static int AsyncDeCompressIn(QzAsyncReq_T *req)
+{
+    unsigned long i, tag;
+    int rc;
+    int j;
+    unsigned int done = 0;
+    unsigned int remaining;
+    unsigned int src_avail_len, dest_avail_len;
+    unsigned int tmp_src_avail_len, tmp_dest_avail_len;
+    unsigned char *src_ptr;
+    unsigned char *dest_ptr;
+
+    QzGzH_T hdr = {{0}, 0};
+
+    QzSession_T *sess = req->sess;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+
+    struct timespec sleep_time;
+    sleep_time.tv_sec = 0;
+    sleep_time.tv_nsec = GET_BUFFER_SLEEP_NSEC;
+
+    i = qz_sess->inst_hint;
+    j = -1;
+
+    qz_sess->src = (unsigned char *)req->src;
+    qz_sess->src_sz = &(req->qzResults->src_len);
+    qz_sess->dest_sz = &(req->qzResults->dest_len);
+    qz_sess->next_dest = req->dest;
+    qz_sess->last = 1;
+    qz_sess->crc32 = req->qzResults->crc != NULL &&
+                     QZ_CRC32_VALID(req->qzResults->crc->valid_flags) ?
+                     (unsigned long *)req->qzResults->crc->in_crc.crc_32 : NULL;
+
+    /* For offlod request, src_ptr, dest_ptr, remaining and src_avail_len,
+     * dest_avail_len will loop update
+     */
+    src_ptr = qz_sess->src;
+    dest_ptr = qz_sess->next_dest;
+    remaining = *qz_sess->src_sz;
+    src_avail_len = remaining;
+    dest_avail_len = *qz_sess->dest_sz;
+    QZ_DEBUG("doDecompressIn: Need to g_process %d bytes\n", remaining);
+
+    /* rc will only maintain in this function, thd_sess_stat will return the error status */
+    while (!done) {
+        QZ_DEBUG("src_avail_len is %u, dest_avail_len is %u\n",
+                 src_avail_len, dest_avail_len);
+
+        rc = checkHeader(qz_sess, src_ptr, src_avail_len, dest_avail_len, &hdr);
+        if (QZ_OK != rc && QZ_FORCE_SW != rc) {
+            sess->thd_sess_stat = rc;
+            goto err_exit;
+        }
+
+        if (g_process.qz_inst[i].heartbeat != CPA_STATUS_SUCCESS ||
+            QZ_FORCE_SW == rc) {
+            tmp_src_avail_len = src_avail_len;
+            tmp_dest_avail_len = dest_avail_len;
+            rc = decompInSWFallback(i, j, sess, src_ptr, dest_ptr, &tmp_src_avail_len,
+                                    &tmp_dest_avail_len);
+            if (QZ_WAIT_SW_PENDING == rc) {
+                continue;
+            }
+            if (QZ_OK != rc) {
+                goto err_exit;
+            }
+
+            /* Decomp inside offloading function, have to reset data
+               like decomp out */
+            qz_sess->qz_in_len  -= tmp_src_avail_len;
+            qz_sess->qz_out_len -= tmp_dest_avail_len;
+            qz_sess->next_dest -= tmp_dest_avail_len;
+            if (req != NULL) {
+                req->dest += tmp_dest_avail_len;
+                req->req_in_len += tmp_src_avail_len;
+                req->req_out_len += tmp_dest_avail_len;
+                req->qzResults->dest_len -= tmp_dest_avail_len;
+                if (req->req_in_len == req->qzResults->src_len) {
+                    req->qzResults->dest_len = req->req_out_len;
+                    CallAsyncbackfn(&req, QZ_OK, NULL);
+                }
+            } else {
+                QZ_ERROR("instance %lu, req callback func flow error\n", i);
+            }
+        } else {
+            /*HW decompression*/
+            do {
+                j = getUnusedBuffer(i, j);
+                if (unlikely(-1 == j)) {
+                    nanosleep(&sleep_time, NULL);
+                }
+            } while (-1 == j);
+
+            QZ_DEBUG("getUnusedBuffer returned %d\n", j);
+
+            g_process.qz_inst[i].stream[j].src1++;/*this buffer is in use*/
+            decompBufferSetup(i, j, qz_sess, src_ptr, dest_ptr, src_avail_len, &hdr,
+                              &tmp_src_avail_len, &tmp_dest_avail_len);
+            g_process.qz_inst[i].stream[j].req = req;
+            g_process.qz_inst[i].stream[j].src2++;/*this buffer is in use*/
+
+            do {
+                tag = (i << 16) | j;
+                QZ_DEBUG("Decomp Sending i = %ld j = %d src_ptr = %p dest_ptr = %p seq = %ld tag = %ld\n",
+                         i, j, src_ptr, dest_ptr, g_process.qz_inst[i].stream[j].seq, tag);
+
+                rc = cpaDcDecompressData(g_process.dc_inst_handle[i],
+                                         g_process.qz_inst[i].cpaSess,
+                                         g_process.qz_inst[i].src_buffers[j],
+                                         g_process.qz_inst[i].dest_buffers[j],
+                                         &g_process.qz_inst[i].stream[j].res,
+                                         CPA_DC_FLUSH_FINAL,
+                                         (void *)(tag));
+
+                if (unlikely(CPA_STATUS_RETRY == rc)) {
+                    g_process.qz_inst[i].num_retries++;
+                    usleep(g_polling_interval[qz_sess->polling_idx]);
+                }
+
+                if (unlikely(g_process.qz_inst[i].num_retries > MAX_NUM_RETRY)) {
+                    QZ_ERROR("instance %lu retry count:%d exceed the max count: %d\n",
+                             i, g_process.qz_inst[i].num_retries, MAX_NUM_RETRY);
+                    break;
+                }
+            } while (rc == CPA_STATUS_RETRY);
+
+            g_process.qz_inst[i].num_retries = 0;
+
+            if (unlikely(CPA_STATUS_SUCCESS != rc)) {
+                QZ_ERROR("Inst %ld, buffer %d, Error in decompIn offload: %d\n", i, j, rc);
+                decompInBufferCleanUp(i, j);
+                tmp_src_avail_len = src_avail_len;
+                tmp_dest_avail_len = dest_avail_len;
+                rc = decompInSWFallback(i, j, sess, src_ptr, dest_ptr, &tmp_src_avail_len,
+                                        &tmp_dest_avail_len);
+                if (QZ_WAIT_SW_PENDING == rc) {
+                    continue;
+                }
+                if (QZ_OK != rc) {
+                    goto err_exit;
+                }
+
+                qz_sess->qz_in_len  -= tmp_src_avail_len;
+                qz_sess->qz_out_len -= tmp_dest_avail_len;
+                qz_sess->next_dest -= tmp_dest_avail_len;
+                if (req != NULL) {
+                    req->dest += tmp_dest_avail_len;
+                    req->req_in_len += tmp_src_avail_len;
+                    req->req_out_len += tmp_dest_avail_len;
+                    req->qzResults->dest_len -= tmp_dest_avail_len;
+                    if (req->req_in_len == req->qzResults->src_len) {
+                        req->qzResults->dest_len = req->req_out_len;
+                        CallAsyncbackfn(&req, QZ_OK, NULL);
+                    }
+                } else {
+                    QZ_ERROR("instance %lu, req callback func flow error\n", i);
+                }
+            }
+        }
+
+        /* update the request src info status */
+        src_ptr         += tmp_src_avail_len;
+        dest_ptr        += tmp_dest_avail_len;
+        src_avail_len   -= tmp_src_avail_len;
+        dest_avail_len  -= tmp_dest_avail_len;
+        remaining       -= tmp_src_avail_len;
+        /* update qz_sess status */
+        qz_sess->seq++;
+        qz_sess->submitted++;
+
+        if (qz_sess->stop_submitting) {
+            remaining = 0;
+        }
+
+        QZ_DEBUG("src_ptr is %p, remaining is %d\n", src_ptr, remaining);
+        if (0 == remaining) {
+            done = 1;
+            // qz_sess->last_submitted = 1;
+        }
+    }
+
+    qz_sess->force_sw = 0;
+    return QZ_OK;
+
+err_exit:
+    /*reset the qz_sess status*/
+    qz_sess->stop_submitting = 1;
+    // qz_sess->last_submitted = 1;
+    return QZ_FAIL;
+}
+
+static void *AsyncDecompressOut(void *in)
+{
+    int i = 0, j = 0, good;
+    int rc = 0;
+    CpaDcRqResults *resl;
+    CpaStatus sts;
+    unsigned int sleep_cnt = 0;
+    unsigned int src_send_sz;
+
+    QzAsyncReq_T *req = NULL;
+    QzAsyncReq_T *req_prv = NULL;
+
+    QzSession_T *sess = (QzSession_T *)in;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
+    QzPollingMode_T polling_mode = qz_sess->sess_params.polling_mode;
+
+    i = qz_sess->inst_hint;
+
+    while ((qz_sess->last_submitted == 0) ||
+           (qz_sess->processed < qz_sess->submitted)) {
+        /* Poll for responses */
+        good = 0;
+        sts = icp_sal_DcPollInstance(g_process.dc_inst_handle[i], 0);
+        if (unlikely(CPA_STATUS_FAIL == sts)) {
+            /* if this error, we don't know which buffer is swapped */
+            QZ_ERROR("Error in DcPoll: %d\n", sts);
+            goto err_exit;
+        }
+
+        /*fake a retrieve*/
+        for (j = 0; j <  g_process.qz_inst[i].dest_count; j++) {
+            if ((g_process.qz_inst[i].stream[j].seq ==
+                 qz_sess->seq_in) &&
+                (g_process.qz_inst[i].stream[j].src1 ==
+                 g_process.qz_inst[i].stream[j].src2) &&
+                (g_process.qz_inst[i].stream[j].sink1 ==
+                 g_process.qz_inst[i].stream[j].src1) &&
+                (g_process.qz_inst[i].stream[j].sink1 ==
+                 g_process.qz_inst[i].stream[j].sink2 + 1)) {
+                good = 1;
+
+                QZ_DEBUG("doDecompressOut: Processing seqnumber %2.2d %2.2d %4.4ld\n",
+                         i, j, g_process.qz_inst[i].stream[j].seq);
+
+                req = g_process.qz_inst[i].stream[j].req;
+                /* Exception handling */
+                if ((sess->thd_sess_stat == QZ_DATA_ERROR || sess->thd_sess_stat == QZ_FAIL)) {
+                    /* The preview error request have complete, send failed status to callback
+                     * function, and change the session status to ok, start process new request
+                     */
+                    if (req_prv != NULL && req != req_prv) {
+                        CallAsyncbackfn(&req_prv, QZ_FAIL, sess);
+                    } else {
+                        decompOutSkipErrorRespond(i, j, qz_sess);
+                        req_prv = req;
+                        /* if process equel to submit, it means a request definatly complete */
+                        if (qz_sess->processed == qz_sess->submitted) {
+                            CallAsyncbackfn(&req_prv, QZ_FAIL, sess);
+                        }
+                        /* if issue is from submit, only check if all submit processed */
+                        if (qz_sess->stop_submitting) {
+                            qz_sess->stop_submitting = 0;
+                        }
+                        continue;
+                    }
+                }
+
+                if (unlikely(CPA_STATUS_SUCCESS != g_process.qz_inst[i].stream[j].job_status)) {
+                    QZ_DEBUG("Error(%d) in callback: %d, %d, ReqStatus: %d\n",
+                             g_process.qz_inst[i].stream[j].job_status, i, j,
+                             g_process.qz_inst[i].stream[j].res.status);
+                    /* polled error/dummy respond , fallback to sw */
+                    rc = AsyncDecompOutSWFallback(i, j, sess, req);
+                    if (QZ_FAIL == rc) {
+                        QZ_ERROR("Error in SW deCompOut:inst %d, buffer %d, seq %ld\n", i, j,
+                                 qz_sess->seq_in);
+                        decompOutSkipErrorRespond(i, j, qz_sess);
+                        sess->thd_sess_stat = QZ_FAIL;
+                        /* If it's last buffer of request, excute Exception handle directly */
+                        if (qz_sess->processed == qz_sess->submitted) {
+                            CallAsyncbackfn(&req, QZ_FAIL, sess);
+                            req_prv = NULL;
+                        }
+                        continue;
+                    }
+                } else {
+                    resl = &g_process.qz_inst[i].stream[j].res;
+                    QZ_DEBUG("\tHW DecompOut: consumed = %d, produced = %d, seq_in = %ld, src_send_sz = %u\n",
+                             resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq,
+                             g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes);
+
+                    /* update the qz_sess info and clean dest buffer */
+                    AsyncDecompOutValidDestBufferCleanUp(i, j, qz_sess, resl, req);
+                    if (QZ_OK != decompOutCheckSum(i, j, sess, resl)) {
+                        if (qz_sess->processed == qz_sess->submitted) {
+                            CallAsyncbackfn(&req, QZ_FAIL, sess);
+                            req_prv = NULL;
+                        }
+                        continue;
+                    }
+
+                    src_send_sz = g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
+                    req->dest += resl->produced;
+                    req->req_in_len += (outputHeaderSz(data_fmt) + src_send_sz +
+                                        outputFooterSz(data_fmt));
+                    req->req_out_len += resl->produced;
+                    req->qzResults->dest_len -= resl->produced;
+                }
+
+                decompOutProcessedRespond(i, j, qz_sess);
+                if (req->req_in_len == req->qzResults->src_len) {
+                    req->qzResults->dest_len = req->req_out_len;
+                    CallAsyncbackfn(&req, QZ_OK, NULL);
+                    req_prv = NULL;
+                } else {
+                    req_prv = req;
+                }
+                break;
+            }
+        }
+
+        if (QZ_PERIODICAL_POLLING == polling_mode) {
+            if (0 == good) {
+                qz_sess->polling_idx = (qz_sess->polling_idx >= POLLING_LIST_NUM - 1) ?
+                                       (POLLING_LIST_NUM - 1) :
+                                       (qz_sess->polling_idx + 1);
+
+                QZ_DEBUG("decomp sleep for %d usec..., for inst %d\n",
+                         g_polling_interval[qz_sess->polling_idx], i);
+                usleep(g_polling_interval[qz_sess->polling_idx]);
+                sleep_cnt++;
+            } else {
+                qz_sess->polling_idx = (qz_sess->polling_idx == 0) ? (0) :
+                                       (qz_sess->polling_idx - 1);
+            }
+        }
+    }
+
+    QZ_DEBUG("Decomp sleep_cnt: %u\n", sleep_cnt);
+    qz_sess->last_processed = qz_sess->last_submitted ? 1 : 0;
+    return ((void *)NULL);
+
+err_exit:
+    qz_sess->stop_submitting = 1;
+    qz_sess->last_processed = 1;
+    sess->thd_sess_stat = QZ_FAIL;
+    /* clean stream buffer */
+    for (j = 0; j < g_process.qz_inst[i].dest_count; j++) {
+        RestoreSrcCpastreamBuffer(i, j);
+        RestoreDestCpastreamBuffer(i, j);
+        ResetCpastreamSink(i, j);
+    }
+    /*  need add flag for buffer swap.
+        swapDataBuffer(i, j);
+    */
+    return ((void *)NULL);
+}
+
+int GetStableInstance(QzSession_T *sess)
+{
+    int i, rc;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+
+    i = qzGrabInstance(qz_sess->inst_hint, &(qz_sess->sess_params));
+    if (unlikely(i == -1)) {
+        QZ_DEBUG("Async API didn't grab instance!\n");
+        goto exit;
+    }
+
+    // check if the instance mem setup
+    if (0 ==  g_process.qz_inst[i].mem_setup ||
+        0 ==  g_process.qz_inst[i].cpa_sess_setup) {
+        QZ_DEBUG("Getting HW resources  for inst %d\n", i);
+        rc = qzSetupHW(sess, i);
+        if (unlikely(QZ_OK != rc)) {
+            qzReleaseInstance(i);
+            i = -1;
+            goto exit;
+        }
+    } else if (memcmp(&g_process.qz_inst[i].session_setup_data,
+                      &qz_sess->session_setup_data,
+                      sizeof(CpaDcSessionSetupData))) {
+        /* session_setup_data of qz_sess is not same with instance i,
+           need to update cpa session of instance i. */
+        rc = qzUpdateCpaSession(sess, i);
+        if (QZ_OK != rc) {
+            qzReleaseInstance(i);
+            i = -1;
+            goto exit;
+        }
+    }
+    qz_sess->inst_hint = i;
+
+exit:
+    return i;
+}
+
+void CheckAsyncPollingDirection(QzSession_T *sess,
+                                QzAsyncOperationType_T op_type)
+{
+    void *(*work_thread)(void *);
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    QzAsynctrl_T *async_ctrl = qz_sess->async_ctrl;
+
+    int direct = op_type & ASYNC_POLLING_MASK;
+
+    if (direct == async_ctrl->async_polling_direct) {
+        return;
+    }
+    qz_sess->last_submitted = 1;
+    pthread_join(async_ctrl->async_polling_t, NULL);
+    resetQzsess(sess, NULL, NULL, NULL, NULL, 0);
+
+    async_ctrl->async_polling_direct = direct;
+    work_thread = direct ? AsyncDecompressOut : AsyncCompressOut;
+    pthread_create(&(async_ctrl->async_polling_t), NULL, work_thread, (void *)sess);
+}
+
+static void *AsyncReqConsumeJob(void *arg)
+{
+    int rc = QZ_FAIL;
+    QzSession_T *sess = (QzSession_T *)arg;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    QzAsynctrl_T *async_ctrl = qz_sess->async_ctrl;
+    QzAsyncReq_T *req;
+    unsigned long *qz_crc32 = NULL;
+    struct timespec mb_polling_abs_timeout;
+    int instance = GetStableInstance(sess);
+    if (-1 != instance) {
+        pthread_create(&(async_ctrl->async_polling_t), NULL, AsyncCompressOut,
+                       (void *)sess);
+    }
+
+    // if the queue is not empty, deal with all inflight requeses.
+    while (async_ctrl->async_ctrl_init) {
+        get_sem_wait_abs_time(&mb_polling_abs_timeout, mb_poll_timeout_time);
+        if (sem_timedwait(&(async_ctrl->sem), &mb_polling_abs_timeout)) {
+            QZ_DEBUG("The async queue is waiting for request!\n");
+            continue;
+        }
+
+        req = QzRingConsumeDequeue(async_ctrl->async_req_ring, 0);
+        if (NULL == req) {
+            sem_post(&(async_ctrl->sem));
+            QZ_DEBUG("dequeue async req failed\n");
+            continue;
+        }
+
+        if (instance != -1) {
+            switch (req->op_type) {
+            case QZ_COMPRESS:
+                /* if compressIn failed, need to wait all request
+                 * dummy up, and call async function, send failed
+                 * status to async caller.
+                 */
+                CheckAsyncPollingDirection(sess, req->op_type);
+                rc = AsyncCompressIn(req);
+                if (QZ_OK != rc) {
+                    QZ_ERROR("instance %d, comp req submit failed\n", instance);
+                    /* Should wait in this place, until sess status
+                     * recover to ok, then start next req process.
+                     */
+                    while (qz_sess->stop_submitting &&
+                           qz_sess->seq != qz_sess->seq_in) {
+                        usleep(g_polling_interval[qz_sess->polling_idx]);
+                    }
+                    resetQzsess(sess, NULL, NULL, NULL, NULL, 0);
+                }
+                break;
+            case QZ_DECOMPRESS:
+                CheckAsyncPollingDirection(sess, req->op_type);
+                rc = AsyncDeCompressIn(req);
+                if (QZ_OK != rc) {
+                    QZ_ERROR("instance %d, decomp req submit failed\n", instance);
+                    /* Should wait in this place, until sess status
+                     * recover to ok, then start next req process.
+                     */
+                    while (qz_sess->stop_submitting &&
+                           qz_sess->seq != qz_sess->seq_in) {
+                        usleep(g_polling_interval[qz_sess->polling_idx]);
+                    }
+                    resetQzsess(sess, NULL, NULL, NULL, NULL, 0);
+                }
+                break;
+            default:
+                rc = QZ_FAIL;
+                QZ_ERROR("async_op_type is incorrect!\n");
+                break;
+            }
+            /* req callback when offload failed */
+            if (QZ_OK != rc && req != NULL) {
+                req->qzResults->status = rc;
+                req->qzAsyncallback(req->qzResults);
+                free(req);
+            }
+        } else {
+            qz_crc32 = req->qzResults->crc != NULL &&
+                       QZ_CRC32_VALID(req->qzResults->crc->valid_flags) ?
+                       (unsigned long *)req->qzResults->crc->in_crc.crc_32 : NULL;
+            switch (req->op_type) {
+            case QZ_COMPRESS:
+                rc = qzCompressCrcExt(req->sess, req->src, &(req->qzResults->src_len),
+                                      req->dest, &(req->qzResults->dest_len),
+                                      1, qz_crc32, &(req->qzResults->ext_rc));
+                break;
+            case QZ_DECOMPRESS:
+                rc = qzDecompressCrcExt(req->sess, req->src, &(req->qzResults->src_len),
+                                        req->dest, &(req->qzResults->dest_len),
+                                        qz_crc32, &(req->qzResults->ext_rc));
+                break;
+            default:
+                QZ_ERROR("async_op_type is incorrect!\n");
+                break;
+            }
+            req->qzResults->status = rc;
+            req->qzAsyncallback(req->qzResults);
+            resetQzsess(req->sess, NULL, NULL, NULL, NULL, 1);
+            free(req);
+
+            // try to grab instance again;
+            instance = GetStableInstance(sess);
+            if (-1 != instance) {
+                pthread_create(&(async_ctrl->async_polling_t), NULL, AsyncCompressOut,
+                               (void *)sess);
+            }
+        }
+    }
+
+    qz_sess->last_submitted = 1;
+    // wait polling thread complete
+    if (0 != async_ctrl->async_polling_t) {
+        pthread_join(async_ctrl->async_polling_t, NULL);
+    }
+
+    QzClearRing(async_ctrl->async_req_ring);
+    if (instance != -1) {
+        qzReleaseInstance(instance);
+    }
+    pthread_exit((void *)NULL);
+}
+
+int qzSetupAsyncCtrl(QzSession_T *sess)
+{
+    QzSess_T *qz_sess;
+    int rc = QZ_OK;
+    qz_sess = (QzSess_T *)(sess->internal);
+    if (qz_sess->async_ctrl == NULL) {
+        qz_sess->async_ctrl = calloc(1, sizeof(QzAsynctrl_T));
+        qz_sess->async_ctrl->async_ctrl_init = 1;
+        qz_sess->async_ctrl->async_req_key = g_process.async_req_key;
+        sem_init(&(qz_sess->async_ctrl->sem), 0, 0);
+
+        // Setup the request queue
+        qz_sess->async_ctrl->async_req_ring = QzRingCreate(async_queue_size);
+        if (unlikely(NULL == qz_sess->async_ctrl->async_req_ring)) {
+            QZ_ERROR("Create async request queue failed!\n");
+            goto err_exit;
+        }
+        // Setup the consume thread
+        if (unlikely(0 != pthread_create(&(qz_sess->async_ctrl->async_consume_t),
+                                         NULL, AsyncReqConsumeJob, (void *)sess))) {
+            QZ_ERROR("Start async consume polling thread failed\n");
+            QzRingFree(qz_sess->async_ctrl->async_req_ring);
+            goto err_exit;
+        }
+        pthread_setspecific(qz_sess->async_ctrl->async_req_key, sess);
+    }
+    return rc;
+
+err_exit:
+    rc = QZ_FAIL;
+    sem_destroy(&(qz_sess->async_ctrl->sem));
+    free(qz_sess->async_ctrl);
+    qz_sess->async_ctrl = NULL;
+    return rc;
+}
+
+int qzAsyncSetupHWSession(QzSession_T *sess, QzDirection_T direct)
+{
+    QzSess_T *qz_sess;
+    int rc;
+
+    /*check if init called*/
+    rc = qzInit(sess, getSwBackup(sess));
+    if (QZ_INIT_FAIL(rc)) {
+        goto err_exit;
+    }
+
+    /*check if setupSession called*/
+    if (NULL == sess->internal || QZ_NONE == sess->hw_session_stat) {
+        if (g_sess_params_internal_default.data_fmt == LZ4_FH) {
+            rc = qzSetupSessionLZ4(sess, NULL);
+        } else if (g_sess_params_internal_default.data_fmt == LZ4S_BK) {
+            rc = qzSetupSessionLZ4S(sess, NULL);
+        } else {
+            rc = qzSetupSessionDeflate(sess, NULL);
+        }
+        if (unlikely(QZ_SETUP_SESSION_FAIL(rc))) {
+            goto err_exit;
+        }
+    }
+
+    qz_sess = (QzSess_T *)(sess->internal);
+    DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
+
+    if ((direct == QZ_DIR_COMPRESS && data_fmt > LZ4S_BK) ||
+        (direct == QZ_DIR_DECOMPRESS && data_fmt > LZ4_FH) ||
+        (data_fmt < DEFLATE_4B)) {
+        QZ_ERROR("Unknown data format: %d\n", data_fmt);
+        rc = QZ_UNSUPPORTED_FMT;
+        goto err_exit;
+    }
+    rc = QZ_OK;
+
+err_exit:
+    return rc;
+}
+
+int qzAsyncReqSubmit(QzSession_T *sess, QzAsyncReq_T *req, QzDirection_T direct)
+{
+    QzSess_T *qz_sess;
+    int rc;
+
+    rc = qzAsyncSetupHWSession(sess, direct);
+    if (rc != QZ_OK) {
+        return rc;
+    }
+    rc = qzSetupAsyncCtrl(sess);
+    if (rc != QZ_OK) {
+        return rc;
+    }
+    qz_sess = (QzSess_T *)(sess->internal);
+    rc = QzRingProduceEnQueue(qz_sess->async_ctrl->async_req_ring, req, 1);
+    if (QZ_OK != rc) {
+        QZ_DEBUG("Push infight async requese failed\n");
+    } else {
+        sem_post(&(qz_sess->async_ctrl->sem));
+        // __sync_fetch_and_add(&(qz_sess->async_ctrl->num_req), 1);
+    }
+    return rc;
+}
+
+int populateAsyncReq(QzSession_T *sess, const unsigned char *src,
+                     unsigned char *dest, qzAsyncCallbackFn callback,
+                     QzResult_T *qzResults, QzAsyncOperationType_T op_type,
+                     QzAsyncReq_T *req)
+{
+    if (unlikely(NULL == sess     || \
+                 NULL == src      || \
+                 NULL == dest     || \
+                 NULL == callback || \
+                 NULL == req)) {
+        QZ_ERROR("Async API input params is incorrect\n");
+        goto err_exit;
+    }
+
+    req->sess = sess;
+    req->src = src;
+    req->dest = dest;
+    req->qzResults = qzResults;
+    req->qzAsyncallback = callback;
+    req->op_type = op_type;
+
+    req->req_src = src;
+    req->req_in_len = 0;
+    req->req_dest = dest;
+    req->req_out_len = 0;
+
+    return QZ_OK;
+
+err_exit:
+    qzResults->src_len = 0;
+    qzResults->dest_len = 0;
+    return QZ_PARAMS;
+}
+
+int qzCompress2(QzSession_T *sess, const unsigned char *src,
+                unsigned char *dest, qzAsyncCallbackFn callback,
+                QzResult_T *qzResults)
+{
+    int rc;
+    if (NULL == qzResults) {
+        QZ_ERROR("For qzCompress2, QzResult_T params is null pointer!\n");
+        return QZ_PARAMS;
+    }
+    // callback is NULL, use synchronous model. otherwise asynchronous model
+    if (NULL == callback) {
+        // linux qatzip only support input crc32.
+        unsigned long *qz_crc32 = qzResults->crc != NULL &&
+                                  QZ_CRC32_VALID(qzResults->crc->valid_flags) ?
+                                  (unsigned long *)qzResults->crc->in_crc.crc_32 : NULL;
+
+        rc = qzCompressCrcExt(sess, src, &(qzResults->src_len),
+                              dest, &(qzResults->dest_len),
+                              1, qz_crc32, &(qzResults->ext_rc));
+        qzResults->status = rc;
+        return rc;
+    }
+    /* For now, use glibc calloc to create request, it may reduce async perf
+     * when request num is small, But as the number of requests increases, the
+     * glibc memory slab would help to reduce the Memory allocation overhead.
+     * For future, we would use the request memory pool to replace currect
+     * implement.
+     */
+    QzAsyncReq_T *req = calloc(1, sizeof(QzAsyncReq_T));
+    rc = populateAsyncReq(sess, src, dest, callback, qzResults, QZ_COMPRESS, req);
+    if (QZ_OK != rc) {
+        goto exit;
+    }
+    rc = qzAsyncReqSubmit(sess, req, QZ_DIR_COMPRESS);
+    if (QZ_OK != rc) {
+        goto exit;
+    }
+    return QZ_OK;
+exit:
+    free(req);
+    return rc;
+}
+
+int qzDecompress2(QzSession_T *sess, const unsigned char *src,
+                  unsigned char *dest, qzAsyncCallbackFn callback,
+                  QzResult_T *qzResults)
+{
+    int rc;
+    if (NULL == qzResults) {
+        QZ_ERROR("For qzDecompress2, QzResult_T params is null pointer!\n");
+        return QZ_PARAMS;
+    }
+    // callback is NULL, use synchronous model. otherwise asynchronous model
+    if (NULL == callback) {
+        // linux qatzip only support input crc32.
+        unsigned long *qz_crc32 = qzResults->crc != NULL &&
+                                  QZ_CRC32_VALID(qzResults->crc->valid_flags) ?
+                                  (unsigned long *)qzResults->crc->in_crc.crc_32 : NULL;
+
+        rc = qzDecompressCrcExt(sess, src, &(qzResults->src_len),
+                                dest, &(qzResults->dest_len),
+                                qz_crc32, &(qzResults->ext_rc));
+        qzResults->status = rc;
+        return rc;
+    }
+    /* For now, use glibc calloc to create request, it may reduce async perf
+     * when request num is small, But as the number of requests increases, the
+     * glibc memory slab would help to reduce the Memory allocation overhead.
+     * For future, we would use the request memory pool to replace currect
+     * implement.
+     */
+    QzAsyncReq_T *req = calloc(1, sizeof(QzAsyncReq_T));
+    rc = populateAsyncReq(sess, src, dest, callback, qzResults, QZ_DECOMPRESS, req);
+    if (QZ_OK != rc) {
+        goto exit;
+    }
+    rc = qzAsyncReqSubmit(sess, req, QZ_DIR_DECOMPRESS);
+    if (QZ_OK != rc) {
+        goto exit;
+    }
+    return QZ_OK;
+exit:
+    free(req);
+    return rc;
 }

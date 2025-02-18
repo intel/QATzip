@@ -182,9 +182,11 @@ void dumpThreadInfo(void)
 
 QzLogLevel_T currentLogLevel = LOG_WARNING;
 
-void qzSetLogLevel(QzLogLevel_T level)
+QzLogLevel_T qzSetLogLevel(QzLogLevel_T level)
 {
+    QzLogLevel_T oldLogLevel = currentLogLevel;
     currentLogLevel = level;
+    return oldLogLevel;
 }
 
 const char *getLogLevelString(QzLogLevel_T level)
@@ -252,11 +254,9 @@ void initDebugLock(void)
     pthread_mutex_init(&g_qat_thread.decomp_lock, NULL);
 }
 
-/* LSM */
-/* Feature TODO
- * Need to expose those global variable to API level in future
- * it would help custom to turning Lsm mode performance
- * 'LsmSwMetSeed' is the empirical mean of sw latency
+/* LSM TODO:
+ * expose global variabled (mention variable name) to API Level to tune
+ * LSM Mode Performance LsmSwMetSeed is the emprical mean of sw Latence
  */
 unsigned int LsmMetLenShift = 6;
 unsigned int LsmSwMetSeed = 1000;
@@ -972,11 +972,10 @@ void outputHeaderGen(unsigned char *ptr,
     }
 }
 
-inline void outputFooterGen(QzSess_T *qz_sess,
+inline void outputFooterGen(unsigned char *ptr,
                             CpaDcRqResults *res,
                             DataFormatInternal_T data_fmt)
 {
-    unsigned char *ptr = qz_sess->next_dest;
     switch (data_fmt) {
     case DEFLATE_RAW:
         break;
@@ -1614,4 +1613,211 @@ inline void metrixUpdate(LatencyMetrix_T *m, unsigned long val)
     QZ_INFO("The latency for request %lu is %lu, avg is %lu\n", m->arr_idx, val,
             m->arr_avg);
     return;
+}
+
+int AsyncCompOutCheckDestLen(int i, int j, QzSession_T *sess,
+                             long dest_receive_sz)
+{
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    QzAsyncReq_T *req = g_process.qz_inst[i].stream[j].req;
+    long remaining = req->qzResults->dest_len - req->req_out_len - dest_receive_sz;
+    if (unlikely(remaining < 0)) {
+        compOutSkipErrorRespond(i, j, qz_sess);
+        // qz_sess->stop_submitting = 1;
+        sess->thd_sess_stat = QZ_BUF_ERROR;
+        return sess->thd_sess_stat;
+    }
+    return QZ_OK;
+}
+
+void AsyncCompOutValidDestBufferCleanUp(int i, int j,
+                                        unsigned int dest_receive_sz)
+{
+    QzAsyncReq_T *req = g_process.qz_inst[i].stream[j].req;
+    CpaBoolean need_cont_mem =
+        g_process.qz_inst[i].instance_info.requiresPhysicallyContiguousMemory;
+
+    if (!need_cont_mem) {
+        QZ_DEBUG("Compress SVM Enabled in doCompressOut\n");
+    }
+
+    if (g_process.qz_inst[i].stream[j].dest_need_reset) {
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
+            g_process.qz_inst[i].stream[j].orig_dest;
+        g_process.qz_inst[i].stream[j].dest_need_reset = 0;
+    } else {
+        QZ_MEMCPY(req->dest,
+                  g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData,
+                  req->qzResults->dest_len - req->req_out_len,
+                  dest_receive_sz);
+    }
+}
+
+void AsyncDecompOutValidDestBufferCleanUp(int i, int j, QzSess_T *qz_sess,
+        CpaDcRqResults *resl,
+        QzAsyncReq_T *req)
+{
+    if (!g_process.qz_inst[i].stream[j].dest_need_reset) {
+        QZ_DEBUG("memory copy in doDecompressOut\n");
+        QZ_MEMCPY(req->dest,
+                  g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData,
+                  req->qzResults->dest_len,
+                  resl->produced);
+    } else {
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData =
+            g_process.qz_inst[i].stream[j].orig_dest;
+        g_process.qz_inst[i].stream[j].dest_need_reset = 0;
+    }
+}
+
+static int QzRingMoveProdHead(QzRing_T *ring, uint32_t *old_head,
+                              uint32_t *new_head, int is_single_producer)
+{
+    const uint32_t capacity = ring->capacity;
+    int success = 0;
+    uint32_t free_entries = 0;
+
+    do {
+        *old_head = ring->prod.head;
+        *new_head = *old_head + 1;
+
+        free_entries = (capacity + ring->cons.tail - *old_head);
+        if (1 > free_entries)
+            return QZ_FAIL;
+
+        if (is_single_producer) {
+            ring->prod.head = *new_head;
+            success = 1;
+        } else {
+            success = __sync_bool_compare_and_swap((uint32_t *)(uintptr_t)&ring->prod.head,
+                                                   *old_head, *new_head);
+        }
+    } while (success == 0);
+    return QZ_OK;
+}
+
+static void QzRingEnqueueElem(QzRing_T *ring, uint32_t prod_head, void *obj)
+{
+    prod_head = prod_head % ring->capacity;
+    ring->elems[prod_head] = obj;
+}
+
+static void QzRingUpdatTail(QzRingHeadTail_T *ht, uint32_t old_val,
+                            uint32_t new_val, uint32_t single)
+{
+    if (!single)
+        __sync_bool_compare_and_swap((volatile uint32_t *)(uintptr_t)&ht->tail, old_val,
+                                     new_val);
+    else
+        ht->tail = new_val;
+}
+
+static int QzRingMoveConsHead(QzRing_T *ring,
+                              uint32_t *old_head, uint32_t *new_head, int is_single_consumer)
+{
+    int success;
+    int entries = 0;
+
+    do {
+        *old_head = ring->cons.head;
+
+        entries = (ring->prod.tail - *old_head);
+
+        if (1 > entries)
+            return QZ_FAIL;
+
+        *new_head = *old_head + 1;
+        if (is_single_consumer) {
+            ring->cons.head = *new_head;
+            success = 1;
+        } else {
+            success = __sync_bool_compare_and_swap((uint32_t *)(uintptr_t)&ring->cons.head,
+                                                   *old_head, *new_head);
+        }
+    } while (success == 0);
+    return QZ_OK;
+}
+
+static void *QzRingDequeueElem(QzRing_T *ring, uint32_t cons_head)
+{
+    void *obj;
+    cons_head = cons_head % ring->capacity;
+    obj = ring->elems[cons_head];
+    ring->elems[cons_head] = NULL;
+    return obj;
+}
+
+QzRing_T *QzRingCreate(int size)
+{
+    if (size < 1) {
+        QZ_ERROR("Create ring size is incorrect\n");
+        return NULL;
+    }
+    QzRing_T *ring;
+    ring = (QzRing_T *)calloc(1, sizeof(QzRing_T));
+    ring->elems = (void *)calloc(size, sizeof(void *));
+    ring->size = size;
+    ring->mask = size - 1;
+    ring->capacity = size;
+    return ring;
+}
+
+void QzClearRing(QzRing_T *ring)
+{
+    for (int i = 0; i < ring->size; i++) {
+        if (NULL != ring->elems[i]) {
+            free(ring->elems[i]);
+            ring->elems[i] = NULL;
+        }
+    }
+    ring->mask = ring->size - 1;
+    ring->capacity = ring->size;
+    ring->cons.head = 0;
+    ring->cons.tail = 0;
+    ring->prod.head = 0;
+    ring->prod.tail = 0;
+}
+
+void QzRingFree(QzRing_T *ring)
+{
+    if (ring != NULL) {
+        if (ring->elems != NULL) {
+            free(ring->elems);
+        }
+        free(ring);
+    }
+}
+
+int QzRingProduceEnQueue(QzRing_T *ring, void *obj, int is_single_producer)
+{
+    uint32_t prod_head, prod_next;
+    int rc = QZ_OK;
+
+    rc = QzRingMoveProdHead(ring, &prod_head, &prod_next, is_single_producer);
+    if (QZ_FAIL == rc)
+        return rc;
+
+    QzRingEnqueueElem(ring, prod_head, obj);
+
+    QzRingUpdatTail(&ring->prod, prod_head, prod_next, is_single_producer);
+    return rc;
+}
+
+void *QzRingConsumeDequeue(QzRing_T *ring, int is_single_consumer)
+{
+    uint32_t cons_head = 0;
+    uint32_t cons_next = 0;
+    // uint32_t entries;
+    int rc = 0;
+    void *obj = NULL;
+
+    rc = QzRingMoveConsHead(ring, &cons_head, &cons_next, is_single_consumer);
+    if (QZ_FAIL == rc)
+        return NULL;
+
+    obj = QzRingDequeueElem(ring, cons_head);
+
+    QzRingUpdatTail(&ring->cons, cons_head, cons_next, is_single_consumer);
+
+    return obj;
 }

@@ -80,7 +80,7 @@ extern"C" {
  *    and minor number definitions represent the complete version number for
  *    this interface.
  *****************************************************************************/
-#define QATZIP_API_VERSION_NUM_MINOR (3)
+#define QATZIP_API_VERSION_NUM_MINOR (5)
 
 /* Define a macro as an integer to test */
 #define QATZIP_API_VERSION    (QATZIP_API_VERSION_NUM_MAJOR * 10000 +      \
@@ -366,6 +366,7 @@ typedef enum QzSoftwareComponentType_E {
 /**< used in gzip header to indicate deflate blocks */
 /**< and in session params */
 #define QZ_LZ4             ((unsigned char)'4')
+#define QZ_LZ4_BLOCK       ((unsigned char)'B')
 #define QZ_LZ4s            ((unsigned char)'s')
 #define QZ_ZSTD            ((unsigned char)'Z')
 
@@ -558,6 +559,7 @@ typedef struct QzSessionParamsLZ4S_S {
     /**< into qzCallback during post processing*/
     unsigned int lz4s_mini_match;
     /**< Set lz4s dictionary mini match, which would be 3 or 4 */
+    /**< Default value is 3 */
 } QzSessionParamsLZ4S_T;
 
 typedef struct QzSessionParamsDeflateExt_S {
@@ -764,6 +766,164 @@ typedef struct QzCrc64Config_S {
 /**
  *****************************************************************************
  * @ingroup qatZip
+ *      QATzip CRC32 configuration structure
+ *
+ * @description
+ *      This structure contains data relating to configuration of the session's
+ *   CRC32 functionality.
+ *
+ *****************************************************************************/
+typedef struct QzCrc32Config_S {
+    uint32_t polynomial;
+    /**< Polynomial used for CRC32 calculation. */
+    uint32_t initial_value;
+    /**< Initial CRC32 value. */
+    uint32_t reflect_in;
+    /**< Reflect bit order before CRC calculation. */
+    uint32_t reflect_out;
+    /**< Reflect bit order after CRC calculation. */
+    uint32_t xor_out;
+    /**< XOR out value for CRC32 calculation. */
+} QzCrc32Config_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      QATzip crc structure's valid_flags bitmap
+ *
+ * @description
+ *      The following definitions can be used with the crc structure's
+ *      valid_flags.
+ *
+ *      QZ_INPUT_CRC_VALID_MASK indicates if input crc feild is valid
+ *      QZ_OUTPUT_CRC_VALID_MASK indicates if output crc feild is valid
+ *      QZ_CRC32_VALID_MASK indicates if crc type is crc32 in union
+ *      QZ_CRC64_VALID_MASK indicates if crc type is crc64 in union
+ *
+ *****************************************************************************/
+
+#define QZ_INPUT_CRC_VALID_BIT             (4)
+#define QZ_INPUT_CRC_VALID_MASK            (1 << QZ_INPUT_CRC_VALID_BIT)
+#define QZ_OUTPUT_CRC_VALID_BIT            (8)
+#define QZ_OUTPUT_CRC_VALID_MASK           (1 << QZ_OUTPUT_CRC_VALID_BIT)
+#define QZ_CRC32_VALID_BIT                 (12)
+#define QZ_CRC32_VALID_MASK                (1 << QZ_CRC32_VALID_BIT)
+#define QZ_CRC64_VALID_BIT                 (16)
+#define QZ_CRC64_VALID_MASK                (1 << QZ_CRC64_VALID_BIT)
+
+#define QZ_CRC32_VALID(valid_flags) \
+        ((valid_flags & QZ_CRC32_VALID_MASK) && !(valid_flags & QZ_CRC64_VALID_MASK))
+
+#define QZ_CRC64_VALID(valid_flags) \
+        ((valid_flags & QZ_CRC64_VALID_MASK) && !(valid_flags & QZ_CRC32_VALID_MASK))
+
+#define QZ_INPUT_CRC_VALID(valid_flags) \
+        (valid_flags & QZ_INPUT_CRC_VALID_MASK)
+
+#define QZ_OUTPUT_CRC_VALID(valid_flags) \
+        (valid_flags & QZ_OUTPUT_CRC_VALID_BIT)
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      crc structure in QzResult_T
+ *
+ * @description
+ *      This structure include the crc input/output value data.
+ *     And crc calculate status, whether input/output valid.
+ *
+ *****************************************************************************/
+typedef struct QzCrcResult_S {
+    int status;
+    /**< indicate checksum compute's status */
+    uint32_t valid_flags;
+    /**< indicate whether input and output crc’s are valid */
+    union {
+        uint32_t *crc_32;
+        uint64_t *crc_64;
+    } in_crc;
+    /**< indicate input crc value */
+    union {
+        uint32_t *crc_32;
+        uint64_t *crc_64;
+    } out_crc;
+    /**< indicate output crc value */
+} QzCrcResult_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      QzResult structure for compress2/decompress2 API
+ *
+ * @description
+ *      This structure contains status, custom callback params for async
+ *     callback function, src_len for input buf length and dest_len for
+ *     output buf length, and extend return code for post processing and
+ *     CRC input/output result.
+ *
+ *****************************************************************************/
+typedef struct QzResult_S {
+    int status;
+    /**< Status of the offload operation, output only */
+    void *cb_tag;
+    /**< Opaque to QATzip, Users could uses this pointer for tracking      */
+    /**< customer side job structures, Most likely, the caller could track */
+    /**< other variables including the pointers to the src and dest in     */
+    /**< async mode, could set to NULL */
+    unsigned int src_len;
+    /**< Length of source buffer. Modified to number of bytes consumed */
+    unsigned int dest_len;
+    /**< Length of destination buffer. Modified to length of produced */
+    /**< data when function returns */
+    uint64_t ext_rc;
+    /**< Extended return codes, output only */
+    QzCrcResult_T *crc;
+    /**< crc result include input/output, could be NULL */
+    void *extension_result;
+    /**< This pointer is for extensibility of QzResult, please don't use */
+    /**< this pointer and always set this pointer as NULL */
+} QzResult_T;
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *
+ * @description
+ *      This callback function will be called in asynchronous compression and
+ *      decompression API. Function implementation should be provided by user
+ *      and comply with this prototype's rules.
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      Yes
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in,out]  res      it's same as compress2/decompress2 API's last
+ *                          parameters, include offloading result.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      None
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+typedef int (*qzAsyncCallbackFn)(QzResult_T *res);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
  *      QATzip pointer to opaque metadata.
  *
  * @description
@@ -775,10 +935,10 @@ typedef void *QzMetadataBlob_T;
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      QATzip log trace level
+ *      QATzip log verbosity level
  *
  * @description
- *      This is an emum for qatzip log trace level
+ *      This is an emum for qatzip log verbosity level
  *
  *****************************************************************************/
 typedef enum QzLogLevel_E {
@@ -795,10 +955,10 @@ typedef enum QzLogLevel_E {
 /**
  *****************************************************************************
  * @ingroup qatZip
- *      Set qatzip log trace level
+ *      Set qatzip log verbosity level
  *
  * @description
- *      Set qatzip log trace level
+ *      Set qatzip log verbosity level
  *
  * @context
  *      This function shall not be called in an interrupt context.
@@ -813,7 +973,8 @@ typedef enum QzLogLevel_E {
  * @threadSafe
  *      Yes
  *
- * @param[in]       level           set log trace level
+ * @param[in]   level   set log verbosity level
+ * @retval              Old log verbosity level
  *
  * @pre
  *      None
@@ -826,7 +987,7 @@ typedef enum QzLogLevel_E {
  *      None
  *
  *****************************************************************************/
-QATZIP_API void qzSetLogLevel(QzLogLevel_T level);
+QATZIP_API QzLogLevel_T qzSetLogLevel(QzLogLevel_T level);
 
 /**
  *****************************************************************************
@@ -1289,9 +1450,63 @@ QATZIP_API int qzCompressWithMetadataExt(QzSession_T *sess,
         unsigned int *dest_len,
         unsigned int last,
         uint64_t *ext_rc,
-        QzMetadataBlob_T *metadata,
+        QzMetadataBlob_T metadata,
         uint32_t hw_buff_sz_override,
         uint32_t comp_thrshold);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Compress a buffer with asynchronous or synchronous model
+ *
+ * @description
+ *      These functions has the same compression ability as "qzCompress",
+ *      but with asynchronous or synchronous model.
+ *
+ *      If user provide the callback function(callback is not NULL), it would
+ *      work as asynchronous model. Otherwise, it would work as synchronous
+ *      model, just like "qzCompress".
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      No
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess       Session handle
+ *                             (pointer to opaque instance and session data)
+ * @param[in]       src        Pointer to source buffer.
+ * @param[in]       dest       Pointer to destination buffer.
+ * @param[in]       callback   User-defined callback Function to be called upon
+ *                             completion of the compression operation. it could
+ *                             be NULL, then it's an synchronous call, otherwise,
+ *                             it's asynchronous call.
+ * @param[in,out]   qzResults  Pointer to QzResult, It have to allocate by user.
+ *
+ * @retval QZ_OK               Request submit successfully.
+ * @retval QZ_FAIL             Request submit failed.
+ * @retval QZ_PARAMS           *sess is NULL or member of params is invalid.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      None
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzCompress2(QzSession_T *sess, const unsigned char *src,
+                           unsigned char *dest, qzAsyncCallbackFn callback,
+                           QzResult_T *qzResults);
 
 /**
  *****************************************************************************
@@ -1535,8 +1750,63 @@ QATZIP_API int qzDecompressWithMetadataExt(QzSession_T *sess,
         unsigned char *dest,
         unsigned int *dest_len,
         uint64_t *ext_rc,
-        QzMetadataBlob_T *metadata,
+        QzMetadataBlob_T metadata,
         uint32_t hw_buff_sz_override);
+
+/**
+ *****************************************************************************
+ * @ingroup qatZip
+ *      Decompress a buffer with asynchronous or synchronous model
+ *
+ * @description
+ *      These functions has the same decompression ability as "qzDecompress",
+ *      but with asynchronous or synchronous model.
+ *
+ *      If user provide the callback function(callback is not NULL), it would
+ *      work as asynchronous model. Otherwise, it would work as synchronous
+ *      model, just like "qzDecompress".
+ *
+ * @context
+ *      This function shall not be called in an interrupt context.
+ * @assumptions
+ *      None
+ * @sideEffects
+ *      None
+ * @blocking
+ *      No
+ * @reentrant
+ *      No
+ * @threadSafe
+ *      Yes
+ *
+ * @param[in]       sess       Session handle
+ *                             (pointer to opaque instance and session data)
+ * @param[in]       src        Pointer to source buffer containing compressed data.
+ * @param[in]       dest       Pointer to destination buffer where decompressed
+ *                             data will be stored.
+ * @param[in]       callback   User-defined callback function to be called upon
+ *                             completion of the decompression operation. it could
+ *                             be NULL, then it's an synchronous call, otherwise,
+ *                             it's asynchronous call.
+ * @param[in,out]   qzResults  Pointer to QzResult, It have to allocate by user.
+ *
+ * @retval QZ_OK               Decompression request submitted successfully.
+ * @retval QZ_FAIL             Decompression request submission failed.
+ * @retval QZ_PARAMS           *sess is NULL or member of params is invalid.
+ *
+ * @pre
+ *      None
+ * @post
+ *      None
+ * @note
+ *      None
+ * @see
+ *      None
+ *
+ *****************************************************************************/
+QATZIP_API int qzDecompress2(QzSession_T *sess, const unsigned char *src,
+                             unsigned char *dest, qzAsyncCallbackFn callback,
+                             QzResult_T *qzResults);
 
 /**
  *****************************************************************************
@@ -1822,8 +2092,6 @@ QATZIP_API int qzSetDefaultsLZ4(QzSessionParamsLZ4_T *defaults);
 QATZIP_API int qzSetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
 
 QATZIP_API int qzSetDefaultsDeflateExt(QzSessionParamsDeflateExt_T *defaults);
-
-
 /**
  *****************************************************************************
  * @ingroup qatZip
@@ -2457,6 +2725,51 @@ QATZIP_API int qzGetSessionCrc64Config(QzSession_T *sess,
 /**
 *****************************************************************************
 * @ingroup qatZip
+*      Requests the CRC32 configuration of the provided session
+*
+* @description
+*      This function populates crc32_config with the CRC32 configuration
+*      details of sess. This function has a dependency on invoking a setup
+*      session function first.
+*
+* @context
+*      This function shall not be called in an interrupt context.
+* @assumptions
+*      None
+* @sideEffects
+*      None
+* @blocking
+*      Yes
+* @reentrant
+*      Yes
+* @threadSafe
+*      Yes
+*
+* @param[in]       sess           Session handle
+*                                 (pointer to opaque instance and session data)
+* @param[out]      crc32_config   Configuration for CRC32 generation.
+*
+* @retval QZ_OK               Function executed successfully
+* @retval QZ_FAIL             Session was not setup
+* @retval QZ_PARAMS           *sess or *crc32_config is NULL
+*
+* @pre
+*      None
+* @post
+*      None
+* @note
+*      Only a synchronous version of this function is provided.
+*
+* @see
+*      None
+*
+*****************************************************************************/
+QATZIP_API int qzGetSessionCrc32Config(QzSession_T *sess,
+                                       QzCrc32Config_T *crc32_config);
+
+/**
+*****************************************************************************
+* @ingroup qatZip
 *      Sets the CRC64 configuration of the provided session with a
 *      user defined set of parameters.
 *
@@ -2480,7 +2793,7 @@ QATZIP_API int qzGetSessionCrc64Config(QzSession_T *sess,
 *
 * @param[in]       sess           Session handle
 *                                 (pointer to opaque instance and session data)
-* @param[out]      crc64_config   Configuration for CRC 64 generation.
+* @param[in]       crc64_config   Configuration for CRC64 generation.
 *
 * @retval QZ_OK               Function executed successfully
 * @retval QZ_FAIL             Session was not setup
@@ -2500,6 +2813,53 @@ QATZIP_API int qzGetSessionCrc64Config(QzSession_T *sess,
 *****************************************************************************/
 QATZIP_API int qzSetSessionCrc64Config(QzSession_T *sess,
                                        QzCrc64Config_T *crc64_config);
+
+/**
+*****************************************************************************
+* @ingroup qatZip
+*      Sets the CRC32 configuration of the provided session with a
+*      user defined set of parameters.
+*
+* @description
+*      This function populates the CRC32 configuration details of sess
+*      using the paramaters provided in crc32_config. This function has a
+*      dependency on invoking a setup session function first.
+*
+* @context
+*      This function shall not be called in an interrupt context.
+* @assumptions
+*      None
+* @sideEffects
+*      None
+* @blocking
+*      Yes
+* @reentrant
+*      Yes
+* @threadSafe
+*      Yes
+*
+* @param[in]       sess           Session handle
+*                                 (pointer to opaque instance and session data)
+* @param[in]       crc32_config   Configuration for CRC32 generation.
+*
+* @retval QZ_OK               Function executed successfully
+* @retval QZ_FAIL             Session was not setup
+* @retval QZ_PARAMS           *sess or *crc32_config is NULL or contains
+*                             invalid parameters.
+*
+* @pre
+*      None
+* @post
+*      None
+* @note
+*      Only a synchronous version of this function is provided.
+*
+* @see
+*      None
+*
+*****************************************************************************/
+QATZIP_API int qzSetSessionCrc32Config(QzSession_T *sess,
+                                       QzCrc32Config_T *crc32_config);
 
 /**
  *****************************************************************************
@@ -2639,6 +2999,106 @@ QATZIP_API int qzMetadataBlockWrite(uint32_t block_num,
                                     uint32_t *block_size,
                                     uint32_t *block_flags,
                                     uint32_t *block_hash);
+
+/**
+*****************************************************************************
+* @ingroup qatZip
+*      Read CRC64 of a metadata block.
+*
+* @description
+*      This function reads the input and output CRC64 for the block specified by
+*      the function param block_num.
+*
+* @context
+*      This function shall not be called in an interrupt context.
+* @assumptions
+*      None
+* @sideEffects
+*      None
+* @blocking
+*      Yes
+* @reentrant
+*      No
+* @threadSafe
+*      Yes
+*
+* @param[in]       block_num      Block number of which CRC64 should be read.
+* @param[in]       metadata       Pointer to opaque metadata.
+* @param[out]      input_crc      Pointer to the CRC64 calculation on input
+*                                 buffer.
+* @param[out]      output_crc     Pointer to the CRC64 calculation on output
+*                                 buffer.
+*
+* @retval QZ_OK                   Function executed successfully.
+* @retval QZ_FAIL                 Function did not succeed.
+* @retval QZ_PARAMS               Metadata is NULL or checksum mismatch.
+* @retval QZ_OUT_OF_RANGE         block_num specified is out of range.
+*
+* @pre
+*      None
+* @post
+*      None
+* @note
+*      Only a synchronous version of this function is provided.
+*
+* @see
+*      None
+*
+*****************************************************************************/
+QATZIP_API int qzMetadataBlockGetCrc64(uint32_t block_num,
+                                       QzMetadataBlob_T metadata,
+                                       uint64_t *input_crc,
+                                       uint64_t *output_crc);
+
+/**
+*****************************************************************************
+* @ingroup qatZip
+*      Read CRC32 of a metadata block.
+*
+* @description
+*      This function reads the input and output CRC32 for the block specified by
+*      the function param block_num.
+*
+* @context
+*      This function shall not be called in an interrupt context.
+* @assumptions
+*      None
+* @sideEffects
+*      None
+* @blocking
+*      Yes
+* @reentrant
+*      No
+* @threadSafe
+*      Yes
+*
+* @param[in]       block_num      Block number of which CRC32 should be read.
+* @param[in]       metadata       Pointer to opaque metadata.
+* @param[out]      input_crc      Pointer to the CRC32 calculation on input
+*                                 buffer.
+* @param[out]      output_crc     Pointer to the CRC32 calculation on output
+*                                 buffer.
+*
+* @retval QZ_OK                   Function executed successfully.
+* @retval QZ_FAIL                 Function did not succeed.
+* @retval QZ_PARAMS               Metadata is NULL or checksum mismatch.
+* @retval QZ_OUT_OF_RANGE         block_num specified is out of range.
+*
+* @pre
+*      None
+* @post
+*      None
+* @note
+*      Only a synchronous version of this function is provided.
+*
+* @see
+*      None
+*
+*****************************************************************************/
+QATZIP_API int qzMetadataBlockGetCrc32(uint32_t block_num,
+                                       QzMetadataBlob_T metadata,
+                                       uint32_t *input_crc,
+                                       uint32_t *output_crc);
 
 #ifdef __cplusplus
 }
