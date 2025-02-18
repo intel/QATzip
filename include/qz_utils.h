@@ -51,6 +51,7 @@
 #define _QZ_UTILS_H_
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <time.h>
@@ -83,6 +84,28 @@ typedef struct QatThread_S {
     unsigned int num_decomp_th;
     pthread_mutex_t decomp_lock;
 } QatThread_T;
+
+typedef struct QzRingHeadTail_S {
+    uint32_t head;
+    uint32_t tail;
+} QzRingHeadTail_T;
+
+typedef struct QzRing_S {
+    uint32_t size;           /**< Size of ring. */
+    uint32_t mask;           /**< Mask (size-1) of ring. */
+    uint32_t capacity;       /**< Usable size of ring */
+
+    void **elems;
+
+    QzRingHeadTail_T prod;
+    QzRingHeadTail_T cons;
+} QzRing_T;
+
+QzRing_T *QzRingCreate(int size);
+void QzRingFree(QzRing_T *ring);
+void QzClearRing(QzRing_T *ring);
+int QzRingProduceEnQueue(QzRing_T *ring, void *obj, int is_single_producer);
+void *QzRingConsumeDequeue(QzRing_T *ring, int is_single_consumer);
 
 extern void initDebugLock(void);
 extern void dumpThreadInfo(void);

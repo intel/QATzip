@@ -46,9 +46,11 @@ extern"C" {
 #endif
 #include <stdbool.h>
 #include <stdatomic.h>
+#include <semaphore.h>
 #include <zlib.h>
 #include <lz4frame.h>
 #include <arpa/inet.h>
+#include "qz_utils.h"
 
 /**
  *  define release version
@@ -146,6 +148,9 @@ extern"C" {
         (DEFLATE_RAW == (fmt) || DEFLATE_GZIP == (fmt) || \
         DEFLATE_GZIP_EXT == (fmt) || DEFLATE_4B == (fmt) || DEFLATE_ZLIB == (fmt))
 
+struct QzAsyncReq_S;
+typedef struct QzAsyncReq_S QzAsyncReq_T;
+
 typedef struct QzCpaStream_S {
     signed long seq;
     signed long src1;
@@ -161,6 +166,7 @@ typedef struct QzCpaStream_S {
     unsigned int checksum;
     unsigned int orgdatalen;
     CpaDcOpData opData;
+    QzAsyncReq_T *req;
 } QzCpaStream_T;
 
 typedef struct QzInstance_S {
@@ -209,6 +215,8 @@ typedef struct ProccesData_S {
     atomic_char qat_available;
     /* this thread handler is for keep polling device fatal events.*/
     pthread_t t_poll_heartbeat;
+    /* Define pthread key here, for different thread local variable */
+    pthread_key_t async_req_key;
 } processData_T;
 
 typedef enum {
@@ -225,6 +233,7 @@ typedef enum {
 } DeflateState_T;
 
 // Include all support data format
+// Don't change the enumeration order
 typedef enum DataFormatInternal_E {
     DEFLATE_4B = 0,
     /**< Data is in raw deflate format with 4 byte header */
@@ -312,6 +321,39 @@ typedef struct LatencyMetrix_S {
 #endif
 } LatencyMetrix_T;
 
+/* This mask should change according to QzAsyncOperationType_E enum */
+#define ASYNC_POLLING_MASK 1
+
+/* compress is even, decompress is odd */
+typedef enum QzAsyncOperationType_E {
+    QZ_COMPRESS = 0,
+    QZ_DECOMPRESS = 1,
+} QzAsyncOperationType_T;
+
+struct QzAsyncReq_S {
+    QzSession_T *sess;
+    const unsigned char *src;
+    unsigned char *dest;
+    QzResult_T *qzResults;
+    qzAsyncCallbackFn qzAsyncallback;
+    QzAsyncOperationType_T op_type;
+
+    const unsigned char *req_src;
+    unsigned int req_in_len;
+    unsigned char *req_dest;
+    unsigned int req_out_len;
+};
+
+typedef struct QzAsynctrl_S {
+    int async_ctrl_init;
+    QzRing_T *async_req_ring;
+    pthread_key_t async_req_key;
+    pthread_t async_consume_t;
+    pthread_t async_polling_t;
+    int async_polling_direct;
+    sem_t sem;
+} QzAsynctrl_T;
+
 typedef struct QzSess_S {
     int inst_hint;   /*which instance we last used*/
     QzSessionParamsInternal_T sess_params;
@@ -356,6 +398,8 @@ typedef struct QzSess_S {
     LatencyMetrix_T RRT;
     LatencyMetrix_T PPT;
     LatencyMetrix_T SWT;
+    /* Async mode */
+    QzAsynctrl_T *async_ctrl;
 } QzSess_T;
 
 typedef struct QzStreamBuf_S {
@@ -468,7 +512,7 @@ void outputHeaderGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      DataFormatInternal_T data_fmt);
 void qzGzipFooterGen(unsigned char *ptr, CpaDcRqResults *res);
-void outputFooterGen(QzSess_T *qz_sess,
+void outputFooterGen(unsigned char *ptr,
                      CpaDcRqResults *res,
                      DataFormatInternal_T data_fmt);
 void qzGzipFooterExt(const unsigned char *const ptr, StdGzF_T *ftr);
@@ -652,4 +696,26 @@ int decompLSMFallback(QzSession_T *sess, const unsigned char *src,
                       unsigned int *src_len, unsigned char *dest,
                       unsigned int *dest_len);
 
+/* Internal Async API */
+int AsyncCompOutCheckDestLen(int i, int j, QzSession_T *sess,
+                             long dest_receive_sz);
+void AsyncCompOutValidDestBufferCleanUp(int i, int j,
+                                        unsigned int dest_receive_sz);
+int AsyncDecompOutSWFallback(int i, int j, QzSession_T *sess,
+                             QzAsyncReq_T *req);
+
+void AsyncDecompOutValidDestBufferCleanUp(int i, int j, QzSess_T *qz_sess,
+        CpaDcRqResults *resl,
+        QzAsyncReq_T *req);
+
+int populateAsyncReq(QzSession_T *sess, const unsigned char *src,
+                     unsigned char *dest, qzAsyncCallbackFn callback,
+                     QzResult_T *qzResults, QzAsyncOperationType_T op_type,
+                     QzAsyncReq_T *req);
+
+int qzAsyncReqSubmit(QzSession_T *sess, QzAsyncReq_T *req,
+                     QzDirection_T direct);
+int qzAsyncSetupHWSession(QzSession_T *sess, QzDirection_T direct);
+int qzSetupAsyncCtrl(QzSession_T *sess);
+int GetStableInstance(QzSession_T *sess);
 #endif //_QATZIPP_H
