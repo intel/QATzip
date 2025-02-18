@@ -320,12 +320,12 @@ int initStream(QzSession_T *sess, QzStream_T *strm)
         streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
 
     if (NULL == stream_buf->in_buf) {
-        QZ_WARN("stream_buf->in_buf : PINNED_MEM failed, try COMMON_MEM\n");
+        QZ_INFO("stream_buf->in_buf : PINNED_MEM failed, try COMMON_MEM\n");
         stream_buf->in_buf =
             streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     }
     if (NULL == stream_buf->out_buf) {
-        QZ_WARN("stream_buf->out_buf : PINNED_MEM failed, try COMMON_MEM\n");
+        QZ_INFO("stream_buf->out_buf : PINNED_MEM failed, try COMMON_MEM\n");
         stream_buf->out_buf =
             streamBufferAlloc(stream_buf->buf_len, QZ_AUTO_SELECT_NUMA_NODE, COMMON_MEM);
     }

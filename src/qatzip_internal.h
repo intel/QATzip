@@ -293,6 +293,25 @@ typedef struct QzSessionParamsInternal_S {
     unsigned char zlib_format;
 } QzSessionParamsInternal_T;
 
+/* LsmMetLenShift is global variable */
+#define LSM_MET_DEPTH (1<<(LsmMetLenShift))
+
+typedef struct LatencyMetrix_S {
+    unsigned long *latency_array;
+    unsigned long arr_idx;
+    unsigned long arr_total;
+    unsigned long arr_avg;
+    unsigned long invoke_counter;
+#ifdef QATZIP_DEBUG
+    unsigned long sess_lat_total;
+    unsigned long sess_lat_avg;
+    unsigned long max_latency;
+    unsigned long min_latency;
+    unsigned long max_cnt;
+    unsigned long min_cnt;
+#endif
+} LatencyMetrix_T;
+
 typedef struct QzSess_S {
     int inst_hint;   /*which instance we last used*/
     QzSessionParamsInternal_T sess_params;
@@ -332,6 +351,11 @@ typedef struct QzSess_S {
     LZ4F_dctx *dctx;
     void *qzdeflateExtData;
     /**< An opaque pointer containing extended results for deflate session*/
+
+    /* LSM */
+    LatencyMetrix_T RRT;
+    LatencyMetrix_T PPT;
+    LatencyMetrix_T SWT;
 } QzSess_T;
 
 typedef struct QzStreamBuf_S {
@@ -611,5 +635,21 @@ void decompOutSkipErrorRespond(int i, int j, QzSess_T *qz_sess);
 int decompOutCheckSum(int i, int j, QzSession_T *sess,
                       CpaDcRqResults *resl);
 
+/* LSM */
+static inline uint64_t rdtsc()
+{
+    unsigned int lo, hi;
+    __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+    return ((uint64_t)hi << 32) | lo;
+}
+
+void metrixReset(LatencyMetrix_T *m);
+void metrixUpdate(LatencyMetrix_T *m, unsigned long val);
+int compLSMFallback(QzSession_T *sess, const unsigned char *src,
+                    unsigned int *src_len, unsigned char *dest,
+                    unsigned int *dest_len, unsigned int last);
+int decompLSMFallback(QzSession_T *sess, const unsigned char *src,
+                      unsigned int *src_len, unsigned char *dest,
+                      unsigned int *dest_len);
 
 #endif //_QATZIPP_H

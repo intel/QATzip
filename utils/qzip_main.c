@@ -34,7 +34,6 @@
  ***************************************************************************/
 #include "qzip.h"
 
-
 int main(int argc, char **argv)
 {
     int ret = QZ_OK;
@@ -77,6 +76,9 @@ int main(int argc, char **argv)
             break;
         case 'R':
             recursive_mode = 1;
+            break;
+        case 's':
+            g_params_th.is_sensitive_mode = true;
             break;
         case 'A':
             if (strcmp(optarg, "deflate") == 0) {
@@ -174,6 +176,15 @@ int main(int argc, char **argv)
                 qzSetLogLevel(LOG_DEBUG1);
             } else {
                 printf("Error log level: %s\n", optarg);
+                return -1;
+            }
+            break;
+        case 'b':
+            block_buff_len =
+                QZIP_GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            if (*stop != '\0' || ERANGE == errno ||
+                block_buff_len > 512 * 1024 * 1024) {
+                printf("Error block size arg: %s\n", optarg);
                 return -1;
             }
             break;

@@ -266,13 +266,30 @@ static void *PollingHeartBeat(void *arg)
     while (true) {
         status = icp_sal_poll_device_events();
         if (CPA_STATUS_SUCCESS != status) {
-            QZ_WARN("Polling device heartbeat is failure!\n");
+            QZ_INFO("Polling device heartbeat is failure!\n");
             continue;
         }
         /* This time may effect the sw fallback times */
         usleep(POLL_EVENT_INTERVAL_TIME);
     }
     return ((void *)NULL);
+}
+
+typedef enum QzLSMPath_E {
+    LSM_QAT,
+    LSM_SW,
+} QzLSMPath_T;
+
+static inline int chooseLSMPath(QzSess_T *qz_sess)
+{
+    int path;
+    if (qz_sess->SWT.arr_avg <
+        (qz_sess->RRT.arr_avg + qz_sess->PPT.arr_avg)) {
+        path = LSM_SW;
+    } else {
+        path = LSM_QAT;
+    }
+    return path;
 }
 
 /*
@@ -1893,6 +1910,15 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
         goto err_exit;
     }
 
+    if (qz_sess->sess_params.is_sensitive_mode == true &&
+        chooseLSMPath(qz_sess) == LSM_SW) {
+        rc = compLSMFallback(sess, src, src_len, dest, dest_len, last);
+        return rc;
+    }
+
+    unsigned long s_time_stamp, e_time_stamp;
+    s_time_stamp = rdtsc();
+
     i = qzGrabInstance(qz_sess->inst_hint, &(qz_sess->sess_params));
     if (unlikely(i == -1)) {
         if (qz_sess->sess_params.sw_backup == 1) {
@@ -1956,6 +1982,12 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     }
 
     qzReleaseInstance(i);
+
+    e_time_stamp = rdtsc();
+    if (qz_sess->sess_params.is_sensitive_mode == true) {
+        metrixUpdate(&qz_sess->RRT, (e_time_stamp - s_time_stamp));
+    }
+
     rc = sess->thd_sess_stat;
     if (qz_sess->seq != qz_sess->seq_in) {
         /*  this means the HW get data already error, qz_in_len and
@@ -1982,7 +2014,7 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
             qz_sess->next_dest += sw_dest_len;
             sess->thd_sess_stat = rc;
         } else {
-            QZ_ERROR("SW Comp fallback failure! compress fatal ERROR!\n");
+            QZ_ERROR("SW Comp fallback failure! compress error!\n");
         }
     }
 
@@ -1996,9 +2028,14 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
 
     //trigger post-processing
     if (data_fmt == LZ4S_BK && qz_sess->sess_params.qzCallback) {
+        unsigned long spp_time_stamp = rdtsc();
         rc = lz4sPostProcess(sess, src, src_len, dest, dest_len, ext_rc);
         if (QZ_OK != rc) {
             goto err_exit;
+        }
+        unsigned long epp_time_stamp = rdtsc();
+        if (qz_sess->sess_params.is_sensitive_mode == true) {
+            metrixUpdate(&qz_sess->PPT, (epp_time_stamp - spp_time_stamp));
         }
     }
 
@@ -2435,6 +2472,15 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
         goto err_exit;
     }
 
+    if (qz_sess->sess_params.is_sensitive_mode == true &&
+        chooseLSMPath(qz_sess) == LSM_SW) {
+        rc = decompLSMFallback(sess, src, src_len, dest, dest_len);
+        return rc;
+    }
+
+    unsigned long s_time_stamp, e_time_stamp;
+    s_time_stamp = rdtsc();
+
     i = qzGrabInstance(qz_sess->inst_hint, &(qz_sess->sess_params));
     if (unlikely(i == -1)) {
         if (qz_sess->sess_params.sw_backup == 1) {
@@ -2499,6 +2545,11 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
 
     qzReleaseInstance(i);
 
+    e_time_stamp = rdtsc();
+    if (qz_sess->sess_params.is_sensitive_mode == true) {
+        metrixUpdate(&qz_sess->RRT, (e_time_stamp - s_time_stamp));
+    }
+
     QZ_DEBUG("PRoduced %lu bytes\n", sess->total_out);
 
     rc = sess->thd_sess_stat;
@@ -2528,7 +2579,7 @@ int qzDecompressExt(QzSession_T *sess, const unsigned char *src,
             qz_sess->next_dest += sw_dest_len;
             sess->thd_sess_stat = rc;
         } else {
-            QZ_ERROR("SW deComp fallback failure! compress fatal ERROR!\n");
+            QZ_ERROR("SW deComp fallback failure! decompress error!\n");
         }
     }
 
@@ -2575,6 +2626,21 @@ int qzTeardownSession(QzSession_T *sess)
             deflateEnd(qz_sess->deflate_strm);
             free(qz_sess->deflate_strm);
             qz_sess->deflate_strm = NULL;
+        }
+
+        if (unlikely(NULL != qz_sess->RRT.latency_array)) {
+            free(qz_sess->RRT.latency_array);
+            qz_sess->RRT.latency_array = NULL;
+        }
+
+        if (unlikely(NULL != qz_sess->PPT.latency_array)) {
+            free(qz_sess->PPT.latency_array);
+            qz_sess->PPT.latency_array = NULL;
+        }
+
+        if (unlikely(NULL != qz_sess->SWT.latency_array)) {
+            free(qz_sess->SWT.latency_array);
+            qz_sess->SWT.latency_array = NULL;
         }
 
         free(sess->internal);
