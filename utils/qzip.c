@@ -51,14 +51,15 @@ QzipParams_T g_params_th = {
     .comp_algorithm = QZ_COMP_ALGOL_DEFAULT,
     .hw_buff_sz = QZ_HW_BUFF_SZ,
     .polling_mode = QZ_PERIODICAL_POLLING,
-    .req_cnt_thrshold = 32
+    .req_cnt_thrshold = QZ_REQ_THRESHOLD_DEFAULT,
+    .is_sensitive_mode = false,
 };
 
 /* Estimate maximum data expansion after decompression */
 const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-char const g_short_opts[] = "A:H:L:C:r:o:O:P:g:dfhkVR";
+char const g_short_opts[] = "A:H:L:C:r:o:O:P:g:b:dfhkVRs";
 const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -78,11 +79,14 @@ const struct option g_long_opts[] = {
     {"polling",    1, 0, 'P'}, /* set polling mode when compressing and
                                   decompressing */
     {"loglevel",   1, 0, 'g'}, /* set log level */
+    {"blocksz",   1, 0, 'b'}, /* set block source buffer size */
+    {"lsm",       1, 0, 's'}, /* enable latency sensitive mode */
     { 0, 0, 0, 0 }
 };
 
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * 1024 * 1024 - 5 * 1024);
 
+unsigned int block_buff_len = SRC_BUFF_LEN;
 
 void tryHelp(void)
 {
@@ -112,7 +116,10 @@ void help(void)
         "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
         "  -P, --polling     set polling mode, only supports busy polling settings",
+        "  -s,               enable latency sensitive mode",
         "  -g, --loglevel    set qatzip loglevel(none|error|warn|info|debug)",
+        "  -b, --blocksz     If set this option, the qzip will split input file into pieces.",
+        "                    qzCompress/qzDecompress will process block_size bytes every time.",
         "",
         "With no FILE, read standard input.",
         0
@@ -178,12 +185,13 @@ int doProcessBuffer(QzSession_T *sess,
 {
     int ret = QZ_FAIL;
     unsigned int done = 0;
-    unsigned int buf_processed = 0;
-    unsigned int buf_remaining = *src_len;
     unsigned int bytes_written = 0;
-    unsigned int valid_dst_buf_len = dst_len;
     RunTimeList_T *time_node = time_list;
-
+    /* block size for compression API level offload */
+    unsigned int block_src_len = *src_len;
+    unsigned int block_dest_len = dst_len;
+    unsigned int consumed = 0;
+    unsigned int produced = 0;
 
     while (time_node->next) {
         time_node = time_node->next;
@@ -200,15 +208,20 @@ int doProcessBuffer(QzSession_T *sess,
 
         /* Do actual work */
         if (is_compress) {
-            ret = qzCompress(sess, src, src_len, dst, &dst_len, 1);
-            if (QZ_BUF_ERROR == ret && 0 == *src_len) {
+            block_src_len = (*src_len - consumed) > block_buff_len ?
+                            block_buff_len : (*src_len - consumed);
+            block_dest_len = dst_len - produced;
+
+            ret = qzCompress(sess, src + consumed, &block_src_len,
+                             dst + produced, &block_dest_len, 1);
+            if (QZ_BUF_ERROR == ret && 0 == block_src_len) {
                 done = 1;
             }
         } else {
-            ret = qzDecompress(sess, src, src_len, dst, &dst_len);
-
+            ret = qzDecompress(sess, src + consumed, &block_src_len,
+                               dst + produced, &block_dest_len);
             if (QZ_DATA_ERROR == ret ||
-                (QZ_BUF_ERROR == ret && 0 == *src_len)) {
+                (QZ_BUF_ERROR == ret && 0 == block_src_len)) {
                 done = 1;
             }
         }
@@ -223,24 +236,18 @@ int doProcessBuffer(QzSession_T *sess,
 
         gettimeofday(&run_time->time_e, NULL);
 
-        bytes_written = fwrite(dst, 1, dst_len, dst_file);
-        assert(bytes_written == dst_len);
-        *dst_file_size += bytes_written;
+        consumed += block_src_len;
+        produced += block_dest_len;
 
-        buf_processed += *src_len;
-        buf_remaining -= *src_len;
-        if (0 == buf_remaining) {
+        if (0 == (*src_len - consumed)) {
             done = 1;
         }
-        src += *src_len;
-        QZ_DEBUG("src_len is %u ,buf_remaining is %u\n", *src_len,
-                 buf_remaining);
-        *src_len = buf_remaining;
-        dst_len = valid_dst_buf_len;
-        bytes_written = 0;
     }
 
-    *src_len = buf_processed;
+    bytes_written = fwrite(dst, 1, produced, dst_file);
+    assert(bytes_written == produced);
+    *dst_file_size = bytes_written;
+    *src_len = consumed;
     return ret;
 }
 
@@ -430,6 +437,7 @@ int qzipSetupSessionDeflate(QzSession_T *sess, QzipParams_T *params)
     deflate_params.common_params.hw_buff_sz = params->hw_buff_sz;
     deflate_params.common_params.polling_mode = params->polling_mode;
     deflate_params.common_params.req_cnt_thrshold = params->req_cnt_thrshold;
+    deflate_params.common_params.is_sensitive_mode = params->is_sensitive_mode;
 
     status = qzSetupSessionDeflate(sess, &deflate_params);
     if (status < 0) {
@@ -457,6 +465,7 @@ int qzipSetupSessionLZ4(QzSession_T *sess, QzipParams_T *params)
     lz4_params.common_params.hw_buff_sz = params->hw_buff_sz;
     lz4_params.common_params.polling_mode = params->polling_mode;
     lz4_params.common_params.req_cnt_thrshold = params->req_cnt_thrshold;
+    lz4_params.common_params.is_sensitive_mode = params->is_sensitive_mode;
 
     status = qzSetupSessionLZ4(sess, &lz4_params);
     if (status < 0) {
@@ -484,6 +493,7 @@ int qzipSetupSessionLZ4S(QzSession_T *sess, QzipParams_T *params)
     lz4s_params.common_params.hw_buff_sz = params->hw_buff_sz;
     lz4s_params.common_params.polling_mode = params->polling_mode;
     lz4s_params.common_params.req_cnt_thrshold = params->req_cnt_thrshold;
+    lz4s_params.common_params.is_sensitive_mode = params->is_sensitive_mode;
 
     status = qzSetupSessionLZ4S(sess, &lz4s_params);
     if (status < 0) {

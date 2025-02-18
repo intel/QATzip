@@ -174,6 +174,7 @@ typedef struct {
     int init_sess_disabled;
     int thread_sleep;
     int block_size;
+    unsigned int is_sensitive_mode;
 } TestArg_T;
 
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * MB - 5 * KB);
@@ -187,7 +188,7 @@ static pthread_mutex_t g_cond_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_ready_cond = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t g_start_cond = PTHREAD_COND_INITIALIZER;
 static int g_ready_to_start;
-static int g_ready_thread_count;
+static atomic_int g_ready_thread_count;
 #else
 static pthread_barrier_t g_bar;
 #endif
@@ -200,6 +201,8 @@ static struct timeval g_timer_start;
 extern void dumpAllCounters(void);
 static int test_thread_safe_flag = 0;
 extern processData_T g_process;
+extern unsigned int LsmMetLenShift;
+extern unsigned int LsmSwMetSeed;
 
 QzBlock_T *parseFormatOption(char *buf)
 {
@@ -537,6 +540,7 @@ int qzSetupDeflate(QzSession_T *sess, TestArg_T *arg)
     params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
     params.common_params.max_forks = arg->max_forks;
     params.common_params.sw_backup = arg->sw_backup;
+    params.common_params.is_sensitive_mode = arg->is_sensitive_mode;
 
     status = qzSetupSessionDeflate(sess, &params);
     if (status < 0) {
@@ -566,6 +570,7 @@ int qzSetupLZ4(QzSession_T *sess, TestArg_T *arg)
     params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
     params.common_params.max_forks = arg->max_forks;
     params.common_params.sw_backup = arg->sw_backup;
+    params.common_params.is_sensitive_mode = arg->is_sensitive_mode;
 
     status = qzSetupSessionLZ4(sess, &params);
     if (status) {
@@ -594,6 +599,7 @@ int qzSetupLZ4S(QzSession_T *sess, TestArg_T *arg)
     params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
     params.common_params.max_forks = arg->max_forks;
     params.common_params.sw_backup = arg->sw_backup;
+    params.common_params.is_sensitive_mode = arg->is_sensitive_mode;
 
     status = qzSetupSessionLZ4S(sess, &params);
     if (status) {
@@ -4453,6 +4459,769 @@ done:
     pthread_exit((void *)NULL);
 }
 
+void *qzLSMcompressPerf(void *arg)
+{
+    int rc = -1, k;
+    unsigned char *src, *comp_out, *decomp_out;
+    int *compressed_blocks_sz = NULL;
+    size_t src_sz, comp_out_sz, decomp_out_sz;
+    size_t block_size, in_sz, out_sz, consumed, produced;
+    size_t num_blocks;
+    struct timeval ts, te;
+    unsigned long long ts_m = 0, te_m = 0, el_m = 0;
+    long double sec, rate;
+    const size_t org_src_sz = ((TestArg_T *)arg)->src_sz;
+    const size_t org_comp_out_sz = ((TestArg_T *)arg)->comp_out_sz;
+    const long tid = ((TestArg_T *)arg)->thd_id;
+    const int verify_data = ((TestArg_T *)arg)->verify_data;
+    const int count = ((TestArg_T *)arg)->count;
+    const int gen_data = ((TestArg_T *)arg)->gen_data;
+    const int SW_only_flag = ((TestArg_T *)arg)->init_engine_disabled;
+    ((TestArg_T *)arg)->init_engine_disabled = 0;
+    const int HW_only_flag = !((TestArg_T *)arg)->sw_backup;
+    ((TestArg_T *)arg)->sw_backup = 1;
+    const unsigned long LSM_max_avg = ULONG_MAX;
+    QzSession_T sess = {0};
+    QzSess_T *qz_sess = NULL;
+
+    src_sz = org_src_sz;
+    comp_out_sz = org_comp_out_sz;
+    decomp_out_sz = org_src_sz;
+
+    rc = qzInitSetupsession(&sess, (TestArg_T *)arg);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+#ifndef ENABLE_THREAD_BARRIER
+        g_ready_thread_count++;
+        pthread_cond_signal(&g_ready_cond);
+#endif
+        pthread_exit((void *)"qzInit failed");
+    }
+
+    qz_sess = (QzSess_T *)(sess.internal);
+    if (qz_sess == NULL) {
+        pthread_exit((void *)"qzInit failed");
+    }
+
+    /* According to contorl flow, adjust LSM matrix table*/
+    if (HW_only_flag) {
+        if (qz_sess->sess_params.is_sensitive_mode) {
+            for (int i = 0; i < LSM_MET_DEPTH; i++) {
+                qz_sess->SWT.latency_array[i] = LSM_max_avg;
+            }
+        }
+        qz_sess->SWT.arr_avg = LSM_max_avg;
+    }
+
+    if (SW_only_flag) {
+        if (qz_sess->sess_params.is_sensitive_mode) {
+            for (int i = 0; i < LSM_MET_DEPTH; i++) {
+                qz_sess->RRT.latency_array[i] = LSM_max_avg;
+                qz_sess->PPT.latency_array[i] = LSM_max_avg;
+            }
+        }
+        qz_sess->PPT.arr_avg = LSM_max_avg;
+        qz_sess->RRT.arr_avg = LSM_max_avg;
+    }
+
+    /* perpare the test data */
+    if (gen_data && !g_perf_svm) {
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        comp_out = qzMalloc(comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        decomp_out = qzMalloc(decomp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    } else {
+        src = g_perf_svm ? malloc(src_sz) : ((TestArg_T *)arg)->src;
+        comp_out = g_perf_svm ? malloc(comp_out_sz) : ((TestArg_T *)arg)->comp_out;
+        decomp_out = g_perf_svm ? malloc(decomp_out_sz) : ((TestArg_T *)
+                     arg)->decomp_out;
+    }
+    if (!src || !comp_out || !decomp_out) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+    if (g_perf_svm && g_input_file_name) {
+        memcpy(src, ((TestArg_T *)arg)->src, src_sz);
+    }
+    if (gen_data) {
+        genRandomData(src, src_sz);
+    }
+
+    /* split the src to multiple block */
+    block_size = ((TestArg_T *)arg)->block_size == -1 ?
+                 src_sz : ((TestArg_T *)arg)->block_size;
+
+    num_blocks = src_sz / block_size + (src_sz % block_size ? 1 : 0);
+    compressed_blocks_sz = malloc(sizeof(int) * num_blocks);
+    memset(compressed_blocks_sz, 0, sizeof(int) * num_blocks);
+    // QZ_PRINT("src len: %lu, block: %lu, num block: %lu\n", src_sz, block_size, num_blocks);
+    /* sync the different thread */
+#ifdef ENABLE_THREAD_BARRIER
+    pthread_barrier_wait(&g_bar);
+#else
+    /* mutex lock for thread count */
+    pthread_mutex_lock(&g_cond_mutex);
+    g_ready_thread_count++;
+    pthread_cond_signal(&g_ready_cond);
+    while (!g_ready_to_start) {
+        pthread_cond_wait(&g_start_cond, &g_cond_mutex);
+    }
+    pthread_mutex_unlock(&g_cond_mutex);
+#endif
+
+    /* loop test */
+    for (k = 0; k < count; k++) {
+        (void)gettimeofday(&ts, NULL);
+        {
+            comp_out_sz = org_comp_out_sz;
+            QZ_DEBUG("thread %ld before Compressed %lu bytes into %lu\n", tid, src_sz,
+                     comp_out_sz);
+            consumed = 0;
+            produced = 0;
+
+            for (int i = 0; i < num_blocks; i ++) {
+                in_sz =  block_size < (org_src_sz - consumed) ? block_size :
+                         (org_src_sz - consumed);
+                out_sz = comp_out_sz - produced;
+
+                rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
+                                comp_out + produced,
+                                (uint32_t *)(&out_sz), 1);
+                if (rc != QZ_OK) {
+                    QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+                    dumpInputData(in_sz, src + consumed);
+                    goto done;
+                }
+
+                consumed = consumed + in_sz;
+                produced = produced + out_sz;
+                compressed_blocks_sz[i] = out_sz;
+
+                /* Because sw would insert 0 to RRT Matrix table every time.
+                 * Have to update the Matrix to Max
+                 */
+                if (SW_only_flag) {
+                    for (int i = 0; i < LSM_MET_DEPTH; i++) {
+                        if (qz_sess->sess_params.is_sensitive_mode) {
+                            qz_sess->RRT.latency_array[i] = LSM_max_avg;
+                            qz_sess->PPT.latency_array[i] = LSM_max_avg;
+                        }
+                    }
+                    qz_sess->PPT.arr_avg = LSM_max_avg;
+                    qz_sess->RRT.arr_avg = LSM_max_avg;
+                }
+            }
+
+            src_sz = consumed;
+            comp_out_sz = produced;
+            if (src_sz != org_src_sz) {
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                         org_src_sz);
+                dumpInputData(src_sz, src);
+                goto done;
+            }
+            QZ_DEBUG("thread %ld after Compressed %lu bytes into %lu\n", tid, src_sz,
+                     comp_out_sz);
+        }
+        (void)gettimeofday(&te, NULL);
+        ts_m = (ts.tv_sec * 1000000) + ts.tv_usec;
+        te_m = (te.tv_sec * 1000000) + te.tv_usec;
+        el_m += te_m - ts_m;
+    }
+
+    /*  Verify the last compress is enough
+        decompress data for verify
+    */
+    if (verify_data) {
+        consumed = 0;
+        produced = 0;
+        for (int i = 0; i < num_blocks; i ++) {
+            in_sz = compressed_blocks_sz[i];
+            out_sz = decomp_out_sz - produced;
+            rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
+                              decomp_out + produced, (uint32_t *)(&out_sz));
+            if (rc != QZ_OK) {
+                QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+                goto done;
+            }
+            consumed += in_sz;
+            produced += out_sz;
+        }
+
+        QZ_DEBUG("verify compressed data..\n");
+        decomp_out_sz = produced;
+        if (decomp_out_sz != org_src_sz ||
+            memcmp(src, decomp_out, org_src_sz)) {
+            QZ_ERROR("compressed data is uncorrect\n");
+            goto done;
+        }
+    }
+
+    sec = (long double)(el_m);
+    sec = sec / 1000000.0;
+    rate = org_src_sz;
+    rate /= 1024;
+    rate *= 8;// Kbits
+
+    rate *= count;
+    rate /= 1024 * 1024; // gigbits
+    rate /= sec;// Gbps
+
+    pthread_mutex_lock(&g_lock_print);
+#ifdef QATZIP_DEBUG
+    QZ_PRINT("[INFO]:RRT Total call: %ld, Total avg: %ld\n",
+             qz_sess->RRT.invoke_counter,
+             qz_sess->RRT.sess_lat_avg);
+    QZ_PRINT("[INFO]:SWT Total call: %ld, Total avg: %ld\n",
+             qz_sess->SWT.invoke_counter,
+             qz_sess->SWT.sess_lat_avg);
+    QZ_PRINT("[INFO]:PPT Total call: %ld, Total avg: %ld\n",
+             qz_sess->PPT.invoke_counter,
+             qz_sess->PPT.sess_lat_avg);
+#endif
+    QZ_PRINT("[INFO] The AVG latency is RRT: %ld, SWT: %ld, PPT: %ld\n",
+             qz_sess->RRT.arr_avg, qz_sess->SWT.arr_avg, qz_sess->PPT.arr_avg);
+    QZ_PRINT("[INFO] invoke counter is RRT: %ld, SWT: %ld, PPT: %ld\n",
+             qz_sess->RRT.invoke_counter, qz_sess->SWT.invoke_counter,
+             qz_sess->PPT.invoke_counter);
+    QZ_PRINT("[INFO] tid=%ld, count=%d, msec=%llu, bytes=%lu, %Lf Gbps",
+             tid, count, el_m, org_src_sz, rate);
+    QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%\n",
+             org_src_sz, comp_out_sz,
+             ((double)comp_out_sz / (double)org_src_sz) * 100);
+    pthread_mutex_unlock(&g_lock_print);
+
+done:
+    if (gen_data && !g_perf_svm) {
+        qzFree(src);
+        qzFree(comp_out);
+        qzFree(decomp_out);
+    } else if (g_perf_svm) {
+        free(src);
+        free(comp_out);
+        free(decomp_out);
+    }
+    if (compressed_blocks_sz != NULL) {
+        free(compressed_blocks_sz);
+    }
+    (void)qzTeardownSession(&sess);
+    pthread_exit((void *)NULL);
+}
+
+void *qzLSMdecompressPerf(void *arg)
+{
+    int rc = -1, k;
+    unsigned char *src, *comp_out, *decomp_out;
+    int *compressed_blocks_sz = NULL;
+    size_t src_sz, comp_out_sz, decomp_out_sz;
+    size_t block_size, in_sz, out_sz, consumed, produced;
+    size_t num_blocks;
+    struct timeval ts, te;
+    unsigned long long ts_m = 0, te_m = 0, el_m = 0;
+    long double sec, rate;
+    const size_t org_src_sz = ((TestArg_T *)arg)->src_sz;
+    const size_t org_comp_out_sz = ((TestArg_T *)arg)->comp_out_sz;
+    const long tid = ((TestArg_T *)arg)->thd_id;
+    const int verify_data = ((TestArg_T *)arg)->verify_data;
+    const int count = ((TestArg_T *)arg)->count;
+    const int gen_data = ((TestArg_T *)arg)->gen_data;
+    const int SW_only_flag = ((TestArg_T *)arg)->init_engine_disabled;
+    ((TestArg_T *)arg)->init_engine_disabled = 0;
+    const int HW_only_flag = !((TestArg_T *)arg)->sw_backup;
+    ((TestArg_T *)arg)->sw_backup = 1;
+    const unsigned long LSM_max_avg = ULONG_MAX;
+    QzSession_T sess = {0};
+    QzSess_T *qz_sess;
+
+    src_sz = org_src_sz;
+    comp_out_sz = org_comp_out_sz;
+    decomp_out_sz = org_src_sz;
+
+    rc = qzInitSetupsession(&sess, (TestArg_T *)arg);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+#ifndef ENABLE_THREAD_BARRIER
+        g_ready_thread_count++;
+        pthread_cond_signal(&g_ready_cond);
+#endif
+        pthread_exit((void *)"qzInit failed");
+    }
+
+    /* According to contorl flow, adjust LSM matrix table*/
+    qz_sess = (QzSess_T *)(sess.internal);
+    if (qz_sess == NULL) {
+        pthread_exit((void *)"qzInit failed");
+    }
+
+    if (HW_only_flag) {
+        if (qz_sess->sess_params.is_sensitive_mode) {
+            for (int i = 0; i < LSM_MET_DEPTH; i++) {
+                qz_sess->SWT.latency_array[i] = LSM_max_avg;
+            }
+        }
+        qz_sess->SWT.arr_avg = LSM_max_avg;
+    }
+
+    if (SW_only_flag) {
+        if (qz_sess->sess_params.is_sensitive_mode) {
+            for (int i = 0; i < LSM_MET_DEPTH; i++) {
+                qz_sess->RRT.latency_array[i] = LSM_max_avg;
+                qz_sess->PPT.latency_array[i] = LSM_max_avg;
+            }
+        }
+        qz_sess->PPT.arr_avg = LSM_max_avg;
+        qz_sess->RRT.arr_avg = LSM_max_avg;
+    }
+
+    /* perpare the test data */
+    if (gen_data && !g_perf_svm) {
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        comp_out = qzMalloc(comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        decomp_out = qzMalloc(decomp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    } else {
+        src = g_perf_svm ? malloc(src_sz) : ((TestArg_T *)arg)->src;
+        comp_out = g_perf_svm ? malloc(comp_out_sz) : ((TestArg_T *)arg)->comp_out;
+        decomp_out = g_perf_svm ? malloc(decomp_out_sz) : ((TestArg_T *)
+                     arg)->decomp_out;
+    }
+    if (!src || !comp_out || !decomp_out) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+    if (g_perf_svm && g_input_file_name) {
+        memcpy(src, ((TestArg_T *)arg)->src, src_sz);
+    }
+    if (gen_data) {
+        genRandomData(src, src_sz);
+    }
+
+    /* split the src to multiple block */
+    block_size = ((TestArg_T *)arg)->block_size == -1 ?
+                 src_sz : ((TestArg_T *)arg)->block_size;
+
+    num_blocks = src_sz / block_size + (src_sz % block_size ? 1 : 0);
+    compressed_blocks_sz = malloc(sizeof(int) * num_blocks);
+    memset(compressed_blocks_sz, 0, sizeof(int) * num_blocks);
+
+    /* Prepare decompress src buffer */
+    consumed = 0;
+    produced = 0;
+    for (int i = 0; i < num_blocks; i ++) {
+        in_sz =  block_size < (org_src_sz - consumed) ? block_size :
+                 (org_src_sz - consumed);
+        out_sz = comp_out_sz - produced;
+        rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
+                        comp_out + produced,
+                        (uint32_t *)(&out_sz), 1);
+        if (rc != QZ_OK) {
+            QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+            dumpInputData(in_sz, src + consumed);
+            goto done;
+        }
+
+        consumed = consumed + in_sz;
+        produced = produced + out_sz;
+        compressed_blocks_sz[i] = out_sz;
+    }
+
+    src_sz = consumed;
+    comp_out_sz = produced;
+    if (src_sz != org_src_sz) {
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                 org_src_sz);
+        dumpInputData(src_sz, src);
+        goto done;
+    }
+
+    /* sync the different thread */
+#ifdef ENABLE_THREAD_BARRIER
+    pthread_barrier_wait(&g_bar);
+#else
+    /* mutex lock for thread count */
+    pthread_mutex_lock(&g_cond_mutex);
+    g_ready_thread_count++;
+    pthread_cond_signal(&g_ready_cond);
+    while (!g_ready_to_start) {
+        pthread_cond_wait(&g_start_cond, &g_cond_mutex);
+    }
+    pthread_mutex_unlock(&g_cond_mutex);
+#endif
+
+    /* loop test */
+    for (k = 0; k < count; k++) {
+        (void)gettimeofday(&ts, NULL);
+        {
+            QZ_DEBUG("thread %ld before Decompressed %lu bytes into %lu\n", tid,
+                     comp_out_sz,
+                     decomp_out_sz);
+            consumed = 0;
+            produced = 0;
+
+            for (int i = 0; i < num_blocks; i ++) {
+                in_sz = compressed_blocks_sz[i];
+                out_sz = decomp_out_sz - produced;
+                rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
+                                  decomp_out + produced, (uint32_t *)(&out_sz));
+                if (rc != QZ_OK) {
+                    QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+                    dumpInputData(src_sz, src);
+                    goto done;
+                }
+                consumed += in_sz;
+                produced += out_sz;
+
+                /* Because sw would insert 0 to RRT Matrix table every time.
+                 * Have to update the Matrix to Max
+                 */
+                if (SW_only_flag) {
+                    if (qz_sess->sess_params.is_sensitive_mode) {
+                        for (int i = 0; i < LSM_MET_DEPTH; i++) {
+                            qz_sess->RRT.latency_array[i] = LSM_max_avg;
+                            qz_sess->PPT.latency_array[i] = LSM_max_avg;
+                        }
+                    }
+                    qz_sess->PPT.arr_avg = LSM_max_avg;
+                    qz_sess->RRT.arr_avg = LSM_max_avg;
+                }
+            }
+
+            decomp_out_sz = produced;
+            if (decomp_out_sz != org_src_sz) {
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                         decomp_out_sz, org_src_sz);
+                dumpInputData(src_sz, src);
+                goto done;
+            }
+            QZ_DEBUG("thread %ld after Decompressed %lu bytes into %lu\n", tid, comp_out_sz,
+                     decomp_out_sz);
+        }
+        (void)gettimeofday(&te, NULL);
+        ts_m = (ts.tv_sec * 1000000) + ts.tv_usec;
+        te_m = (te.tv_sec * 1000000) + te.tv_usec;
+        el_m += te_m - ts_m;
+    }
+
+    /*  Verify the last compress is enough
+        decompress data for verify
+    */
+    if (verify_data) {
+        if (memcmp(src, decomp_out, org_src_sz)) {
+            QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu \n!", tid,
+                     src_sz);
+            dumpInputData(src_sz, src);
+            goto done;
+        }
+    }
+
+    sec = (long double)(el_m);
+    sec = sec / 1000000.0;
+    rate = org_src_sz;
+    rate /= 1024;
+    rate *= 8;// Kbits
+
+    rate *= count;
+    rate /= 1024 * 1024; // gigbits
+    rate /= sec;// Gbps
+
+    pthread_mutex_lock(&g_lock_print);
+#ifdef QATZIP_DEBUG
+    QZ_PRINT("[INFO]:RRT Total call: %ld, Total avg: %ld\n",
+             qz_sess->RRT.invoke_counter,
+             qz_sess->RRT.sess_lat_avg);
+    QZ_PRINT("[INFO]:SWT Total call: %ld, Total avg: %ld\n",
+             qz_sess->SWT.invoke_counter,
+             qz_sess->SWT.sess_lat_avg);
+    QZ_PRINT("[INFO]:PPT Total call: %ld, Total avg: %ld\n",
+             qz_sess->PPT.invoke_counter,
+             qz_sess->PPT.sess_lat_avg);
+#endif
+    QZ_PRINT("[INFO] The AVG latency is RRT: %ld, SWT: %ld, PPT: %ld\n",
+             qz_sess->RRT.arr_avg, qz_sess->SWT.arr_avg, qz_sess->PPT.arr_avg);
+    QZ_PRINT("[INFO] invoke counter is RRT: %ld, SWT: %ld, PPT: %ld\n",
+             qz_sess->RRT.invoke_counter, qz_sess->SWT.invoke_counter,
+             qz_sess->PPT.invoke_counter);
+    QZ_PRINT("[INFO] tid=%ld, count=%d, msec=%llu, bytes=%lu, %Lf Gbps",
+             tid, count, el_m, org_src_sz, rate);
+    QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%\n",
+             org_src_sz, comp_out_sz,
+             ((double)comp_out_sz / (double)org_src_sz) * 100);
+    pthread_mutex_unlock(&g_lock_print);
+
+done:
+    if (gen_data && !g_perf_svm) {
+        qzFree(src);
+        qzFree(comp_out);
+        qzFree(decomp_out);
+    } else if (g_perf_svm) {
+        free(src);
+        free(comp_out);
+        free(decomp_out);
+    }
+    if (compressed_blocks_sz != NULL) {
+        free(compressed_blocks_sz);
+    }
+    (void)qzTeardownSession(&sess);
+    pthread_exit((void *)NULL);
+}
+
+void *qzLSMHeterogeneousPerf(void *arg)
+{
+    int rc = -1, k;
+    unsigned char *src, *comp_out, *decomp_out, *decomp_src;
+    size_t src_sz, comp_out_sz, decomp_out_sz;
+    size_t consumed, produced;
+    struct timeval ts, te;
+    unsigned long long ts_m = 0, te_m = 0, el_m = 0;
+    long double sec, rate;
+    /* parse the input params */
+    const ServiceType_T service = ((TestArg_T *)arg)->service;
+    const size_t org_src_sz = ((TestArg_T *)arg)->src_sz;
+    const size_t org_comp_out_sz = ((TestArg_T *)arg)->comp_out_sz;
+    const long tid = ((TestArg_T *)arg)->thd_id;
+    const int count = ((TestArg_T *)arg)->count;
+    const int gen_data = ((TestArg_T *)arg)->gen_data;
+    /* LSM params */
+    const int SW_only_flag = ((TestArg_T *)arg)->init_engine_disabled;
+    ((TestArg_T *)arg)->init_engine_disabled = 0;
+    const int HW_only_flag = !((TestArg_T *)arg)->sw_backup;
+    ((TestArg_T *)arg)->sw_backup = 1;
+    const unsigned long LSM_max_avg = ULONG_MAX;
+    /* max 64kb and min 1 kb */
+    const int max_block = 64;
+    const int min_block = 1;
+    QzSession_T sess = {0};
+    QzSess_T *qz_sess;
+
+    src_sz = org_src_sz;
+    comp_out_sz = org_comp_out_sz;
+    decomp_out_sz = org_src_sz;
+
+    unsigned int block_num = 0;
+    unsigned int *block_in_len = malloc((src_sz / min_block / 1024) *
+                                        sizeof(unsigned int));
+    unsigned int *block_out_len = malloc((src_sz / min_block / 1024) *
+                                         sizeof(unsigned int));
+    int direction = BOTH;
+
+    rc = qzInitSetupsession(&sess, (TestArg_T *)arg);
+    if (rc != QZ_OK && rc != QZ_DUPLICATE) {
+#ifndef ENABLE_THREAD_BARRIER
+        g_ready_thread_count++;
+        pthread_cond_signal(&g_ready_cond);
+#endif
+        pthread_exit((void *)"qzInit failed");
+    }
+
+    /* According to contorl flow, adjust LSM matrix table*/
+    qz_sess = (QzSess_T *)(sess.internal);
+    if (qz_sess == NULL) {
+        pthread_exit((void *)"qzInit failed");
+    }
+
+    if (HW_only_flag) {
+        for (int i = 0; i < LSM_MET_DEPTH; i++) {
+            qz_sess->SWT.latency_array[i] = LSM_max_avg;
+        }
+        qz_sess->SWT.arr_avg = LSM_max_avg;
+    }
+
+    if (SW_only_flag) {
+        for (int i = 0; i < LSM_MET_DEPTH; i++) {
+            qz_sess->RRT.latency_array[i] = LSM_max_avg;
+            qz_sess->PPT.latency_array[i] = LSM_max_avg;
+        }
+        qz_sess->PPT.arr_avg = LSM_max_avg;
+        qz_sess->RRT.arr_avg = LSM_max_avg;
+    }
+
+    /* perpare the test data */
+    if (gen_data && !g_perf_svm) {
+        src = qzMalloc(src_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        comp_out = qzMalloc(comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        decomp_out = qzMalloc(decomp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        decomp_src = qzMalloc(comp_out_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    } else {
+        src = g_perf_svm ? malloc(src_sz) : ((TestArg_T *)arg)->src;
+        comp_out = g_perf_svm ? malloc(comp_out_sz) : ((TestArg_T *)arg)->comp_out;
+        decomp_out = g_perf_svm ? malloc(decomp_out_sz) : ((TestArg_T *)
+                     arg)->decomp_out;
+        decomp_src = malloc(comp_out_sz);
+    }
+    if (!src || !comp_out || !decomp_out) {
+        QZ_ERROR("Malloc failed\n");
+        goto done;
+    }
+    if (g_perf_svm && g_input_file_name) {
+        memcpy(src, ((TestArg_T *)arg)->src, src_sz);
+    }
+    if (gen_data) {
+        genRandomData(src, src_sz);
+    }
+
+
+#ifdef ENABLE_THREAD_BARRIER
+    pthread_barrier_wait(&g_bar);
+#else
+    /* mutex lock for thread count */
+    pthread_mutex_lock(&g_cond_mutex);
+    g_ready_thread_count++;
+    pthread_cond_signal(&g_ready_cond);
+    while (!g_ready_to_start) {
+        pthread_cond_wait(&g_start_cond, &g_cond_mutex);
+    }
+    pthread_mutex_unlock(&g_cond_mutex);
+#endif
+
+    /* loop test */
+    for (k = 0; k < count; k++) {
+        /* Generate the random block size */
+        {
+            block_num = 0;
+            produced = 0;
+            consumed = 0;
+            int block_size;
+            srand(time(0));
+            while (produced < org_src_sz) {
+                block_size = (rand() % (max_block - min_block + 1) + min_block) * 1024;
+                block_size = (org_src_sz - produced) > block_size ?
+                             block_size : (org_src_sz - produced);
+                block_in_len[block_num] = block_size;
+                block_out_len[block_num] = block_size * 2;
+                produced += block_size;
+                block_num++;
+                QZ_DEBUG("the block %ld is %ld\n", block_num, block_size);
+            }
+
+            if (produced != org_src_sz) {
+                QZ_ERROR("ERROR: Rondom block error!\n");
+                goto done;
+            }
+
+            /* prepare decomp buffer data */
+            if (service != COMP) {
+                produced = 0;
+                consumed = 0;
+                int temp = qz_sess->sess_params.is_sensitive_mode;
+                qz_sess->sess_params.is_sensitive_mode = 0;
+                for (unsigned int i = 0; i < block_num; i++) {
+                    rc = qzCompress(&sess, src + consumed, &block_in_len[i],
+                                    decomp_src + produced, &block_out_len[i], 1);
+
+                    if (rc != QZ_OK) {
+                        QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+                        goto done;
+                    }
+                    consumed = consumed + block_in_len[i];
+                    produced = produced + block_out_len[i];
+                }
+                qz_sess->sess_params.is_sensitive_mode = temp;
+            }
+        }
+
+        (void)gettimeofday(&ts, NULL);
+        {
+            /* reset params for each loop */
+            consumed = 0;
+            produced = 0;
+            unsigned int in_sz;
+            unsigned int out_sz;
+            for (unsigned int i = 0; i < block_num ; i++) {
+                in_sz = block_in_len[i];
+                out_sz = block_out_len[i];
+                if (service == BOTH) {
+                    direction = rand() % 2 ? COMP : DECOMP;
+                }
+
+                if (service == COMP || direction == COMP) {
+                    out_sz = comp_out_sz;
+                    rc = qzCompress(&sess, src + consumed, &in_sz,
+                                    comp_out, &out_sz, 1);
+                    if (rc != QZ_OK) {
+                        QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
+                        goto done;
+                    }
+                }
+
+                if (service == DECOMP || direction == DECOMP) {
+                    in_sz = org_src_sz;
+                    rc = qzDecompress(&sess, decomp_src + produced, &out_sz,
+                                      decomp_out, &in_sz);
+                    if (rc != QZ_OK) {
+                        QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
+                        goto done;
+                    }
+                }
+
+                consumed = consumed + block_in_len[i];
+                produced = produced + block_out_len[i];
+                /* Because sw would insert 0 to RRT Matrix table every time.
+                 * Have to update the Matrix to Max
+                 */
+                if (SW_only_flag) {
+                    if (qz_sess->sess_params.is_sensitive_mode) {
+                        for (int i = 0; i < LSM_MET_DEPTH; i++) {
+                            qz_sess->RRT.latency_array[i] = LSM_max_avg;
+                            qz_sess->PPT.latency_array[i] = LSM_max_avg;
+                        }
+                    }
+                    qz_sess->PPT.arr_avg = LSM_max_avg;
+                    qz_sess->RRT.arr_avg = LSM_max_avg;
+                }
+            }
+        }
+        (void)gettimeofday(&te, NULL);
+        ts_m = (ts.tv_sec * 1000000) + ts.tv_usec;
+        te_m = (te.tv_sec * 1000000) + te.tv_usec;
+        el_m += te_m - ts_m;
+    }
+
+    sec = (long double)(el_m);
+    sec = sec / 1000000.0;
+    rate = org_src_sz;
+    rate /= 1024;
+    rate *= 8;// Kbits
+
+    rate *= count;
+    rate /= 1024 * 1024; // gigbits
+    rate /= sec;// Gbps
+
+    pthread_mutex_lock(&g_lock_print);
+#ifdef QATZIP_DEBUG
+    QZ_PRINT("[INFO]:RRT Total call: %ld, Total avg: %ld\n",
+             qz_sess->RRT.invoke_counter,
+             qz_sess->RRT.sess_lat_avg);
+    QZ_PRINT("[INFO]:SWT Total call: %ld, Total avg: %ld\n",
+             qz_sess->SWT.invoke_counter,
+             qz_sess->SWT.sess_lat_avg);
+    QZ_PRINT("[INFO]:PPT Total call: %ld, Total avg: %ld\n",
+             qz_sess->PPT.invoke_counter,
+             qz_sess->PPT.sess_lat_avg);
+#endif
+    QZ_PRINT("[INFO] The AVG latency is RRT: %ld, SWT: %ld, PPT: %ld\n",
+             qz_sess->RRT.arr_avg, qz_sess->SWT.arr_avg, qz_sess->PPT.arr_avg);
+    QZ_PRINT("[INFO] invoke counter is RRT: %ld, SWT: %ld, PPT: %ld\n",
+             qz_sess->RRT.invoke_counter, qz_sess->SWT.invoke_counter,
+             qz_sess->PPT.invoke_counter);
+    QZ_PRINT("[INFO] tid=%ld, count=%d, msec=%llu, bytes=%lu, %Lf Gbps",
+             tid, count, el_m, org_src_sz, rate);
+    QZ_PRINT(", input_len=%lu, comp_len=%lu, ratio=%f%%\n",
+             org_src_sz, comp_out_sz,
+             ((double)comp_out_sz / (double)org_src_sz) * 100);
+    pthread_mutex_unlock(&g_lock_print);
+
+done:
+    if (gen_data && !g_perf_svm) {
+        qzFree(src);
+        qzFree(comp_out);
+        qzFree(decomp_out);
+    } else if (g_perf_svm) {
+        free(src);
+        free(comp_out);
+        free(decomp_out);
+    }
+    free(block_in_len);
+    free(block_out_len);
+    (void)qzTeardownSession(&sess);
+    pthread_exit((void *)NULL);
+}
+
 #define STR_INTER(N)    #N
 #define STR(N) STR_INTER(N)
 
@@ -4498,6 +5267,8 @@ done:
     "    -r req_cnt_thrshold   max in-flight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
     "    -P polling            set polling mode, default is periodical polling\n" \
+    "                          when set busy polling mode, it would automaticlly \n"    \
+    "                          enable the LSM(latency sensitive mode) \n"    \
     "    -M svm                set perf mode with file input, default is non\n" \
     "                          svm mode. When set to svm, all memory will\n"    \
     "                          be allocated with malloc instead of qzMalloc\n"  \
@@ -4507,7 +5278,8 @@ done:
     "                          If set common, memory of compress buffer will be allocated through malloc\n" \
     "                          If set pinned, memory of compress buffer will be allocated in huge page, the\n" \
     "                          allocation limit is 2M\n"                        \
-    "    -g, --loglevel        set qatzip loglevel(none|error|warn|info|debug)\n"  \
+    "    -g loglevel           set qatzip loglevel(none|error|warn|info|debug)\n"  \
+    "    -a sensitive_mode     Enable Latency sensitive mode\n" \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -4558,7 +5330,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:g:vh";
+    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:g:d:vha";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -4696,6 +5468,9 @@ int main(int argc, char *argv[])
         case 'v':
             verify = 1;
             break;
+        case 'a':
+            args.is_sensitive_mode = true;
+            break;
         case 'i':
             g_input_file_name = optarg;
             break;
@@ -4753,7 +5528,7 @@ int main(int argc, char *argv[])
         case 'b':
             block_size = GET_LOWER_32BITS(strtol(optarg, &stop, 0));
             if (*stop != '\0' || errno || ((block_size & (block_size - 1)) != 0) ||
-                block_size < 4096 || block_size > 1024 * 1024) {
+                block_size < 1024 || block_size > 1024 * 1024) {
                 QZ_ERROR("Error block size arg: %s, please set it to the power of 2 in range of 4k to 1M.\n",
                          optarg);
                 return -1;
@@ -4784,6 +5559,9 @@ int main(int argc, char *argv[])
                 QZ_ERROR("Error log level: %s\n", optarg);
                 return -1;
             }
+            break;
+        case 'd':
+            LsmMetLenShift = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             break;
         default:
             qzPrintUsageAndExit(argv[0]);
@@ -4863,9 +5641,18 @@ int main(int argc, char *argv[])
         qzThdOps = qzDecompressStreamWithBufferError;
         break;
     case 23:
-        qzThdOps = qzCompressAndDecompressExt;
+        qzThdOps = qzLSMcompressPerf;
         break;
     case 24:
+        qzThdOps = qzLSMdecompressPerf;
+        break;
+    case 25:
+        qzThdOps = qzLSMHeterogeneousPerf;
+        break;
+    case 26:
+        qzThdOps = qzCompressAndDecompressExt;
+        break;
+    case 27:
         qzThdOps = qzTestEndOfStreamDetection;
         break;
     default:
@@ -4883,7 +5670,8 @@ int main(int argc, char *argv[])
 
         input_buf_len = GET_LOWER_32BITS((file_state.st_size > QATZIP_MAX_HW_SZ ?
                                           QATZIP_MAX_HW_SZ : file_state.st_size));
-        if (test == 4 || test == 10 || test == 11 || test == 12 || test == 23) {
+        if (test == 4 || test == 10 || test == 11 || test == 12 || test == 23 ||
+            test == 24 || test == 25 || test == 26) {
             input_buf_len = GET_LOWER_32BITS(file_state.st_size);
         }
         if (compress_buf_type == PINNED_MEM) {
@@ -4968,7 +5756,8 @@ int main(int argc, char *argv[])
 
 #ifndef ENABLE_THREAD_BARRIER
     /*for qzCompressAndDecompress test*/
-    if (test == 4 || test == 18 || test == 23) {
+    if (test == 4 || test == 18 || test == 23 || test == 24 || test == 25 ||
+        test == 26) {
         ret = pthread_mutex_lock(&g_cond_mutex);
         if (ret != 0) {
             QZ_ERROR("Failure to get Mutex Lock, status = %d\n", ret);

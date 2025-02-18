@@ -191,17 +191,17 @@ const char *getLogLevelString(QzLogLevel_T level)
 {
     switch (level) {
     case LOG_ERROR:
-        return "ERROR";
+        return "Error";
     case LOG_WARNING:
-        return "WARNING";
+        return "Warning";
     case LOG_INFO:
-        return "INFO";
+        return "Info";
     case LOG_DEBUG1:
-        return "DEBUG";
+        return "Debug";
     case LOG_DEBUG2:
-        return "TEST";
+        return "Test";
     case LOG_DEBUG3:
-        return "MEM";
+        return "Memory";
     default:
         return "UNKNOWN";
     }
@@ -221,7 +221,7 @@ void logMessage(QzLogLevel_T level, const char *file, int line,
 
     switch (level) {
     case LOG_NONE:
-        output = stderr;
+        output = stdout;
         break;
     case LOG_ERROR:
     case LOG_WARNING:
@@ -251,6 +251,15 @@ void initDebugLock(void)
     pthread_mutex_init(&g_qat_thread.comp_lock, NULL);
     pthread_mutex_init(&g_qat_thread.decomp_lock, NULL);
 }
+
+/* LSM */
+/* Feature TODO
+ * Need to expose those global variable to API level in future
+ * it would help custom to turning Lsm mode performance
+ * 'LsmSwMetSeed' is the empirical mean of sw latency
+ */
+unsigned int LsmMetLenShift = 6;
+unsigned int LsmSwMetSeed = 1000;
 
 static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
                                 QzSessionParamsInternal_T *params)
@@ -345,6 +354,14 @@ int qzSetupSessionInternal(QzSession_T *sess)
                               &qz_sess->sess_params);
     if (rc != QZ_OK) {
         return rc;
+    }
+
+    /* LSM setup */
+    if (qz_sess->sess_params.is_sensitive_mode == true) {
+        metrixReset(&qz_sess->RRT);
+        metrixReset(&qz_sess->PPT);
+        metrixReset(&qz_sess->SWT);
+        qz_sess->SWT.arr_avg = LsmSwMetSeed;
     }
 
     qz_sess->inst_hint = -1;
@@ -1535,4 +1552,66 @@ unsigned char getDeflateEndOfStream(QzSess_T *qz_sess)
         return data->end_of_stream;
     }
     return 0;
+}
+
+inline void metrixReset(LatencyMetrix_T *m)
+{
+    if (m == NULL) {
+        return;
+    }
+    if (m->latency_array == NULL) {
+        m->latency_array = calloc(LSM_MET_DEPTH, sizeof(*(m->latency_array)));
+    }
+
+    for (int i = 0; i < LSM_MET_DEPTH; i++) {
+        m->latency_array[i] = 0;
+    }
+    m->arr_total = 0;
+    m->arr_avg = 0;
+    m->arr_idx = 0;
+#ifdef QATZIP_DEBUG
+    m->invoke_counter = 0;
+    m->sess_lat_total = 0;
+    m->sess_lat_avg = 0;
+#endif
+}
+
+inline void metrixUpdate(LatencyMetrix_T *m, unsigned long val)
+{
+    if (m == NULL) {
+        return;
+    }
+
+    m->arr_total -= m->latency_array[m->arr_idx];
+    m->latency_array[m->arr_idx] = val;
+    m->arr_total += m->latency_array[m->arr_idx];
+    m->arr_avg = m->arr_total >> LsmMetLenShift;
+
+    if (++m->arr_idx >= LSM_MET_DEPTH) {
+        m->arr_idx = 0;
+    }
+
+    if (val != 0) {
+        m->invoke_counter++;
+    }
+#ifdef QATZIP_DEBUG
+    m->sess_lat_total += val;
+
+    if (m->invoke_counter != 0) {
+        m->sess_lat_avg = (m->sess_lat_total) / (m->invoke_counter);
+    }
+
+    if (val < m->min_latency) {
+        m->min_latency = val;
+        m->min_cnt = m->invoke_counter;
+    }
+    if (val > m->min_latency) {
+        m->max_latency = val;
+        m->max_cnt = m->invoke_counter;
+    }
+#endif
+
+    QZ_INFO("The latency for request %lu is %lu, avg is %lu\n", m->arr_idx, val,
+            m->arr_avg);
+    return;
 }

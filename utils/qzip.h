@@ -62,6 +62,7 @@
 #include <pthread.h>
 #include <zlib.h>
 #include <libgen.h>
+#include <qatzip_internal.h>
 
 
 /* qzip version */
@@ -171,6 +172,10 @@
 
 #define QZIP_GET_LOWER_32BITS(v)  ((v) & 0xFFFFFFFF)
 
+/* Read file Buffer, Larger buffer to reduce I/O times */
+#define SRC_BUFF_LEN         (512 * 1024 * 1024)
+extern unsigned int block_buff_len;
+
 typedef enum QzSuffix_E {
     E_SUFFIX_GZ,
     E_SUFFIX_7Z,
@@ -184,8 +189,6 @@ typedef enum QzSuffixCheckStatus_E {
     E_CHECK_SUFFIX_UNSUPPORT,
     E_CHECK_SUFFIX_FORMAT_UNMATCH
 } QzSuffixCheckStatus_T;
-
-#define SRC_BUFF_LEN         (512 * 1024 * 1024)
 
 typedef enum QzipDataFormat_E {
     QZIP_DEFLATE_4B = 0,
@@ -215,6 +218,7 @@ typedef struct QzipParams_S {
     unsigned int recursive_mode;
     unsigned int req_cnt_thrshold;
     char *output_filename;
+    unsigned int is_sensitive_mode;
 } QzipParams_T;
 
 #define QZ7Z_PROPERTY_ID_INTEL7Z_1001   ((QZ7Z_DEVELOP_PREFIX << 56) | \
