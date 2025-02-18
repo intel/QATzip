@@ -73,6 +73,11 @@ contained in the file `LICENSE.GPL` within the `config_file` folder.
   platforms that have acceleration devices and non-accelerated platforms.
 * Provide streaming interface of compression and decompression to achieve better compression
   ratio and throughput for data sets that are submitted piecemeal.
+* Provide Async interface of compression and decompression to achieve lower latency and
+  higher throughput. The async API holds a significant advantage when it comes to compressing
+  and decompressing smaller data packets(below 64KB). By utilizing persistent polling threads
+  and an event callback mechanism, it allows for higher device utilization, thereby increasing
+  throughput and reducing latency.
 * 'qzip' utility supports compression from regular file, pipeline and block device.
 * For QATzip GZIP\* format, try hardware decompression first before switching to software decompression.
 * Enable adaptive polling mechanism to save CPU usage in stress mode.

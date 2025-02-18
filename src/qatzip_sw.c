@@ -815,8 +815,8 @@ int decompInSWFallback(int i, int j, QzSession_T *sess,
     }
 
     if (qz_sess->single_thread) {
-        QZ_ERROR("The instance %d fallback to sw, single_thread, back to API level fallback!\n",
-                 i);
+        QZ_INFO("The instance %d fallback to sw, single_thread, back to API level fallback!\n",
+                i);
         sess->thd_sess_stat = QZ_FAIL;
         return QZ_FAIL;
     }
@@ -909,10 +909,10 @@ int compLSMFallback(QzSession_T *sess, const unsigned char *src,
                     unsigned int *dest_len, unsigned int last)
 {
     int rc;
-    unsigned long s_time_stamp, e_time_stamp;
+    unsigned long start_time_stamp, end_time_stamp;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
-    s_time_stamp = rdtsc();
+    start_time_stamp = rdtsc();
     /* sw fallback here */
     rc = qzSWCompress(sess, src, src_len, dest, dest_len, last);
 
@@ -921,15 +921,15 @@ int compLSMFallback(QzSession_T *sess, const unsigned char *src,
         return QZ_FAIL;
     }
 
-    e_time_stamp = rdtsc();
+    end_time_stamp = rdtsc();
     /* The reduction for sw latency here is for offloading more request to
      * SW when QAT devcie is busy, maybe we could optimize this value in
      * the future.
      */
-    metrixUpdate(&qz_sess->SWT, (e_time_stamp - s_time_stamp) >> 2);
+    metrixUpdate(&qz_sess->SWT, (end_time_stamp - start_time_stamp) >> 2);
     metrixUpdate(&qz_sess->RRT, 0);
     metrixUpdate(&qz_sess->PPT, 0);
-    QZ_DEBUG("LSM mode, insert SWT %ld\n", (e_time_stamp - s_time_stamp));
+    QZ_DEBUG("LSM mode, insert SWT %ld\n", (end_time_stamp - start_time_stamp));
 
     return QZ_OK;
 }
@@ -946,10 +946,10 @@ int decompLSMFallback(QzSession_T *sess, const unsigned char *src,
                       unsigned int *dest_len)
 {
     int rc;
-    unsigned long s_time_stamp, e_time_stamp;
+    unsigned long start_time_stamp, end_time_stamp;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
-    s_time_stamp = rdtsc();
+    start_time_stamp = rdtsc();
     /* sw fallback here */
     rc = qzSWDecompressMulti(sess, src, src_len, dest, dest_len);
 
@@ -958,15 +958,59 @@ int decompLSMFallback(QzSession_T *sess, const unsigned char *src,
         return QZ_FAIL;
     }
 
-    e_time_stamp = rdtsc();
+    end_time_stamp = rdtsc();
     /* The reduction for sw latency here is for offloading more request to
      * SW when QAT devcie is busy, maybe we could optimize this value in
      * the future.
      */
-    metrixUpdate(&qz_sess->SWT, (e_time_stamp - s_time_stamp) >> 2);
+    metrixUpdate(&qz_sess->SWT, (end_time_stamp - start_time_stamp) >> 2);
     metrixUpdate(&qz_sess->RRT, 0);
     metrixUpdate(&qz_sess->PPT, 0);
-    QZ_DEBUG("LSM mode, insert SWT %ld\n", (e_time_stamp - s_time_stamp));
+    QZ_DEBUG("LSM mode, insert SWT %ld\n", (end_time_stamp - start_time_stamp));
+    return QZ_OK;
+}
 
+int AsyncDecompOutSWFallback(int i, int j, QzSession_T *sess,
+                             QzAsyncReq_T *req)
+{
+    int rc;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
+    DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
+    unsigned int src_send_sz =
+        g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
+    unsigned int dest_receive_sz =
+        g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes;
+    /*  pinned buffer ptr already strip header, need retrieve.
+    *   use original src_ptr and consumed len to get src_ptr for this request.
+    */
+    const unsigned char *src_ptr = req->src + req->req_in_len;
+    src_send_sz += (outputHeaderSz(data_fmt) + outputFooterSz(data_fmt)) ;
+
+    if (!qz_sess->sess_params.sw_backup) {
+        QZ_DEBUG("The instance %d heartbeat is failure, Don't enable sw fallback, decompressOut fatal ERROR!\n",
+                 i);
+        return QZ_FAIL;
+    }
+
+    QZ_DEBUG("The request get dummy empty respond, offload to software!\n");
+    QZ_DEBUG("SW DecompOut src_ptr %p, dest_ptr %p, Sending %u bytes, receive %u bytes, seq = %ld\n",
+             src_ptr, req->dest, src_send_sz, dest_receive_sz,
+             g_process.qz_inst[i].stream[j].seq);
+    rc = qzSWDecompress(sess,
+                        src_ptr,
+                        &src_send_sz,
+                        req->dest,
+                        &dest_receive_sz);
+    if (QZ_OK != rc) {
+        QZ_ERROR("SW deCompOut fallback failure! compress fatal ERROR!\n");
+        return QZ_FAIL;
+    }
+
+    /* update qz_sess info, Don't need clean dest buffer */
+    decompOutErrorDestBufferCleanUp(i, j);
+    req->dest += dest_receive_sz;
+    req->req_in_len += src_send_sz;
+    req->req_out_len += dest_receive_sz;
+    req->qzResults->dest_len -= dest_receive_sz;
     return QZ_OK;
 }
