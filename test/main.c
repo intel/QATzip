@@ -1303,6 +1303,292 @@ end:
     pthread_exit((void *)NULL);
 }
 
+void *qzTestStopDecompressionOnStreamEnd(void *arg)
+{
+    /*
+    1. create  a random  block of data
+    2. compress it in multiple streams of size same as HW buffer size(64 K)
+    3. send the entire compressed blocks for decompression.
+    4. Since the stop_decompression_stream_end is set , the decompress function will process single block.
+    5. check whether only first block is decompressed.
+    6. Size of the decompressed data should be same as HW buffer size i.e chunk/block size.
+    7. close the session
+    */
+    int rc;
+    QzSession_T sess = {0};
+    uint8_t *orig_src, *comp_src, *decomp_src;
+    size_t orig_sz, src_sz, comp_sz, decomp_sz;
+    size_t org_chunk_sz, comp_sz_partial;
+    QzSessionParamsDeflateExt_T params = {{{0}}};
+    unsigned char *endofstream = (unsigned char *) malloc(sizeof(char));
+    orig_sz = comp_sz = decomp_sz = 512 * 1024; /*512K*/
+    orig_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    comp_src = qzMalloc(comp_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+
+    if (orig_src == NULL ||
+        comp_src == NULL ||
+        decomp_src == NULL) {
+        QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
+        goto done;
+    }
+
+    rc = qzInit(&sess, 0);
+    if (QZ_INIT_HW_FAIL(rc)) {
+        QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
+        goto done;
+    }
+    rc = qzGetDefaultsDeflateExt(&params);
+    if (rc < 0) {
+        QZ_ERROR("Get defaults params error with error: %d\n",
+                 rc);
+        goto done;
+    }
+    switch (((TestArg_T *)arg)->test_format) {
+    case TEST_GZIP:
+        params.deflate_params.data_fmt = QZ_DEFLATE_GZIP;
+        break;
+    case TEST_GZIPEXT:
+        params.deflate_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        break;
+    case TEST_ZLIB:
+        params.deflate_params.data_fmt = QZ_DEFLATE_RAW;
+        params.zlib_format = 1;
+        break;
+    default:
+        QZ_ERROR("Unsupported data format\n");
+        goto done;
+    }
+    params.deflate_params.huffman_hdr = ((TestArg_T *)arg)->huffman_hdr;
+    params.deflate_params.common_params.comp_lvl = ((TestArg_T *)arg)->comp_lvl;
+    params.deflate_params.common_params.comp_algorithm = QZ_DEFLATE;
+    params.deflate_params.common_params.hw_buff_sz = QZ_HW_BUFF_SZ; // 64K
+    params.deflate_params.common_params.direction = QZ_DIR_BOTH;
+    params.deflate_params.common_params.polling_mode = QZ_BUSY_POLLING;
+    params.deflate_params.common_params.req_cnt_thrshold = ((
+                TestArg_T *)arg)->req_cnt_thrshold;
+    params.deflate_params.common_params.max_forks = ((TestArg_T *)arg)->max_forks;
+    params.deflate_params.common_params.sw_backup = 0;
+    params.deflate_params.common_params.strm_buff_sz = QZ_STRM_BUFF_SZ_DEFAULT;
+    params.stop_decompression_stream_end = 1;
+
+    rc = qzSetupSessionDeflateExt(&sess, &params);
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
+        QZ_ERROR("qzSetupSessionDeflateExt for testing %s error, return: %d\n",
+                 __func__, rc);
+        goto done;
+    }
+
+    genRandomData(orig_src, orig_sz);
+
+
+    /*do compress Data*/
+    src_sz = orig_sz;
+    org_chunk_sz =  params.deflate_params.common_params.hw_buff_sz;
+    rc = qzCompress(&sess, orig_src, (uint32_t *)(&src_sz), comp_src,
+                    (uint32_t *)(&comp_sz), 1);
+    if (rc != QZ_OK || src_sz != orig_sz) {
+        QZ_ERROR("ERROR: qzTestEndOfStreamDetectionCompression FAILED with return value: %d\n",
+                 rc);
+        QZ_ERROR("ERROR: qzTestEndOfStreamDetection After Compression src_sz: %lu != org_src_sz: %lu \n!",
+                 src_sz,
+                 orig_sz);
+        goto done;
+    }
+    QZ_DEBUG("qzTestStopDecompressionOnStreamEndZlib compress  src_sz : %lu comp_sz %lu\n",
+             src_sz, comp_sz);
+    /*do decompress Data*/
+    rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz), decomp_src,
+                      (uint32_t *)(&decomp_sz));
+    if (rc != QZ_OK) {
+        QZ_ERROR("FAILED: Decompression success with Error\n");
+        goto done;
+    }
+    if (decomp_sz != org_chunk_sz) {
+        QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_chunk_sz: %lu \n!",
+                 decomp_sz, org_chunk_sz);
+        goto done;
+    }
+    rc = qzGetDeflateEndOfStream(&sess, endofstream);
+    QZ_DEBUG("qzGetDeflateEndOfStream return: %d\n", *endofstream);
+    if (*endofstream != 1) {
+        QZ_ERROR("ERROR: End of stream not detected \n!");
+        goto done;
+    }
+    QZ_INFO("Decompress stop at first stream end, decomp_sz %lu\n", decomp_sz);
+    /*send only partial compressed block stream for decompression.
+    Checksum check will fail and return QZ_DATA_ERROR for zlib and gzip_ext, for gzip partial stream will give QZ_FAIL.
+    Also endofstream would not be set.
+    */
+    memset(decomp_src, 0, decomp_sz);
+    comp_sz_partial = 1100;
+    rc = qzDecompress(&sess, comp_src, (uint32_t *)(&comp_sz_partial), decomp_src,
+                      (uint32_t *)(&decomp_sz));
+    if (rc == QZ_OK) {
+        QZ_ERROR("FAILED: Decompression should return error for partial  stream\n");
+    }
+    rc = qzGetDeflateEndOfStream(&sess, endofstream);
+    if (*endofstream != 0) {
+        QZ_ERROR("ERROR: incorrect end of stream detected for Partial stream \n!");
+    }
+    rc = 0;
+done:
+    qzFree(orig_src);
+    qzFree(comp_src);
+    qzFree(decomp_src);
+    (void)qzTeardownSession(&sess);
+    pthread_exit((void *)NULL);
+}
+
+void *qzTestStopDecompressionOnStreamEndMultiStream(void *arg)
+{
+    /*
+    1. compress first block of size 4k.
+    2. compress second block of size 4k.
+    3. send the entire compressed 8k blocks for decompression.
+    4. Since the stop_decompression_stream_end is set , the decompress function will process single block.
+    5. check whether only first block is decompressed.
+    6. Size of the decompressed data should be same as block size(4k).
+    7. close the session
+    */
+    int rc;
+    QzSession_T sess = {0};
+    uint8_t *orig_src, *comp_src, *decomp_src, *multicomp_src;
+    size_t orig_sz, src_sz, comp_sz, decomp_sz, multicomp_sz;
+    QzSessionParamsDeflateExt_T params = {{{0}}};
+    unsigned char *endofstream = (unsigned char *) malloc(sizeof(char));
+    orig_sz = comp_sz = 4 * 1024; /*4K*/
+    multicomp_sz = decomp_sz = 8 * 1024; /*8K*/
+    orig_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    comp_src = qzMalloc(comp_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    decomp_src = qzMalloc(orig_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    multicomp_src = qzMalloc(multicomp_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+
+    if (orig_src == NULL ||
+        comp_src == NULL ||
+        decomp_src == NULL) {
+        QZ_ERROR("Malloc Memory for testing %s error\n", __func__);
+        goto done;
+    }
+
+    rc = qzInit(&sess, 0);
+    if (QZ_INIT_HW_FAIL(rc)) {
+        QZ_ERROR("qzInit for testing %s error, return: %d\n", __func__, rc);
+        goto done;
+    }
+    rc = qzGetDefaultsDeflateExt(&params);
+    if (rc < 0) {
+        QZ_ERROR("Get defaults params error with error: %d\n",
+                 rc);
+        goto done;
+    }
+    switch (((TestArg_T *)arg)->test_format) {
+    case TEST_DEFLATE:
+        params.deflate_params.data_fmt = QZ_DEFLATE_RAW;
+        break;
+    case TEST_GZIP:
+        params.deflate_params.data_fmt = QZ_DEFLATE_GZIP;
+        break;
+    case TEST_GZIPEXT:
+        params.deflate_params.data_fmt = QZ_DEFLATE_GZIP_EXT;
+        break;
+    case TEST_ZLIB:
+        params.deflate_params.data_fmt = QZ_DEFLATE_RAW;
+        params.zlib_format = 1;
+        break;
+    default:
+        QZ_ERROR("Unsupported data format\n");
+        goto done;
+    }
+    params.deflate_params.huffman_hdr = ((TestArg_T *)arg)->huffman_hdr;
+    params.deflate_params.common_params.comp_lvl = ((TestArg_T *)arg)->comp_lvl;
+    params.deflate_params.common_params.comp_algorithm = QZ_DEFLATE;
+    params.deflate_params.common_params.hw_buff_sz = QZ_HW_BUFF_SZ; // 64K
+    params.deflate_params.common_params.direction = QZ_DIR_BOTH;
+    params.deflate_params.common_params.polling_mode = QZ_BUSY_POLLING;
+    params.deflate_params.common_params.req_cnt_thrshold = ((
+                TestArg_T *)arg)->req_cnt_thrshold;
+    params.deflate_params.common_params.max_forks = ((TestArg_T *)arg)->max_forks;
+    params.deflate_params.common_params.sw_backup = 0;
+    params.deflate_params.common_params.strm_buff_sz = QZ_STRM_BUFF_SZ_DEFAULT;
+    params.stop_decompression_stream_end = 1;
+
+    rc = qzSetupSessionDeflateExt(&sess, &params);
+    if (QZ_SETUP_SESSION_FAIL(rc)) {
+        QZ_ERROR("qzSetupSessionDeflateExt for testing %s error, return: %d\n",
+                 __func__, rc);
+        goto done;
+    }
+
+    genRandomData(orig_src, orig_sz);
+
+
+    /*do compress Data in 2 streams*/
+    src_sz = orig_sz;
+    rc = qzCompress(&sess, orig_src, (uint32_t *)(&src_sz), comp_src,
+                    (uint32_t *)(&comp_sz), 1);
+    if (rc != QZ_OK || src_sz != orig_sz) {
+        QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream FAILED with return value: %d\n",
+                 rc);
+        QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream After Compression src_sz: %lu != org_src_sz: %lu \n!",
+                 src_sz,
+                 orig_sz);
+        goto done;
+    }
+    QZ_DEBUG("qzTestStopDecompressionOnStreamEndMultiStream compress1  src_sz : %lu compressed size: %lu\n",
+             src_sz, comp_sz);
+    memset(multicomp_src, 0, multicomp_sz);
+    // copy the first compressed stream in compressed buffer.
+    memcpy(multicomp_src, comp_src, comp_sz);
+    multicomp_sz = comp_sz;
+    //clear the comp_src and reset comp_sz and again compress the data
+    comp_sz = orig_sz;
+    memset(comp_src, 0, comp_sz);
+    rc = qzCompress(&sess, orig_src, (uint32_t *)(&src_sz), comp_src,
+                    (uint32_t *)(&comp_sz), 1);
+    if (rc != QZ_OK || src_sz != orig_sz) {
+        QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream FAILED with return value: %d\n",
+                 rc);
+        QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream After Compression src_sz: %lu != orig_sz: %lu \n!",
+                 src_sz,
+                 orig_sz);
+        goto done;
+    }
+    QZ_DEBUG("qzTestStopDecompressionOnStreamEndZlib compress2  src_sz : %lu compressed size %lu\n",
+             src_sz, comp_sz);
+    // copy the first compressed stream in compressed buffer.
+    memcpy(multicomp_src + multicomp_sz, comp_src, comp_sz);
+    multicomp_sz += comp_sz;
+    /*do decompress Data*/
+    QZ_DEBUG("qzTestStopDecompressionOnStreamEndZlib decompress  multicomp_sz : %lu \n",
+             multicomp_sz);
+    rc = qzDecompress(&sess, multicomp_src, (uint32_t *)(&multicomp_sz), decomp_src,
+                      (uint32_t *)(&decomp_sz));
+    if (rc != QZ_OK) {
+        QZ_ERROR("FAILED: Decompression success with Error\n");
+        goto done;
+    }
+    if (decomp_sz != src_sz) {
+        QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != src_sz: %lu \n!",
+                 decomp_sz, src_sz);
+        goto done;
+    }
+    rc = qzGetDeflateEndOfStream(&sess, endofstream);
+    QZ_DEBUG("qzGetDeflateEndOfStream return: %d\n", *endofstream);
+    if (*endofstream != 1) {
+        QZ_ERROR("ERROR: End of stream not detected \n!");
+        goto done;
+    }
+    rc = 0;
+done:
+    qzFree(orig_src);
+    qzFree(comp_src);
+    qzFree(decomp_src);
+    qzFree(multicomp_src);
+    (void)qzTeardownSession(&sess);
+    pthread_exit((void *)NULL);
+}
+
 void *qzTestEndOfStreamDetection(void *arg)
 {
     /*
@@ -6470,6 +6756,12 @@ int main(int argc, char *argv[])
         break;
     case 29:
         qzThdOps = qzAsyncPerfCompressAndDecompress;
+        break;
+    case 30:
+        qzThdOps = qzTestStopDecompressionOnStreamEnd;
+        break;
+    case 31:
+        qzThdOps = qzTestStopDecompressionOnStreamEndMultiStream;
         break;
     default:
         goto done;

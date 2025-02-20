@@ -2239,13 +2239,10 @@ static void *doDecompressIn(void *in)
         /*stop_decompression_stream_end is valid for gzip and gzip ext where multiple decompress requests can be submitted.
         Given we can identify streams/chunk with header and footer. Zlib and deflate raw always takes decompression as a single job
         as we cannot identify the stream boundries.Job size can be as big as QAT HW buffer*/
-
         if (qz_sess->stop_submitting ||
-            (getDeflateEndOfStream(qz_sess) == 1 &&
-             qz_sess->sess_params.stop_decompression_stream_end == 1)) {
+            qz_sess->sess_params.stop_decompression_stream_end == 1) {
             remaining = 0;
         }
-
         QZ_DEBUG("src_ptr is %p, remaining is %d\n", src_ptr, remaining);
         if (0 == remaining) {
             done = 1;
