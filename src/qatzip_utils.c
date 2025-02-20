@@ -1494,7 +1494,7 @@ int decompOutCheckSum(int i, int j, QzSession_T *sess,
             StdZlibF_T *zlibFooter = (StdZlibF_T *)(src_ptr + resl->consumed);
             g_process.qz_inst[i].stream[j].checksum = zlibFooter->adler32;
             if (qz_sess->single_thread &&
-                (qz_sess->sess_params.stop_decompression_stream_end == 1)) {
+                (qz_sess->sess_params.stop_decompression_stream_end == 0)) {
                 qz_sess->last_submitted = 0;
             }
             QZ_DEBUG("src_ptr  %p  qz_sess->qz_in_len %lu data checksum %x\n",
