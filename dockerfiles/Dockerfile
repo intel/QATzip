@@ -39,7 +39,7 @@ ARG UBUNTU_BASE=ubuntu:22.04
 FROM ${UBUNTU_BASE} AS builder
 
 ARG QATLIB_VERSION="24.02.0"
-ARG QATZIP_VERSION="v1.2.0"
+ARG QATZIP_VERSION="v1.3.0"
 ARG QATZSTD_PLUG_VERSION="v0.2.0"
 ARG ZSTD_VERSION="v1.5.5"
 ARG GID
@@ -126,6 +126,9 @@ RUN make QAT_SUPPORT=1 SEQPRODLIB=/QAT-ZSTD-Plugin/src PREFIX=/zstd_with_plugin/
 RUN apt-get purge -y linux-libc-dev
 
 FROM ${UBUNTU_BASE}
+
+RUN apt-get update && \
+    apt-get upgrade -y
 
 COPY --from=builder /usr/local/lib/libqat.so.4.2.0 /usr/lib/
 COPY --from=builder /usr/local/lib/libusdm.so.0.1.0 /usr/lib/
