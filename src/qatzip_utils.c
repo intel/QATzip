@@ -256,10 +256,10 @@ void initDebugLock(void)
 
 /* LSM TODO:
  * expose global variabled (mention variable name) to API Level to tune
- * LSM Mode Performance LsmSwMetSeed is the emprical mean of sw Latence
+ * LSM Mode Performance lsm_sw_met_seed is the emprical mean of sw Latence
  */
-unsigned int LsmMetLenShift = 6;
-unsigned int LsmSwMetSeed = 1000;
+unsigned int lsm_met_len_shift = 6;
+unsigned int lsm_sw_met_seed = 1000;
 
 static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
                                 QzSessionParamsInternal_T *params)
@@ -361,7 +361,7 @@ int qzSetupSessionInternal(QzSession_T *sess)
         metrixReset(&qz_sess->RRT);
         metrixReset(&qz_sess->PPT);
         metrixReset(&qz_sess->SWT);
-        qz_sess->SWT.arr_avg = LsmSwMetSeed;
+        qz_sess->SWT.arr_avg = lsm_sw_met_seed;
     }
 
     qz_sess->inst_hint = -1;
@@ -1584,7 +1584,7 @@ inline void metrixUpdate(LatencyMetrix_T *m, unsigned long val)
     m->arr_total -= m->latency_array[m->arr_idx];
     m->latency_array[m->arr_idx] = val;
     m->arr_total += m->latency_array[m->arr_idx];
-    m->arr_avg = m->arr_total >> LsmMetLenShift;
+    m->arr_avg = m->arr_total >> lsm_met_len_shift;
 
     if (++m->arr_idx >= LSM_MET_DEPTH) {
         m->arr_idx = 0;
