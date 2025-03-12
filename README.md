@@ -73,11 +73,13 @@ contained in the file `LICENSE.GPL` within the `config_file` folder.
   platforms that have acceleration devices and non-accelerated platforms.
 * Provide streaming interface of compression and decompression to achieve better compression
   ratio and throughput for data sets that are submitted piecemeal.
-* Provide Async interface of compression and decompression to achieve lower latency and
-  higher throughput. The async API holds a significant advantage when it comes to compressing
-  and decompressing smaller data packets(below 64KB). By utilizing persistent polling threads
-  and an event callback mechanism, it allows for higher device utilization, thereby increasing
-  throughput and reducing latency.
+* Provide Async interface of compression and decompression in library to achieve lower latency 
+  and higher throughput(qzip utility don't suppport this feature). It's beneficial for fewer
+  instances or smaller data packets(below 64KB).
+* Provide Latency sensitive mode, which should be utilized when the device is under significant
+  load. This mode enables QATzip to offload part of the workload to the CPU, taking advantage
+  of Intel's multi-core processors to achieve improved throughput and reduced latency under
+  high-stress conditions.
 * 'qzip' utility supports compression from regular file, pipeline and block device.
 * For QATzip GZIP\* format, try hardware decompression first before switching to software decompression.
 * Enable adaptive polling mechanism to save CPU usage in stress mode.
@@ -164,8 +166,12 @@ This release was validated on the following:
 * Stream APIs only support "DEFLATE_GZIP", "DEFLATE_GZIP_EXT", "DEFLATE_RAW" for compression
   and "DEFLATE_GZIP", "DEFLATE_GZIP_EXT" for decompression now.
 * DEFLATE_RAW hardware decompression is supported, if want to offload to HW, then the input data must be single complete deflate block and it's uncompressed size have to smaller than the HW buffer size, otherwise, it would fallback to sw(The API's input dest len have to set down by the customer). If input data is multi-blocks and software backup is enabled, then it would fallback to sw.
-* DEFLATE_ZLIB hardware compresssion and  decompression is supported, if want to offload to HW, then the input data must be single complete deflate block and it's compressed size have to smaller or equal than the HW buffer size, otherwise, it would fallback to sw(The API's input dest len have to set down by the customer). If input data is multi-blocks then only first complete block will be decompressed by HW and user need to call decompress with next block.
-
+* DEFLATE_ZLIB hardware compression and  decompression is supported, if want to offload to HW, then the input data must be single complete deflate block and it's compressed size have to smaller or equal than the HW buffer size, otherwise, it would fallback to sw(The API's input dest len have to set down by the customer). If input data is multi-blocks then only first complete block will be decompressed by HW and user need to call decompress with next block.
+* When Async API is used, instance over-subscription is currently unsupported. This implies that the number of threads should ideally not surpass
+  the number of instances. Each thread maintains its own session and instance. Otherwise, any additional threads will offload the workload to
+  software
+* Latency sensitive mode is not advisable to enable in low-stress scenarios or for smaller data workloads (below 8KB), as QATzip may
+  experience decreased throughput.
 
 ## Installation Instructions
 
@@ -336,7 +342,7 @@ Known issues relating to the QATzip are described in this section.
 |----------|:-------------
 | Reference   | QATAPP-33809 |
 | Description | If a multi-threaded application using standalone mode (no qatmgr) calls icp_sal_userStart() in one thread and icp_sal_userStop() in a different thread, errors like "Incorrect thread xxx for section SSL_INT_X. Expected yyy" will be seen.  |
-| Implication | Standalone mode is typically used when running in a container and this error has been seen there. If icp_sal_userStop() is called in a separate thread, after this error is seen some resources, e.g. memory, will not be freed. As long as the process finishes after calling icp_sal_userStop(), the resources will be freed by the OS. However, if the process doesn't end and icp_sal_userStart() is called again, the behaviour will be undefined.|
+| Implication | Standalone mode is typically used when running in a container and this error has been seen there. If icp_sal_userStop() is called in a separate thread, after this error is seen some resources, e.g. memory, will not be freed. As long as the process finishes after calling icp_sal_userStop(), the resources will be freed by the OS. However, if the process doesn't end and icp_sal_userStart() is called again, the behavior will be undefined.|
 | Resolution | If running in standalone mode in a multi-threaded process, it's recommended to call icp_sal_userStart() and icp_sal_userStop() in the same thread to avoid seeing these errors.|
 | Affected OS | Linux |
 | Driver/Module | CPM-IA - General |
@@ -357,7 +363,7 @@ from course of performance, course of dealing, or usage in trade.
 This document contains information on products, services and/or processes in
 development.  All information provided here is subject to change without
 notice. Contact your Intel&reg; representative to obtain the latest forecast
-, schedule, specifications and roadmaps.
+, schedule, specifications and road maps.
 
 The products and services described may contain defects or errors known as
 errata which may cause deviations from published specifications. Current

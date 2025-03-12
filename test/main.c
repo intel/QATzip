@@ -201,8 +201,7 @@ static struct timeval g_timer_start;
 extern void dumpAllCounters(void);
 static int test_thread_safe_flag = 0;
 extern processData_T g_process;
-extern unsigned int LsmMetLenShift;
-extern unsigned int LsmSwMetSeed;
+extern unsigned int lsm_met_len_shift;
 
 // Async test mode global variable
 extern int async_queue_size;
@@ -1432,6 +1431,8 @@ void *qzTestStopDecompressionOnStreamEnd(void *arg)
         QZ_ERROR("ERROR: incorrect end of stream detected for Partial stream \n!");
     }
     rc = 0;
+    QZ_PRINT("qzTestStopDecompressionOnStreamEnd : PASS\n");
+
 done:
     qzFree(orig_src);
     qzFree(comp_src);
@@ -2626,7 +2627,7 @@ void *qzCompressStreamAndDecompress(void *arg)
         dumpOutputData(decomp_sz, decomp_src, "decomp_out");
         goto exit;
     }
-    QZ_DEBUG("qzDecompress Test PASS\n");
+    QZ_PRINT("qzCompressStreamAndDecompress Test PASS\n");
 
     QZ_DEBUG("*** Decompress Stream Test 1 ***\n");
     comp_sz = produced;
@@ -2672,7 +2673,7 @@ void *qzCompressStreamAndDecompress(void *arg)
         dumpInputData(orig_sz, decomp_src);
         goto exit;
     }
-    QZ_DEBUG("*** Decompress Stream Test 1 PASS ***\n");
+    QZ_PRINT("*** Decompress Stream Test 1 PASS ***\n");
 
     if (comp_params.data_fmt != QZ_DEFLATE_GZIP_EXT) {
         goto test_2_end;
@@ -2721,7 +2722,7 @@ void *qzCompressStreamAndDecompress(void *arg)
 
         goto exit;
     }
-    QZ_DEBUG("*** Decompress Stream Test 2 PASS ***\n");
+    QZ_PRINT("*** Decompress Stream Test 2 PASS ***\n");
 test_2_end:
 
     if (comp_params.data_fmt == QZ_DEFLATE_GZIP_EXT) {
@@ -2773,7 +2774,7 @@ test_2_end:
         dumpInputData(orig_sz, decomp_src);
         goto exit;
     }
-    QZ_DEBUG("*** Decompress Stream Test 3 PASS***\n");
+    QZ_PRINT("*** Decompress Stream Test 3 PASS***\n");
 test_3_end:
 
     QZ_DEBUG("*** Decompress Stream Test 4 ***\n");
@@ -2822,7 +2823,7 @@ test_3_end:
         dumpInputData(orig_sz, decomp_src);
         goto exit;
     }
-    QZ_DEBUG("*** Decompress Stream Test 4 PASS***\n");
+    QZ_PRINT("*** Decompress Stream Test 4 PASS***\n");
 
     QZ_PRINT("Compress Stream and Decompress function test: PASS\n");
 
@@ -3445,7 +3446,7 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
         dumpOutputData(decomp_sz, decomp_src, "decomp_out");
         goto exit;
     }
-    QZ_DEBUG("qzDecompress Test PASS\n");
+    QZ_PRINT("qzDecompress Test PASS\n");
 
     QZ_DEBUG("*** Decompress Stream Test ***\n");
     comp_sz = produced;
@@ -6657,7 +6658,7 @@ int main(int argc, char *argv[])
             }
             break;
         case 'd':
-            LsmMetLenShift = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+            lsm_met_len_shift = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             break;
         default:
             qzPrintUsageAndExit(argv[0]);
