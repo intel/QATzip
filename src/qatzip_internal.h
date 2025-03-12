@@ -302,8 +302,8 @@ typedef struct QzSessionParamsInternal_S {
     unsigned char zlib_format;
 } QzSessionParamsInternal_T;
 
-/* LsmMetLenShift is global variable */
-#define LSM_MET_DEPTH (1<<(LsmMetLenShift))
+/* lsm_met_len_shift is global variable */
+#define LSM_MET_DEPTH (1<<(lsm_met_len_shift))
 
 typedef struct LatencyMetrix_S {
     unsigned long *latency_array;
@@ -323,6 +323,7 @@ typedef struct LatencyMetrix_S {
 
 /* This mask should change according to QzAsyncOperationType_E enum */
 #define ASYNC_POLLING_MASK 1
+#define DEFAULT_ASYNC_QUEUE_SIZE 1024
 
 /* compress is even, decompress is odd */
 typedef enum QzAsyncOperationType_E {

@@ -127,8 +127,7 @@ __thread ThreadData_T g_thread = {
     .ppid = 0,
 };
 
-/* Define default async request Queue size */
-int async_queue_size = 100;
+int async_queue_size = DEFAULT_ASYNC_QUEUE_SIZE;
 
 static int setInstance(unsigned int dev_id, QzInstanceList_T *new_instance,
                        QzHardware_T *qat_hw)
