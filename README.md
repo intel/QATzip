@@ -73,8 +73,8 @@ contained in the file `LICENSE.GPL` within the `config_file` folder.
   platforms that have acceleration devices and non-accelerated platforms.
 * Provide streaming interface of compression and decompression to achieve better compression
   ratio and throughput for data sets that are submitted piecemeal.
-* Provide Async interface of compression and decompression in library to achieve lower latency 
-  and higher throughput(qzip utility don't suppport this feature). It's beneficial for fewer
+* Provide Async interface of compression and decompression in library to achieve lower latency
+  and higher throughput(qzip utility don't support this feature). It's beneficial for fewer
   instances or smaller data packets(below 64KB).
 * Provide Latency sensitive mode, which should be utilized when the device is under significant
   load. This mode enables QATzip to offload part of the workload to the CPU, taking advantage
