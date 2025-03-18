@@ -28,14 +28,14 @@ Please see the file headers of the configuration files, and the full GPLv2 licen
 contained in the file `LICENSE.GPL` within the `config_file` folder.
 
 ## Input Parameters
-                                                                   
+
 Required options:
-  
-- -m testMode  
-                        
-      2  test hugepage alloc Memory                                   
+
+- -m testMode
+
+      2  test hugepage alloc Memory
       4  test comp/decomp by configurable parameters
-      5  test comp/decomp by format parameters      
+      5  test comp/decomp by format parameters
       6  test session setup process according to configurable parameters
       7  test decompress sw failover
       8  test compression/decompression mixed sw failover
@@ -62,55 +62,56 @@ Required options:
       30 test negative case, decompression with invalid end of stream
       31 test decompression with valid end of stream during multi-stream
 
-Optional options can be:                                                                                                                     
-- ``` -i inputfile```  
+Optional options can be:
+
+- ``` -i inputfile```
   - Input test file, default by generating random data and default test size is 512KB.
-- ``` -C hw_buff_sz``` 
+- ``` -C hw_buff_sz```
   - HW buffer size, default is 64K.
-- ``` -b block_size``` 
+- ``` -b block_size```
   - Input src buffer size at API level, It must be the power of 2. The minimum is 4k, and maximum is 1M. Default is input file size.
-- ``` -t thread_count``` 
+- ``` -t thread_count```
   - Maximum fork thread permitted in the current test, 0 means no forking permitted.
-- ``` -l loop_count``` 
+- ``` -l loop_count```
   - The loop for same test condition, default is 2.
-- ``` -L comp_lvl``` 
+- ``` -L comp_lvl```
   - compression level. default is 1.
-- ``` -A comp_algorithm``` 
+- ``` -A comp_algorithm```
   - deflate | lz4 | lz4s.
-- ``` -T huffmanType``` 
+- ``` -T huffmanType```
   - static | dynamic, set huffmanType to deflate algorithm.
-- ``` -D direction``` 
+- ``` -D direction```
   - Test compression/decompression direction, comp | decomp | both, default is comp.
-- ``` -O data_fmt``` 
+- ``` -O data_fmt```
   - deflate | gzip | gzipext | deflate_4B | lz4 | lz4s | zlib. For zlib and deflate raw the block size must be same as HW buffer size, e.g '-b' and '-C' should be same.
-- ``` -B swBack``` 
+- ``` -B swBack```
   - enable | disable SW failover, enabled by default.
-- ``` -e init engine``` 
+- ``` -e init engine```
   - enable | disable HW engine. enabled by default.
-- ``` -s init session``` 
+- ``` -s init session```
   - enable | disable session setup. enabled by default.
-- ``` -r req_cnt_thrshold``` 
+- ``` -r req_cnt_thrshold```
   - max in-flight request num, default is 16.
-- ``` -M svm ``` 
+- ``` -M svm ```
   - set perf mode with file input, default is non svm mode. When set to svm, all memory will be allocated with malloc instead of qzMalloc, This option is only applied to mode 4.
-- ``` -p compress_buf_type```  
-  - pinned | common, default is common,This option is only applied to file compression test in mode 4, If set common, memory of compress buffer will be allocated through malloc, If set pinned, memory of compress buffer will be allocated in huge page, allocation limit is 2M\n" 
-- ``` -P polling``` 
+- ``` -p compress_buf_type```
+  - pinned | common, default is common,This option is only applied to file compression test in mode 4, If set common, memory of compress buffer will be allocated through malloc, If set pinned, memory of compress buffer will be allocated in huge page, allocation limit is 2M\n"
+- ``` -P polling```
   - set polling mode, default is periodical polling, when set busy polling mode, it would automatically enable the LSM(latency sensitive mode)
-- ``` -g loglevel``` 
+- ``` -g loglevel```
   - set qatzip loglevel(none|error|warn|info|debug)
-- ``` -q async_queue_sz``` 
+- ``` -q async_queue_sz```
   - set async queue size, default is 1024
-- ``` -v ``` 
+- ``` -v ```
   - verify compression/decompression result, disabled by default.
-- ``` -a ``` 
+- ``` -a ```
   - Enable Latency sensitive mode.
-- ``` -h ``` 
+- ``` -h ```
   - Print this help message
 
 ## Limitations
 
-* If "-t" thread number is larger than driver dc instances, have to enable SW failover, like "-B 1" 
+* If "-t" thread number is larger than driver dc instances, have to enable SW failover, like "-B 1"
 * For LSM test(mode 23-25), it require the maximum dc instance configure to build heavy pressure situation
   for QAT device, please setup 64 dc instances in driver config, and use the same number of threads.
   because LSM would consume the cpu resource, please make sure cpu usage is not in pressure when you test.

@@ -87,7 +87,14 @@ rm -vf %{buildroot}%{_mandir}/*.pdf
 %{_libdir}/pkgconfig/*.pc
 
 %changelog
-* Fri Jan 02 2024 taorong <taorong.jian@intel.com> - 1.2.0-1
+* Tue Mar 18 2025 xinghong <xinghong.chen@intel.com> - 1.3.0-1
+- Update to qatzip v1.3.0
+- Support Latency sesitive mode for qatzip
+- Add a suit of comp/decomp API to support Async offloading
+- Support zlib format and end of stream flag
+- Fix some bugs
+
+* Fri Jan 05 2024 taorong <taorong.jian@intel.com> - 1.2.0-1
 - Update to qatzip v1.2.0
 - Add qatzip-test tool
 - SW fallback
