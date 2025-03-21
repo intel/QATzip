@@ -125,7 +125,7 @@ static inline int removeNodeFromList(StreamBuffNode_T *node,
     return SUCCESS;
 }
 
-void streamBufferCleanup()
+void streamBufferCleanup(void)
 {
     StreamBuffNode_T *node;
     StreamBuffNode_T *next;

@@ -49,12 +49,12 @@
 #include "qatzip_internal.h"
 #include "qz_utils.h"
 
-inline unsigned long qzLZ4HeaderSz()
+inline unsigned long qzLZ4HeaderSz(void)
 {
     return QZ_LZ4_HEADER_SIZE;
 }
 
-inline unsigned long qzLZ4FooterSz()
+inline unsigned long qzLZ4FooterSz(void)
 {
     return QZ_LZ4_FOOTER_SIZE;
 }

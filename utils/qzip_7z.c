@@ -2406,7 +2406,7 @@ QzListHead_T *qzListCreate(int num_per_node)
     return p;
 }
 
-Qz7zSignatureHeader_T *generateSignatureHeader()
+Qz7zSignatureHeader_T *generateSignatureHeader(void)
 {
     Qz7zSignatureHeader_T  *header = qzMalloc(sizeof(Qz7zSignatureHeader_T), 0,
                                      PINNED_MEM);
@@ -2450,7 +2450,7 @@ Qz7zPackInfo_T *generatePackInfo(Qz7zItemList_T *the_list,
     return pack;
 }
 
-static Qz7zCoder_T *generateCoder()
+static Qz7zCoder_T *generateCoder(void)
 {
 
     Qz7zCoder_T *coder = qzMalloc(sizeof(Qz7zCoder_T), 0, PINNED_MEM);
@@ -2666,7 +2666,7 @@ Qz7zStreamsInfo_T *generateStreamsInfo(Qz7zItemList_T *the_list,
     return streams;
 }
 
-Qz7zArchiveProperty_T *generatePropertyInfo()
+Qz7zArchiveProperty_T *generatePropertyInfo(void)
 {
     Qz7zArchiveProperty_T *property = qzMalloc(sizeof(Qz7zArchiveProperty_T), 0,
                                       PINNED_MEM);
@@ -2696,7 +2696,7 @@ Qz7zEndHeader_T *generateEndHeader(Qz7zItemList_T *the_list,
     return header;
 }
 
-QzCatagoryTable_T *createCatagoryList()
+QzCatagoryTable_T *createCatagoryList(void)
 {
     QzCatagoryTable_T  *cat_tbl;
     cat_tbl = malloc(sizeof(QzCatagoryTable_T));

@@ -42,7 +42,7 @@
 
 #define DEFAULT_BUF_LEN (256*1024)
 
-void usage()
+void usage(void)
 {
     printf("-f fit decompress buffers to size (default full buffers)\n");
     printf("-s skip specific number of bytes\n");

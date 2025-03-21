@@ -750,7 +750,7 @@ void processFile(QzSession_T *sess, const char *in_name,
     }
 }
 
-void version()
+void version(void)
 {
     char const *const *p = g_license_msg;
 
