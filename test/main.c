@@ -209,6 +209,7 @@ QzBlock_T *parseFormatOption(char *buf)
     char *saveptr, *sub_saveptr;
 
     int i, j, fmt_idx;
+    (void)j;
     unsigned int fmt_found = 0;
     QzBlock_T *blk = NULL;
     QzBlock_T *head, *prev, *r;
