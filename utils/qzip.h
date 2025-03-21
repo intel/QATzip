@@ -801,6 +801,5 @@ extern const unsigned int g_bufsz_expansion_ratio[4];
 extern char const g_short_opts[];
 extern const struct option g_long_opts[];
 extern const unsigned int USDM_ALLOC_MAX_SZ;
-extern int errno;
 
 #endif
