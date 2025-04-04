@@ -39,7 +39,7 @@ ARG UBUNTU_BASE=ubuntu:22.04
 FROM ${UBUNTU_BASE} AS builder
 
 ARG QATLIB_VERSION="24.02.0"
-ARG QATZIP_VERSION="v1.3.0"
+ARG QATZIP_VERSION="v1.3.1"
 ARG QATZSTD_PLUG_VERSION="v0.2.0"
 ARG ZSTD_VERSION="v1.5.5"
 ARG GID
@@ -132,7 +132,7 @@ RUN apt-get update && \
 
 COPY --from=builder /usr/local/lib/libqat.so.4.2.0 /usr/lib/
 COPY --from=builder /usr/local/lib/libusdm.so.0.1.0 /usr/lib/
-COPY --from=builder /usr/local/lib/libqatzip.so.3.0.3 /usr/lib/
+COPY --from=builder /usr/local/lib/libqatzip.so.3.2.0 /usr/lib/
 COPY --from=builder /usr/local/bin/qzip /usr/bin/qzip
 COPY --from=builder /usr/local/bin/qatzip-test /usr/bin/qatzip-test
 COPY --from=builder /QATzip/utils/qzstd /usr/bin/qzstd
