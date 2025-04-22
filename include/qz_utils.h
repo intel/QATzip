@@ -119,28 +119,14 @@ extern void insertThread(unsigned int th_id,
 void logMessage(QzLogLevel_T level, const char *file, int line,
                 const char *format, ...);
 
-#ifdef __clang__
-/* The ', ##__VA_ARGS__' is a GNU extension and it's support by clang too,
- * but which emits a error under the -pedantic -Werror flag with zero argument,
- * in this case, add a dummy argument to avoid this error.*/
-#define LOG(level, format, ...) logMessage(level, __FILE__, __LINE__, format "%s", __VA_ARGS__);
-#define QZ_PRINT(...) LOG(LOG_NONE, __VA_ARGS__, "")
-#define QZ_ERROR(...) LOG(LOG_ERROR, __VA_ARGS__, "")
-#define QZ_WARN(...) LOG(LOG_WARNING, __VA_ARGS__, "")
-#define QZ_INFO(...) LOG(LOG_INFO, __VA_ARGS__, "")
-#define QZ_DEBUG(...) LOG(LOG_DEBUG1, __VA_ARGS__, "")
-#define QZ_TEST(...) LOG(LOG_DEBUG2, __VA_ARGS__, "")
-#define QZ_MEM_PRINT(...) LOG(LOG_DEBUG3, __VA_ARGS__, "")
-#else
-#define LOG(level, format, ...) logMessage(level, __FILE__, __LINE__, format, ##__VA_ARGS__)
-#define QZ_PRINT(format, ...) LOG(LOG_NONE, format, ##__VA_ARGS__)
-#define QZ_ERROR(format, ...) LOG(LOG_ERROR, format, ##__VA_ARGS__)
-#define QZ_WARN(format, ...) LOG(LOG_WARNING, format, ##__VA_ARGS__)
-#define QZ_INFO(format, ...) LOG(LOG_INFO, format, ##__VA_ARGS__)
-#define QZ_DEBUG(format, ...) LOG(LOG_DEBUG1, format, ##__VA_ARGS__)
-#define QZ_TEST(format, ...) LOG(LOG_DEBUG2, format, ##__VA_ARGS__)
-#define QZ_MEM_PRINT(format, ...) LOG(LOG_DEBUG3, format, ##__VA_ARGS__)
-#endif
+#define LOG(level, ...) logMessage(level, __FILE__, __LINE__, __VA_ARGS__)
+#define QZ_PRINT(...) LOG(LOG_NONE, __VA_ARGS__)
+#define QZ_ERROR(...) LOG(LOG_ERROR, __VA_ARGS__)
+#define QZ_WARN(...) LOG(LOG_WARNING, __VA_ARGS__)
+#define QZ_INFO(...) LOG(LOG_INFO, __VA_ARGS__)
+#define QZ_DEBUG(...) LOG(LOG_DEBUG1, __VA_ARGS__)
+#define QZ_TEST(...) LOG(LOG_DEBUG2, __VA_ARGS__)
+#define QZ_MEM_PRINT(...) LOG(LOG_DEBUG3, __VA_ARGS__)
 
 #ifdef ENABLE_TESTLOG
 #define QZ_TESTLOG(debuglevel, Readable, tag, ...) { \
