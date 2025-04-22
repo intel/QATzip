@@ -50,6 +50,7 @@ extern"C" {
 #include <zlib.h>
 #include <lz4frame.h>
 #include <arpa/inet.h>
+#include <limits.h>
 #include "qz_utils.h"
 
 /**
