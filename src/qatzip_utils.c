@@ -1018,7 +1018,7 @@ int isQATProcessable(const unsigned char *ptr,
         break;
     case DEFLATE_RAW:
         if (*src_len < qz_sess->sess_params.input_sz_thrshold) {
-            QZ_DEBUG("isQATProcessable: deflate_raw src_len is less than input threshhold\n");
+            QZ_DEBUG("isQATProcessable: deflate_raw src_len is less than input threshold\n");
             rc = 0;
         } else {
             rc = 1;

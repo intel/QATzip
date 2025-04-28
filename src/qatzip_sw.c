@@ -765,7 +765,7 @@ int compOutSWFallback(int i, int j, QzSession_T *sess,
         return QZ_FAIL;
     }
 
-    QZ_DEBUG("The request get dummy emty respond, offload to software!\n");
+    QZ_DEBUG("The request get dummy empty respond, offload to software!\n");
     QZ_DEBUG("SW CompOut src_ptr %p, dst_ptr %p, Sending %u bytes, seq = %ld\n",
              src_ptr, dest_ptr, src_send_sz, g_process.qz_inst[i].stream[j].seq);
 
