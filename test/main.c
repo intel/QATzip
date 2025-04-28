@@ -4942,7 +4942,7 @@ void *qzLSMcompressPerf(void *arg)
         decomp_out_sz = produced;
         if (decomp_out_sz != org_src_sz ||
             memcmp(src, decomp_out, org_src_sz)) {
-            QZ_ERROR("compressed data is uncorrect\n");
+            QZ_ERROR("compressed data is incorrect\n");
             goto done;
         }
     }
@@ -6357,7 +6357,7 @@ done:
     "    -r req_cnt_thrshold   max in-flight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
     "    -P polling            set polling mode, default is periodical polling\n" \
-    "                          when set busy polling mode, it would automaticlly \n"    \
+    "                          when set busy polling mode, it would automatically \n"    \
     "                          enable the LSM(latency sensitive mode) \n"    \
     "    -M svm                set perf mode with file input, default is non\n" \
     "                          svm mode. When set to svm, all memory will\n"    \
