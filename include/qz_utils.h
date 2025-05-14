@@ -113,6 +113,11 @@ extern void insertThread(unsigned int th_id,
                          Serv_T serv_type,
                          Engine_T engine_type);
 
+#ifdef QZ_DEBUG_FILE
+extern void qz_debug_init_log(void);
+extern void qz_debug_close_log(void);
+#endif
+
 /*  QATzip log API
  *  could change the log level on runtime
  */

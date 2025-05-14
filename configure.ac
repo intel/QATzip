@@ -235,7 +235,7 @@ AC_ARG_ENABLE(debug,
     [
         debug=true
         CFLAGS+=' -g -DQATZIP_DEBUG -O0'
-    ]      ,
+    ],
     [
         debug=false
         CFLAGS+=' -O2'
@@ -243,6 +243,15 @@ AC_ARG_ENABLE(debug,
     ]
 )
 AM_CONDITIONAL([QATZIP_DEBUG_AC], [test x$debug = xtrue])
+
+AC_ARG_WITH(debug_file,
+    AS_HELP_STRING([--with-debug_file], [Path and filename to write logs]),
+    AS_IF(
+        [test "$withval" = "yes"],
+        AC_MSG_ERROR([--with-debug_file=PATH requires a file with absolute PATH]),
+        [CFLAGS+=" -DQZ_DEBUG_FILE=$withval"]
+    )
+)
 
 #Enable qatzip symbol
 AC_ARG_ENABLE(symbol,

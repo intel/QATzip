@@ -48,8 +48,12 @@
 #include <qatzip.h>
 #include "qatzip_internal.h"
 
+#define XSTR(x) #x
+#define STR(x) XSTR(x)
+
 static QatThread_T g_qat_thread;
 extern processData_T g_process;
+FILE *qzDebugLogFile = NULL;
 
 #ifdef QATZIP_DEBUG
 static void doInsertThread(unsigned int th_id,
@@ -180,7 +184,39 @@ void dumpThreadInfo(void)
 }
 #endif
 
+#ifdef QZ_DEBUG_FILE
+pthread_mutex_t debug_file_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void qz_debug_init_log(void)
+{
+    pthread_mutex_lock(&debug_file_mutex);
+    if (!qzDebugLogFile) {
+        qzDebugLogFile = fopen(STR(QZ_DEBUG_FILE), "w");
+        if (!qzDebugLogFile) {
+            qzDebugLogFile = stderr;
+            fprintf(stderr, "Failed to open debug log file: %s\n",
+                    STR(QZ_DEBUG_FILE));
+        }
+    }
+    pthread_mutex_unlock(&debug_file_mutex);
+}
+
+void qz_debug_close_log(void)
+{
+    pthread_mutex_lock(&debug_file_mutex);
+    if (qzDebugLogFile && qzDebugLogFile != stderr) {
+        fclose(qzDebugLogFile);
+        qzDebugLogFile = NULL;
+    }
+    pthread_mutex_unlock(&debug_file_mutex);
+}
+#endif
+
+#ifdef QATZIP_DEBUG
+QzLogLevel_T currentLogLevel = LOG_DEBUG1;
+#else
 QzLogLevel_T currentLogLevel = LOG_WARNING;
+#endif
 
 QzLogLevel_T qzSetLogLevel(QzLogLevel_T level)
 {
@@ -212,34 +248,25 @@ const char *getLogLevelString(QzLogLevel_T level)
 void logMessage(QzLogLevel_T level, const char *file, int line,
                 const char *format, ...)
 {
-
     if (level > currentLogLevel) return;
 
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
-    char time_buffer[26];
-    strftime(time_buffer, 26, "%Y-%m-%d %H:%M:%S", tm_info);
-    FILE *output = stderr;
+    char time_buffer[26] = {0};
+    if (tm_info != NULL) {
+        strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", tm_info);
+    } else {
+        snprintf(time_buffer, sizeof(time_buffer), "UNKNOWN_TIME");
+    }
 
-    switch (level) {
-    case LOG_NONE:
-        output = stdout;
-        break;
-    case LOG_ERROR:
-    case LOG_WARNING:
-        output = stderr;
+    FILE *output = (level == LOG_ERROR || level == LOG_WARNING) ? stderr : stdout;
+    if (qzDebugLogFile) {
+        output = qzDebugLogFile;
+    }
+
+    if (level <= LOG_DEBUG3) {
         fprintf(output, "[%s] [%s] (%s:%d): ", getLogLevelString(level), time_buffer,
                 file, line);
-        break;
-    case LOG_INFO:
-    case LOG_DEBUG1:
-    case LOG_DEBUG2:
-    case LOG_DEBUG3:
-        output = stdout;
-        fprintf(output, "[%s]: ", getLogLevelString(level));
-        break;
-    default:
-        break;
     }
 
     va_list args;
