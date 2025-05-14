@@ -537,6 +537,10 @@ static void exitFunc(void)
 #ifdef QATZIP_DEBUG
     dumpThreadInfo();
 #endif
+#ifdef QZ_DEBUG_FILE
+    qz_debug_close_log();
+#endif
+
 }
 
 static unsigned int getWaitCnt(QzSession_T *sess)
@@ -638,6 +642,10 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     static atomic_int wait_cnt = 0;
 #ifdef ADF_PCI_API
     Cpa32U pcie_count = 0;
+#endif
+
+#ifdef QZ_DEBUG_FILE
+    qz_debug_init_log();
 #endif
 
     if (unlikely(sess == NULL)) {
