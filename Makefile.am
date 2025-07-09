@@ -46,7 +46,8 @@ pkginclude_HEADERS = include/qatzip.h
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = qatzip.pc
 dist_man_MANS = \
-                man/qzip.1
+                man/qzip.1 \
+                man/qatzip-test.1
 
 EXTRA_DIST = \
              LICENSE \
