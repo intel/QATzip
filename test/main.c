@@ -6149,9 +6149,11 @@ void *qzAsyncPerfCompressAndDecompress(void *arg)
             }
 
             pthread_mutex_lock(&mutex);
-            pthread_cond_wait(&all_callbacks_called, &mutex);
-            pthread_mutex_unlock(&mutex);
+            while (req_count < num_blocks) {
+                pthread_cond_wait(&all_callbacks_called, &mutex);
+            }
             req_count = 0;
+            pthread_mutex_unlock(&mutex);
 
             int comp_output_size = 0;
             for (int i = 0; i < num_blocks; i ++) {
@@ -6223,9 +6225,11 @@ void *qzAsyncPerfCompressAndDecompress(void *arg)
             }
 
             pthread_mutex_lock(&mutex);
-            pthread_cond_wait(&all_callbacks_called, &mutex);
-            pthread_mutex_unlock(&mutex);
+            while (req_count < num_blocks) {
+                pthread_cond_wait(&all_callbacks_called, &mutex);
+            }
             req_count = 0;
+            pthread_mutex_unlock(&mutex);
 
             int decomp_output_size = 0;
             for (int i = 0; i < num_blocks; i ++) {

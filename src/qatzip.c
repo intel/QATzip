@@ -3127,7 +3127,7 @@ void CallAsyncbackfn(QzAsyncReq_T **req_pointer, int status, QzSession_T *sess)
     }
 }
 
-static int AsyncCompressIn(QzAsyncReq_T *req)
+static int AsyncCompressIn(QzAsyncReq_T **req_ptr)
 {
     unsigned long tag;
     int i, j;
@@ -3137,6 +3137,7 @@ static int AsyncCompressIn(QzAsyncReq_T *req)
     unsigned char *src_ptr;
     unsigned int hw_buff_sz;
     CpaStatus rc;
+    QzAsyncReq_T *req = *req_ptr;
     QzSession_T *sess = req->sess;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
@@ -3239,6 +3240,7 @@ static int AsyncCompressIn(QzAsyncReq_T *req)
 err_exit:
     /*reset the qz_sess status*/
     qz_sess->stop_submitting = 1;
+    qz_sess->seq = qz_sess->seq_in;
     // qz_sess->last_submitted = 1;
     sess->thd_sess_stat = QZ_FAIL;
     return QZ_FAIL;
@@ -3449,7 +3451,7 @@ err_exit:
     pthread_exit((void *)NULL);
 }
 
-static int AsyncDeCompressIn(QzAsyncReq_T *req)
+static int AsyncDeCompressIn(QzAsyncReq_T **req_ptr)
 {
     unsigned long i, tag;
     int rc;
@@ -3463,6 +3465,7 @@ static int AsyncDeCompressIn(QzAsyncReq_T *req)
 
     QzGzH_T hdr = {{0}, 0};
 
+    QzAsyncReq_T *req = *req_ptr;
     QzSession_T *sess = req->sess;
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
@@ -3636,6 +3639,7 @@ static int AsyncDeCompressIn(QzAsyncReq_T *req)
 err_exit:
     /*reset the qz_sess status*/
     qz_sess->stop_submitting = 1;
+    qz_sess->seq = qz_sess->seq_in;
     // qz_sess->last_submitted = 1;
     return QZ_FAIL;
 }
@@ -3897,7 +3901,7 @@ static void *AsyncReqConsumeJob(void *arg)
                  * status to async caller.
                  */
                 CheckAsyncPollingDirection(sess, req->op_type);
-                rc = AsyncCompressIn(req);
+                rc = AsyncCompressIn(&req);
                 if (QZ_OK != rc) {
                     QZ_ERROR("instance %d, comp req submit failed\n", instance);
                     /* Should wait in this place, until sess status
@@ -3912,7 +3916,7 @@ static void *AsyncReqConsumeJob(void *arg)
                 break;
             case QZ_DECOMPRESS:
                 CheckAsyncPollingDirection(sess, req->op_type);
-                rc = AsyncDeCompressIn(req);
+                rc = AsyncDeCompressIn(&req);
                 if (QZ_OK != rc) {
                     QZ_ERROR("instance %d, decomp req submit failed\n", instance);
                     /* Should wait in this place, until sess status
