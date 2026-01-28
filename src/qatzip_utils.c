@@ -1025,7 +1025,7 @@ int isQATProcessable(const unsigned char *ptr,
                      const unsigned int *const src_len,
                      QzSess_T *const qz_sess)
 {
-    uint32_t rc = 0;
+    int rc = 0;
     DataFormatInternal_T data_fmt;
     assert(ptr != NULL);
     assert(src_len != NULL);

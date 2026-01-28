@@ -169,6 +169,11 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
             qz4B_header = (Qz4BH_T *)dest;
             dest = dest + sizeof(Qz4BH_T);
         }
+    } else {
+        if (NULL == stream) {
+            QZ_ERROR("ERR: deflate stream is NULL\n");
+            return QZ_FAIL;
+        }
     }
 
 #ifdef QATZIP_DEBUG
@@ -458,7 +463,7 @@ int qzLZ4SWCompress(QzSession_T *sess, const unsigned char *src,
         QZ_ERROR("LZ4F_compressUpdate error: %s\n", LZ4F_getErrorName(total_out));
         goto lz4_compress_fail;
     }
-    *dest_len = total_out;
+    *dest_len = (unsigned int)total_out;
     QZ_INFO("Exit qzLZ4SWCompress: src_len %u dest_len %u\n",
             *src_len, *dest_len);
 

@@ -449,8 +449,8 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
 {
     int ret = OK;
     struct stat src_file_stat;
-    unsigned int src_buffer_size = 0;
-    unsigned int dst_buffer_size = 0, dst_buffer_max_size = 0;
+    size_t src_buffer_size = 0;
+    size_t dst_buffer_size = 0, dst_buffer_max_size = 0;
     off_t src_file_size = 0, dst_file_size = 0, file_remaining = 0;
     const char *src_file_name = NULL;
     unsigned char *src_buffer = NULL;
@@ -578,18 +578,23 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
 
                 if (read_more) {
                     if (cur_file->isSymLink) {
-                        int size;
+                        ssize_t size;
                         size = readlink(cur_file->fileName, (char *)src_buffer,
                                         src_buffer_size);
-                        bytes_read = size;
+                        if (size < 0) {
+                            QZ_ERROR("readlink failed for %s\n", cur_file->fileName);
+                            ret = ERROR;
+                            goto exit;
+                        }
+                        bytes_read = (unsigned int)size;
                     } else {
-                        bytes_read = fread(src_buffer, 1, src_buffer_size,
-                                           src_file);
+                        bytes_read = (unsigned int)fread(src_buffer, 1, src_buffer_size,
+                                                         src_file);
                         QZ_INFO("Reading input file %s (%u Bytes)\n",
                                 src_file_name, bytes_read);
                     }
                 } else {
-                    bytes_read = file_remaining;
+                    bytes_read = (unsigned int)file_remaining;
                 }
 
                 puts("Compressing...");
@@ -623,7 +628,7 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
                         dst_buffer = malloc(dst_buffer_size);
                         if (NULL == dst_buffer) {
                             QZ_ERROR("Fail to allocate destination buffer "
-                                     "with size %u\n", dst_buffer_size);
+                                     "with size %zu\n", dst_buffer_size);
                             ret = ERROR;
                             goto exit;
                         }
@@ -1773,9 +1778,9 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 {
     int ret = OK;
     struct stat src_file_stat;
-    unsigned int src_buffer_size = 0;
-    unsigned int dst_buffer_size = 0;
-    unsigned int saved_dst_buffer_size = 0;
+    size_t src_buffer_size = 0;
+    size_t dst_buffer_size = 0;
+    size_t saved_dst_buffer_size = 0;
     off_t src_file_size = 0, dst_file_size = 0, file_remaining = 0;
     unsigned char *src_buffer = NULL;
     unsigned char *src_buffer_orig = NULL;
@@ -1954,11 +1959,11 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
 
             if (read_more) {
                 src_buffer = src_buffer_orig;
-                bytes_read = fread(src_buffer, 1, src_buffer_size, src_file);
+                bytes_read = (unsigned int)fread(src_buffer, 1, src_buffer_size, src_file);
                 QZ_INFO("Reading input file %s (%u Bytes)\n", src_file_name,
                         bytes_read);
             } else {
-                bytes_read = file_remaining;
+                bytes_read = (unsigned int)file_remaining;
             }
 
             puts("Decompressing...");
@@ -1968,9 +1973,11 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
             int buffer_remaining = bytes_read;
             do {
                 unsigned int bytes_processed = buffer_remaining;
+                unsigned int decomp_dst_len = (unsigned int)dst_buffer_size;
                 ret = doDecompressBuffer(sess, src_buffer, &bytes_processed,
-                                         dst_buffer, &dst_buffer_size,
+                                         dst_buffer, &decomp_dst_len,
                                          time_list_head, is_last);
+                dst_buffer_size = decomp_dst_len;
 
                 file_read_processed_size += bytes_processed;
                 src_buffer += bytes_processed;
@@ -1998,7 +2005,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
                         dst_buffer = malloc(dst_buffer_size);
                         if (NULL == dst_buffer) {
                             QZ_ERROR("Fail to allocate destination buffer "
-                                     "with size %u\n", dst_buffer_size);
+                                     "with size %zu\n", dst_buffer_size);
                             ret = ERROR;
                             goto exit;
                         }
@@ -2223,7 +2230,6 @@ void qzListDestroy(QzListHead_T *head)
                     fi->fileName = NULL;
                 }
                 free(fi);
-                fi = NULL;
             }
         }
         free(node->items);
