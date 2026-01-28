@@ -1004,6 +1004,10 @@ void *qzCompressDecompressWithFormatOption(void *arg)
                          g_format_list[blk->fmt - 1].fmt_name, remaining, tmp_src_sz);
 
                 blk = (blk->next) ? blk->next : head->next;
+                if (NULL == blk) {
+                    QZ_ERROR("ERROR: blk is NULL\n");
+                    goto done;
+                }
             }
 
             if (rc != QZ_OK) {

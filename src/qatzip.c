@@ -656,6 +656,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         return QZ_PARAMS;
     }
 
+    /* coverity[lock_evasion:FALSE] - intentional fast-path optimization */
     if (CPA_FALSE == g_process.qat_available ||
         QZ_OK == g_process.qz_init_status) {
         return QZ_DUPLICATE;

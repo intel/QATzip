@@ -257,8 +257,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
 {
     int ret = OK;
     struct stat src_file_stat;
-    unsigned int src_buffer_size = 0;
-    unsigned int dst_buffer_size = 0;
+    size_t src_buffer_size = 0;
+    size_t dst_buffer_size = 0;
     off_t src_file_size = 0, dst_file_size = 0, file_remaining = 0;
     unsigned char *src_buffer = NULL;
     unsigned char *dst_buffer = NULL;
@@ -364,7 +364,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                 dst_buffer = malloc(dst_buffer_size);
                 if (NULL == dst_buffer) {
                     QZ_ERROR("Fail to allocate destination buffer with size "
-                             "%u\n", dst_buffer_size);
+                             "%zu\n", dst_buffer_size);
                     ret = ERROR;
                     goto exit;
                 }
@@ -795,8 +795,8 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
                    int is_compress)
 {
     int ret = OK;
-    unsigned int src_buffer_size = 0;
-    unsigned int dst_buffer_size = 0;
+    size_t src_buffer_size = 0;
+    size_t dst_buffer_size = 0;
     off_t dst_file_size = 0;
     unsigned char *src_buffer = NULL;
     unsigned char *dst_buffer = NULL;
@@ -870,7 +870,7 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
                 dst_buffer = malloc(dst_buffer_size);
                 if (NULL == dst_buffer) {
                     QZ_ERROR("Fail to allocate destination buffer with size "
-                             "%u\n", dst_buffer_size);
+                             "%zu\n", dst_buffer_size);
                     ret = ERROR;
                     goto exit;
                 }
