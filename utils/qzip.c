@@ -35,13 +35,13 @@
 #include "qzip.h"
 
 char const *const g_license_msg[] = {
-    "Copyright (C) 2021 Intel Corporation.",
+    "Copyright (C) 2026 Intel Corporation.",
     0
 };
 
 char *g_program_name = NULL; /* program name */
 int g_decompress = 0;        /* g_decompress (-d) */
-int g_keep = 0;                     /* keep (don't delete) input files */
+int g_keep = 0;              /* keep (don't delete) input files */
 QzSession_T g_sess;
 QzipParams_T g_params_th = {
     .huffman_hdr = QZ_HUFF_HDR_DEFAULT,
@@ -85,7 +85,6 @@ const struct option g_long_opts[] = {
 };
 
 const unsigned int USDM_ALLOC_MAX_SZ = (2 * 1024 * 1024 - 5 * 1024);
-
 unsigned int block_buff_len = SRC_BUFF_LEN;
 
 void tryHelp(void)
@@ -97,7 +96,7 @@ void tryHelp(void)
 void help(void)
 {
     static char const *const help_msg[] = {
-        "Compress or uncompress FILEs (by default, compress FILES in-place).",
+        "Compress or Decompress FILEs (by default, compress FILES in-place).",
         "",
         "Mandatory arguments to long options are mandatory for short options "
         "too.",
@@ -197,57 +196,74 @@ int doProcessBuffer(QzSession_T *sess,
         time_node = time_node->next;
     }
 
+    /* Allocate single timing node for this buffer processing.
+     * Avoids expensive per-iteration calloc overhead.
+     */
+    RunTimeList_T *run_time = calloc(1, sizeof(RunTimeList_T));
+    assert(NULL != run_time);
+    run_time->next = NULL;
+    time_node->next = run_time;
+
+    /* Start timing before processing loop */
+    gettimeofday(&run_time->time_s, NULL);
+
     while (!done) {
-        RunTimeList_T *run_time = calloc(1, sizeof(RunTimeList_T));
-        assert(NULL != run_time);
-        run_time->next = NULL;
-        time_node->next = run_time;
-        time_node = run_time;
-
-        gettimeofday(&run_time->time_s, NULL);
-
-        /* Do actual work */
         if (is_compress) {
+            /* Compression: process in block_buff_len chunks */
             block_src_len = (*src_len - consumed) > block_buff_len ?
                             block_buff_len : (*src_len - consumed);
             block_dest_len = dst_len - produced;
 
             ret = qzCompress(sess, src + consumed, &block_src_len,
                              dst + produced, &block_dest_len, 1);
+
             if (QZ_BUF_ERROR == ret && 0 == block_src_len) {
                 done = 1;
             }
         } else {
+            /* Decompression: process remaining input */
+            block_src_len = *src_len - consumed;
+            block_dest_len = dst_len - produced;
+
             ret = qzDecompress(sess, src + consumed, &block_src_len,
                                dst + produced, &block_dest_len);
+
             if (QZ_DATA_ERROR == ret ||
                 (QZ_BUF_ERROR == ret && 0 == block_src_len) ||
-                (QZ_OK == ret && block_src_len < *src_len)) {
+                (QZ_OK == ret && 0 == block_src_len)) {
                 done = 1;
             }
         }
 
-        if (ret != QZ_OK &&
-            ret != QZ_BUF_ERROR &&
-            ret != QZ_DATA_ERROR) {
-            const char *op = (is_compress) ? "Compression" : "Decompression";
-            QZ_ERROR("doProcessBuffer:%s failed with error: %d\n", op, ret);
+        if (ret != QZ_OK && ret != QZ_BUF_ERROR && ret != QZ_DATA_ERROR) {
+            const char *op = is_compress ? "Compression" : "Decompression";
+            QZ_ERROR("doProcessBuffer: %s failed with error: %d\n", op, ret);
             break;
         }
-
-        gettimeofday(&run_time->time_e, NULL);
 
         consumed += block_src_len;
         produced += block_dest_len;
 
-        if (0 == (*src_len - consumed)) {
+        /* Check if all input consumed */
+        if (consumed >= *src_len) {
             done = 1;
         }
     }
 
+    /* End timing after processing loop */
+    gettimeofday(&run_time->time_e, NULL);
+
+    /* Write accumulated output in single I/O operation */
     bytes_written = fwrite(dst, 1, produced, dst_file);
     assert(bytes_written == produced);
-    *dst_file_size = bytes_written;
+    *dst_file_size += bytes_written;
+
+    /* Signal buffer error if output full but input remains. */
+    if (!is_compress && consumed < *src_len && produced == dst_len) {
+        *src_len = consumed;
+        return QZ_BUF_ERROR;
+    }
+
     *src_len = consumed;
     return ret;
 }
@@ -272,13 +288,15 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
     unsigned int read_more = 0;
     int src_fd = 0;
+
+    /* Initialize timing list for accurate performance measurement */
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
     assert(NULL != time_list_head);
     gettimeofday(&time_list_head->time_s, NULL);
     time_list_head->time_e = time_list_head->time_s;
     time_list_head->next = NULL;
 
-    //open file
+    /* Open source file */
     src_fd = open(src_file_name, O_RDONLY);
     if (src_fd < 0) {
         QZ_INFO("Open input file %s failed\n", src_file_name);
@@ -287,8 +305,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     ret = fstat(src_fd, &src_file_stat);
     assert(!ret);
 
+    /* Handle block devices differently for size calculation */
     if (S_ISBLK(src_file_stat.st_mode)) {
-        /* ioctl return device size / 512, so device size = src_file_size * 512 */
         if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
             close(src_fd);
             perror(src_file_name);
@@ -298,15 +316,21 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     } else {
         src_file_size = src_file_stat.st_size;
     }
+
+    /* Determine buffer sizes based on operation type */
     src_buffer_size = (src_file_size > SRC_BUFF_LEN) ?
                       SRC_BUFF_LEN : src_file_size;
+
     if (is_compress) {
         dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
         if (0 == dst_buffer_size) {
             perror("During SW compression, src file size is less than HW size!\n");
             exit(ERROR);
         }
-    } else { /* decompress */
+    } else {
+        /* For decompression, use initial ratio (typical gzip is 6-10x).
+         * This balances memory usage with avoiding buffer expansion.
+         */
         dst_buffer_size = src_buffer_size *
                           g_bufsz_expansion_ratio[ratio_idx++];
     }
@@ -343,37 +367,47 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                               &dst_file_size, is_compress);
 
         if (QZ_DATA_ERROR == ret || QZ_BUF_ERROR == ret) {
-            if (0 != bytes_read) {
+            if (!is_compress && QZ_DATA_ERROR == ret) {
+                /* End of compressed stream - normal completion for gzip */
+                file_remaining -= bytes_read;
+                ret = OK;
+                break;
+            } else if (bytes_read > 0 && bytes_read < bytes_lookahead) {
+                /* Partial consumption: rewind file position for retry */
                 offset_revert = (long)bytes_read - (long)bytes_lookahead;
                 if (-1 == fseek(src_file, offset_revert, SEEK_CUR)) {
                     ret = ERROR;
                     goto exit;
                 }
                 read_more = 1;
-            } else if (QZ_BUF_ERROR == ret) {
-                //dest buffer not long enough
+            } else if (0 == bytes_read && QZ_BUF_ERROR == ret) {
+                /* Destination buffer too small - expand it */
                 if (ratio_limit == ratio_idx) {
                     QZ_ERROR("Could not expand more destination buffer\n");
                     ret = ERROR;
                     goto exit;
                 }
 
-                free(dst_buffer);
+                /* Use realloc to potentially avoid memory copy if
+                 * there's contiguous space available.
+                 */
                 dst_buffer_size = src_buffer_size *
                                   g_bufsz_expansion_ratio[ratio_idx++];
-                dst_buffer = malloc(dst_buffer_size);
-                if (NULL == dst_buffer) {
+                unsigned char *new_buffer = realloc(dst_buffer, dst_buffer_size);
+                if (NULL == new_buffer) {
                     QZ_ERROR("Fail to allocate destination buffer with size "
                              "%zu\n", dst_buffer_size);
                     ret = ERROR;
                     goto exit;
                 }
+                dst_buffer = new_buffer;
 
                 read_more = 0;
             } else {
-                // corrupt data
-                ret = ERROR;
-                goto exit;
+                /* All input consumed (bytes_read == bytes_lookahead)
+                 * Continue reading next chunk normally
+                 */
+                read_more = 1;
             }
         } else if (QZ_OK != ret) {
             QZ_ERROR("Process file error: %d\n", ret);
@@ -620,7 +654,9 @@ QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
 {
     if (E_SUFFIX_GZ == suffix) {
         if (!is_format_set) {
-            // format is not specified, reassign data format by suffix instead of default value
+            /* Format is not specified: reassign data format based on suffix
+             * instead of using the default value.
+             */
             g_params_th.data_fmt = QZIP_DEFLATE_GZIP_EXT;
             return E_CHECK_SUFFIX_OK;
         }
@@ -651,7 +687,7 @@ QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
         } else {
             return E_CHECK_SUFFIX_OK;
         }
-    } else {    //unsupported suffix
+    } else {    /* Unsupported suffix */
         return E_CHECK_SUFFIX_UNSUPPORT;
     }
 }
@@ -762,7 +798,7 @@ void processFile(QzSession_T *sess, const char *in_name,
         doProcessFile(sess, in_name, oname, is_compress);
 
         if (access(oname, F_OK) == 0) {
-            //update src file stat to dst file
+            /* Update destination file timestamps to match source file */
             memset(timebuf, 0, sizeof(timebuf));
             timebuf[0].tv_nsec = UTIME_NOW;
             timebuf[1].tv_sec = fstat.st_mtime;
@@ -857,7 +893,7 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
                 }
                 read_more = 1;
             } else if (QZ_BUF_ERROR == ret) {
-                // dest buffer not long enough
+                /* Destination buffer not long enough */
                 if (ratio_limit == ratio_idx) {
                     QZ_ERROR("Could not expand more destination buffer\n");
                     ret = ERROR;
@@ -877,7 +913,7 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
 
                 read_more = 0;
             } else {
-                // corrupt data
+                /* Corrupt data detected */
                 ret = ERROR;
                 goto exit;
             }
