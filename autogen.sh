@@ -1,3 +1,4 @@
+#!/bin/sh
 ################################################################
 #   BSD LICENSE
 #
@@ -31,6 +32,5 @@
 #   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################
-#!/bin/sh
 mkdir -p m4
 autoreconf -vif

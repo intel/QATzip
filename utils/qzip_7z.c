@@ -134,9 +134,13 @@ static unsigned char readByte(FILE *fp)
     return c;
 }
 
-static void skipNByte(int n, FILE *fp)
+static int skipNByte(int n, FILE *fp)
 {
-    fseek(fp, n, SEEK_CUR);
+    if (fseek(fp, n, SEEK_CUR) != 0) {
+        QZ_ERROR("fseek failed\n");
+        return -1;
+    }
+    return 0;
 }
 
 static uint32_t readCRC(FILE *fp)
@@ -656,7 +660,9 @@ int doCompressFile(QzSession_T *sess, Qz7zItemList_T *list,
 
             } while (file_remaining > 0);
             if (!cur_file->isSymLink) {
-                fclose(src_file);
+                if (fclose(src_file) != 0) {
+                    QZ_ERROR("fclose failed for src_file\n");
+                }
                 src_file = NULL;
                 if (src_fd >= 0) {
                     close(src_fd);
@@ -713,15 +719,9 @@ exit:
     if (src_file) {
         fclose(src_file);
     }
-    if (dst_buffer) {
-        free(dst_buffer);
-    }
-    if (src_buffer) {
-        free(src_buffer);
-    }
-    if (sheader) {
-        qzFree(sheader);
-    }
+    free(dst_buffer);
+    free(src_buffer);
+    qzFree(sheader);
     if (dst_file) {
         fclose(dst_file);
     }
@@ -851,7 +851,9 @@ Qz7zArchiveProperty_T *resolveArchiveProperties(FILE *fp)
 
     size = getU64FromBytes(fp);
 
-    skipNByte(size, fp);
+    if (skipNByte(size, fp) != 0) {
+        goto error;
+    }
 
     if (readByte(fp) != PROPERTY_ID_END) {
         QZ_ERROR("Resolve PackInfo: kEnd (0x00) expected\n");
@@ -1351,7 +1353,9 @@ Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp)
         case PROPERTY_ID_DUMMY:
             c = readByte(fp);
             if (c) {
-                skipNByte(c, fp);
+                if (skipNByte(c, fp) != 0) {
+                    goto error;
+                }
             }
             break;
 
@@ -2248,8 +2252,8 @@ void itemListDestroy(Qz7zItemList_T *p)
         qzListDestroy(h);
     }
 
-    QzCatagoryTable_T *table = p->table;
-    QzCatagory_T      cat;
+    QzCategoryTable_T *table = p->table;
+    QzCategory_T      cat;
     if (table) {
         for (int i = 0; i < table->cat_num; ++i) {
             cat = table->catas[i];
@@ -2554,7 +2558,7 @@ Qz7zCodersInfo_T *generateCodersInfo(Qz7zItemList_T *the_list)
     }
 
     for (int i = 0; i < coders->numFolders; ++i) {
-        QzCatagory_T *cat = &(the_list->table->catas[i]);
+        QzCategory_T *cat = &(the_list->table->catas[i]);
         coders->unPackSize[i] = 0;
         for (int j = 0; j < cat->cat_files->total; ++j) {
             Qz7zFileItem_T *p = (Qz7zFileItem_T *)qzListGet(cat->cat_files, j);
@@ -2589,6 +2593,9 @@ Qz7zDigest_T *generateDigestInfo(QzListHead_T *head)
 
     for (int i = 0; i < digests->numDefined; ++i) {
         Qz7zFileItem_T *p = (Qz7zFileItem_T *)qzListGet(head, i);
+        if (p == NULL) {
+            continue;
+        }
         (digests->crc)[i] = p->crc;
     }
 
@@ -2645,6 +2652,9 @@ Qz7zSubstreamsInfo_T *generateSubstreamsInfo(Qz7zItemList_T *the_list)
 
         for (int j = 0; j < h->total - 1; ++j) {
             fi = qzListGet(h, j);
+            if (fi == NULL) {
+                continue;
+            }
             substreamsInfo->unPackSize[index_of_file++] = fi->size;
         }
     }
@@ -2726,15 +2736,15 @@ Qz7zEndHeader_T *generateEndHeader(Qz7zItemList_T *the_list,
     return header;
 }
 
-QzCatagoryTable_T *createCatagoryList(void)
+QzCategoryTable_T *createCategoryList(void)
 {
-    QzCatagoryTable_T  *cat_tbl;
-    cat_tbl = malloc(sizeof(QzCatagoryTable_T));
+    QzCategoryTable_T  *cat_tbl;
+    cat_tbl = malloc(sizeof(QzCategoryTable_T));
     CHECK_ALLOC_RETURN_VALUE(cat_tbl)
 
     cat_tbl->cat_num = sizeof(g_category_names) / sizeof(g_category_names[0]);
 
-    cat_tbl->catas = malloc(cat_tbl->cat_num * sizeof(QzCatagory_T));
+    cat_tbl->catas = malloc(cat_tbl->cat_num * sizeof(QzCategory_T));
     CHECK_ALLOC_RETURN_VALUE(cat_tbl->catas)
 
     // the last one for all other files
@@ -2747,7 +2757,7 @@ QzCatagoryTable_T *createCatagoryList(void)
     return cat_tbl;
 }
 
-int getCatagory(QzCatagoryTable_T *tbl, Qz7zFileItem_T *p)
+int getCategory(QzCategoryTable_T *tbl, Qz7zFileItem_T *p)
 {
     return 0;
 }
@@ -2756,16 +2766,19 @@ int getCatagory(QzCatagoryTable_T *tbl, Qz7zFileItem_T *p)
  * return 0 success
  *       -1  failed
  */
-int scanFilesIntoCatagory(Qz7zItemList_T *the_list)
+int scanFilesIntoCategory(Qz7zItemList_T *the_list)
 {
     int cat_index;
     QzListHead_T *files = the_list->items[1];
-    QzCatagory_T *cat = the_list->table->catas;
+    QzCategory_T *cat = the_list->table->catas;
 
     for (int i = 0; i < files->total; ++i) {
         Qz7zFileItem_T *p = qzListGet(files, i);
+        if (p == NULL) {
+            continue;
+        }
         // decide the category for the fileitem
-        cat_index = getCatagory(the_list->table, p);
+        cat_index = getCategory(the_list->table, p);
         // add to the category list
         qzListAdd(cat[cat_index].cat_files, (void **)&p);
     }
@@ -2999,10 +3012,16 @@ static unsigned char *genNamesPart(QzListHead_T *head_dir,
 
     for (i = 0; i < n_dir; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_dir, i);
+        if (p == NULL) {
+            continue;
+        }
         buf_len += 2 * (p->nameLength - p->baseNameLength);
     }
     for (i = 0; i < n_file; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_file, i);
+        if (p == NULL) {
+            continue;
+        }
         buf_len += 2 * (p->nameLength - p->baseNameLength);
     }
     buf = malloc(buf_len + 1);
@@ -3012,6 +3031,9 @@ static unsigned char *genNamesPart(QzListHead_T *head_dir,
     buf[k++] = 0;
     for (i = 0; i < n_dir; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_dir, i);
+        if (p == NULL) {
+            continue;
+        }
         for (j = p->baseNameLength; j < p->nameLength; ++j) {
             buf[k++] = p->fileName[j];
             buf[k++] = 0;
@@ -3019,6 +3041,9 @@ static unsigned char *genNamesPart(QzListHead_T *head_dir,
     }
     for (i = 0; i < n_file; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_file, i);
+        if (p == NULL) {
+            continue;
+        }
         for (j = p->baseNameLength; j < p->nameLength; ++j) {
             buf[k++] = p->fileName[j];
             buf[k++] = 0;
@@ -3044,10 +3069,16 @@ static uint32_t *genAttributes(QzListHead_T *head_dir, QzListHead_T *head_file)
     k = 0;
     for (i = 0; i < n_dir; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_dir, i);
+        if (p == NULL) {
+            continue;
+        }
         buf[k++] = p->attribute;
     }
     for (i = 0; i < n_file; ++i) {
         p = (Qz7zFileItem_T *)qzListGet(head_file, i);
+        if (p == NULL) {
+            continue;
+        }
         buf[k++] = p->attribute;
     }
 
@@ -3289,8 +3320,8 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
     }// end for
 
     /* now the res->items has been resolved successfully */
-    res->table = createCatagoryList();
-    scanFilesIntoCatagory(res);
+    res->table = createCategoryList();
+    scanFilesIntoCategory(res);
 
     return res;
 

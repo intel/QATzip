@@ -367,19 +367,22 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                               &dst_file_size, is_compress);
 
         if (QZ_DATA_ERROR == ret || QZ_BUF_ERROR == ret) {
-            if (!is_compress && QZ_DATA_ERROR == ret) {
-                /* End of compressed stream - normal completion for gzip */
-                file_remaining -= bytes_read;
-                ret = OK;
-                break;
-            } else if (bytes_read > 0 && bytes_read < bytes_lookahead) {
-                /* Partial consumption: rewind file position for retry */
+            if (bytes_read > 0 && bytes_read < bytes_lookahead) {
+                /* Partial consumption: rewind file position for retry.
+                 * This handles combined files where a frame header/footer
+                 * may span buffer boundaries.
+                 */
                 offset_revert = (long)bytes_read - (long)bytes_lookahead;
                 if (-1 == fseek(src_file, offset_revert, SEEK_CUR)) {
                     ret = ERROR;
                     goto exit;
                 }
                 read_more = 1;
+            } else if (!is_compress && QZ_DATA_ERROR == ret) {
+                /* End of compressed stream - normal completion */
+                file_remaining -= bytes_read;
+                ret = OK;
+                break;
             } else if (0 == bytes_read && QZ_BUF_ERROR == ret) {
                 /* Destination buffer too small - expand it */
                 if (ratio_limit == ratio_idx) {

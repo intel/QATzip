@@ -670,9 +670,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
         if (unlikely(0 != pthread_mutex_unlock(&g_lock))) {
             return QZ_NOSW_NO_HW;
         }
-        if (g_process.sw_backup != sw_backup) {
-            g_process.sw_backup = sw_backup;
-        }
+        g_process.sw_backup = sw_backup;
 
         return QZ_DUPLICATE;
     }
@@ -708,11 +706,7 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
     }
 #else
     status = icp_adf_get_numDevices(&pcie_count);
-    if (CPA_STATUS_SUCCESS != status) {
-        g_process.qat_available = CPA_FALSE;
-    }
-
-    if (pcie_count >= 1) {
+    if (CPA_STATUS_SUCCESS == status && pcie_count >= 1) {
         g_process.qat_available = CPA_TRUE;
     } else {
         g_process.qat_available = CPA_FALSE;
@@ -1136,6 +1130,9 @@ int qzSetupSession(QzSession_T *sess, QzSessionParams_T *params)
 
     if (NULL == params) {
         rc = qzGetDefaults(&temp);
+        if (rc != QZ_OK) {
+            return rc;
+        }
         params = &temp;
     }
 
@@ -1179,6 +1176,9 @@ int qzSetupSessionDeflate(QzSession_T *sess,  QzSessionParamsDeflate_T *params)
 
     if (NULL == params) {
         rc = qzGetDefaultsDeflate(&temp);
+        if (rc != QZ_OK) {
+            return rc;
+        }
         params = &temp;
     }
 
@@ -1224,6 +1224,9 @@ int qzSetupSessionDeflateExt(QzSession_T *sess,
 
     if (NULL == params) {
         rc = qzGetDefaultsDeflateExt(&temp);
+        if (rc != QZ_OK) {
+            return rc;
+        }
         params = &temp;
     }
 
@@ -1279,6 +1282,9 @@ int qzSetupSessionLZ4(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
 
     if (NULL == params) {
         rc = qzGetDefaultsLZ4(&temp);
+        if (rc != QZ_OK) {
+            return rc;
+        }
         params = &temp;
     }
 
@@ -1322,6 +1328,9 @@ int qzSetupSessionLZ4S(QzSession_T *sess,  QzSessionParamsLZ4S_T *params)
 
     if (NULL == params) {
         rc = qzGetDefaultsLZ4S(&temp);
+        if (rc != QZ_OK) {
+            return rc;
+        }
         params = &temp;
     }
 
@@ -2022,7 +2031,13 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     }
 
     if (reqcnt > qz_sess->sess_params.req_cnt_thrshold) {
-        pthread_create(&(qz_sess->c_th_i), NULL, doCompressIn, (void *)sess);
+        if (unlikely(0 != pthread_create(&(qz_sess->c_th_i), NULL, doCompressIn,
+                                         (void *)sess))) {
+            QZ_ERROR("pthread_create failed for doCompressIn\n");
+            qzReleaseInstance(i);
+            rc = QZ_FAIL;
+            goto err_exit;
+        }
         doCompressOut((void *)sess);
         pthread_join(qz_sess->c_th_i, NULL);
     } else {
@@ -2497,6 +2512,11 @@ int qzDecompressCrcExt(QzSession_T *sess, const unsigned char *src,
         }
     }
 
+    if (unlikely(NULL == sess->internal)) {
+        rc = QZ_FAIL;
+        goto err_exit;
+    }
+
     qz_sess = (QzSess_T *)(sess->internal);
     if (g_sess_params_internal_default.data_fmt == DEFLATE_ZLIB) {
         qz_sess->sess_params.data_fmt = DEFLATE_ZLIB;
@@ -2964,8 +2984,7 @@ static unsigned int qzDeflateBound(unsigned int src_sz, QzSession_T *sess)
      * for header and footer size.
      */
     /* Calculate how many gzip/gzip-ext headers and footers will be generated. */
-    chunk_cnt = src_sz / hw_buffer_sz + src_sz %
-                hw_buffer_sz ? 1 : 0;
+    chunk_cnt = src_sz / hw_buffer_sz + ((src_sz % hw_buffer_sz) ? 1 : 0);
     if (qz_sess->sess_params.data_fmt == DEFLATE_ZLIB) {
         dest_sz += chunk_cnt * outputHeaderSz(qz_sess->sess_params.data_fmt) +
                    chunk_cnt * outputFooterSz(qz_sess->sess_params.data_fmt);
@@ -3020,8 +3039,8 @@ static unsigned int qzLZ4Bound(unsigned int src_sz, QzSession_T *sess)
      */
     /* Calculate how many frames header and footer will be generated */
     qz_sess = (QzSess_T *)sess->internal;
-    chunk_cnt = src_sz / qz_sess->sess_params.hw_buff_sz + src_sz %
-                qz_sess->sess_params.hw_buff_sz ? 1 : 0;
+    chunk_cnt = src_sz / qz_sess->sess_params.hw_buff_sz +
+                ((src_sz % qz_sess->sess_params.hw_buff_sz) ? 1 : 0);
     dest_sz += chunk_cnt * outputHeaderSz(qz_sess->sess_params.data_fmt) +
                chunk_cnt * outputFooterSz(qz_sess->sess_params.data_fmt);
 
@@ -3043,8 +3062,7 @@ unsigned int qzMaxCompressedLength(unsigned int src_sz, QzSession_T *sess)
         uint64_t in_sz = src_sz;
         uint64_t out_sz = 0;
         out_sz = QZ_CEIL_DIV(9 * in_sz, 8) + QZ_SKID_PAD_SZ;
-        chunk_cnt = in_sz / QZ_HW_BUFF_SZ + in_sz %
-                    QZ_HW_BUFF_SZ ? 1 : 0;
+        chunk_cnt = in_sz / QZ_HW_BUFF_SZ + ((in_sz % QZ_HW_BUFF_SZ) ? 1 : 0);
         out_sz += chunk_cnt * (qzGzipHeaderSz() + stdGzipFooterSz());
         if (out_sz & 0xffffffff00000000UL)
             return 0;
@@ -4047,6 +4065,11 @@ int qzAsyncSetupHWSession(QzSession_T *sess, QzDirection_T direct)
         if (unlikely(QZ_SETUP_SESSION_FAIL(rc))) {
             goto err_exit;
         }
+    }
+
+    if (unlikely(NULL == sess->internal)) {
+        rc = QZ_FAIL;
+        goto err_exit;
     }
 
     qz_sess = (QzSess_T *)(sess->internal);

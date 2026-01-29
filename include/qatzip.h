@@ -47,8 +47,8 @@
  *
  *****************************************************************************/
 
-#ifndef _QATZIP_H
-#define _QATZIP_H
+#ifndef QATZIP_H
+#define QATZIP_H
 
 #ifdef __cplusplus
 extern"C" {
