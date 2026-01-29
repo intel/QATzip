@@ -3154,7 +3154,8 @@ static int AsyncCompressIn(QzAsyncReq_T **req_ptr)
     qz_sess->src_sz = &(req->qzResults->src_len);
     qz_sess->dest_sz = &(req->qzResults->dest_len);
     qz_sess->next_dest = req->dest;
-    qz_sess->last = 1;
+    qz_sess->last = req->qzResults->extension_result != NULL ?
+                    *(uint32_t *)(req->qzResults->extension_result) : 1;
     qz_sess->crc32 = req->qzResults->crc != NULL &&
                      QZ_CRC32_VALID(req->qzResults->crc->valid_flags) ?
                      (unsigned long *)req->qzResults->crc->in_crc.crc_32 : NULL;
@@ -3266,7 +3267,7 @@ static void *AsyncCompressOut(void *in)
     QzAsyncReq_T *req_prv = NULL;
     QzSession_T *sess = (QzSession_T *) in;
     QzSess_T *qz_sess = (QzSess_T *) sess->internal;
-    unsigned long *qz_crc32 = NULL;
+    uint32_t *qz_crc32 = NULL;
 
     int i = qz_sess->inst_hint;
     DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
@@ -3383,7 +3384,7 @@ static void *AsyncCompressOut(void *in)
 
                 qz_crc32 = req->qzResults->crc != NULL &&
                            QZ_CRC32_VALID(req->qzResults->crc->valid_flags) ?
-                           (unsigned long *)req->qzResults->crc->in_crc.crc_32 : NULL;
+                           req->qzResults->crc->in_crc.crc_32 : NULL;
 
                 if (likely(NULL != qz_crc32 && IS_DEFLATE(data_fmt))) {
                     if (0 == *(qz_crc32)) {
