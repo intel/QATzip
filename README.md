@@ -189,7 +189,7 @@ sudo make install
   sudo make install
   ```
 ### Install from Docker Image
-Dockerfile with the qatlib intree driver dependancy which can be built into docker images can be used for installing qatzip. Please refer [here](dockerfiles/README.md) for more details.
+Dockerfile with the qatlib intree driver dependency which can be built into docker images can be used for installing qatzip. Please refer [here](dockerfiles/README.md) for more details.
 
 ### Configuration
 

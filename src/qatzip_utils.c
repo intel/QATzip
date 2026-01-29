@@ -1294,7 +1294,7 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         if ((unsigned char *)qzFooter == src_ptr + src_avail_len - stdGzipFooterSz()) {
             isEndWithFooter = 1;
         }
-        QZ_DEBUG("checkHeader: DEFLATE_GZIP compressed_sz = %u , uncompressed_sz = %u \n",
+        QZ_DEBUG("checkHeader: DEFLATE_GZIP compressed_sz = %u , uncompressed_sz = %u\n",
                  compressed_sz, uncompressed_sz);
         break;
     case DEFLATE_GZIP_EXT:
@@ -1303,7 +1303,7 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         }
         compressed_sz = (long)(hdr->extra.qz_e.dest_sz);
         uncompressed_sz = (long)(hdr->extra.qz_e.src_sz);
-        QZ_DEBUG("checkHeader: DEFLATE_GZIP_EXT compressed_sz = %u , uncompressed_sz = %u \n",
+        QZ_DEBUG("checkHeader: DEFLATE_GZIP_EXT compressed_sz = %u , uncompressed_sz = %u\n",
                  compressed_sz, uncompressed_sz);
 
         break;
@@ -1330,14 +1330,14 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
     case DEFLATE_RAW:
         compressed_sz = *(qz_sess->src_sz);
         uncompressed_sz = *(qz_sess->dest_sz);
-        QZ_DEBUG("checkHeader: DEFLATE_RAW HW Decompression enabled uncompressed_sz is %u \n",
+        QZ_DEBUG("checkHeader: DEFLATE_RAW HW Decompression enabled uncompressed_sz is %u\n",
                  uncompressed_sz);
         break;
     case DEFLATE_ZLIB:
         compressed_sz = src_avail_len - stdZlibFooterSz() - stdZlibHeaderSz();
         uncompressed_sz = (qz_sess->sess_params.hw_buff_sz > dest_avail_len) ?
                           dest_avail_len : qz_sess->sess_params.hw_buff_sz;
-        QZ_DEBUG("checkHeader DEFLATE_ZLIB: compressed_sz %u  uncompressed_sz %u \n",
+        QZ_DEBUG("checkHeader DEFLATE_ZLIB: compressed_sz %u  uncompressed_sz %u\n",
                  compressed_sz, uncompressed_sz);
         break;
     default:
@@ -1564,7 +1564,7 @@ void setDeflateEndOfStream(QzSess_T *qz_sess, unsigned char val)
                                       qz_sess->qzdeflateExtData;
     if (data != NULL) {
         data->end_of_stream = val;
-        QZ_DEBUG("\tHW setDeflateEndOfStream: setting end_of_stream to %d \n", val);
+        QZ_DEBUG("HW setDeflateEndOfStream: setting end_of_stream to %d\n", val);
     }
 }
 
@@ -1573,7 +1573,7 @@ unsigned char getDeflateEndOfStream(QzSess_T *qz_sess)
     QzDeflateExtCustomData_T  *data = (QzDeflateExtCustomData_T *)
                                       qz_sess->qzdeflateExtData;
     if (data != NULL) {
-        QZ_DEBUG("\tHW getDeflateEndOfStream:  end_of_stream  %d \n",
+        QZ_DEBUG("HW getDeflateEndOfStream: end_of_stream %d\n",
                  data->end_of_stream);
         return data->end_of_stream;
     }

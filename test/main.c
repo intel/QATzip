@@ -355,13 +355,13 @@ static void dumpInputData(size_t size, uint8_t *data)
 
     fd = mkstemp(temp_file);
     if (-1 == fd) {
-        QZ_ERROR("Creat dump file Failed\n");
+        QZ_ERROR("Create dump file Failed\n");
         return;
     }
 
     ulen = write(fd, data, size);
     if (ulen != (ssize_t) size) {
-        QZ_ERROR("Creat dump file Failed\n");
+        QZ_ERROR("Create dump file Failed\n");
         return;
     }
     close(fd);
@@ -391,13 +391,13 @@ static void dumpOutputData(size_t size, uint8_t *data, char *filename)
     }
 
     if (-1 == fd) {
-        QZ_ERROR("Creat dump file Failed\n");
+        QZ_ERROR("Create dump file Failed\n");
         goto done;
     }
 
     ulen = write(fd, data, size);
     if (ulen != (ssize_t) size) {
-        QZ_ERROR("Creat dump file Failed\n");
+        QZ_ERROR("Create dump file Failed\n");
         goto done;
     }
 
@@ -427,7 +427,7 @@ static void dumpDecompressedData(size_t size, uint8_t *data, char *filename)
     filename_len = (filename_len + suffix_len + 1 + 7) / 8 * 8;
     output_filename = (char *) calloc(1, filename_len);
     if (NULL == output_filename) {
-        QZ_ERROR("Creat dump file Failed\n");
+        QZ_ERROR("Create dump file Failed\n");
         goto done;
     }
     snprintf(output_filename, filename_len, "%s%s",
@@ -438,13 +438,13 @@ static void dumpDecompressedData(size_t size, uint8_t *data, char *filename)
               S_IRUSR | S_IRGRP | S_IROTH);
 
     if (-1 == fd) {
-        QZ_ERROR("Creat dump file Failed\n");
+        QZ_ERROR("Create dump file Failed\n");
         goto done;
     }
 
     ulen = write(fd, data, size);
     if (ulen != (ssize_t) size) {
-        QZ_ERROR("Creat dump file Failed\n");
+        QZ_ERROR("Create dump file Failed\n");
         goto done;
     }
 
@@ -631,7 +631,7 @@ int qzInitSetupsessionExt(QzSession_T *sess, TestArg_T *arg)
         case TEST_GZIP:
         case TEST_GZIPEXT:
         case TEST_ZLIB:
-            QZ_DEBUG("calling  qzSetupDeflateExt \n");
+            QZ_DEBUG("calling  qzSetupDeflateExt\n");
             rc = qzSetupDeflateExt(sess, arg);
             break;
         default:
@@ -758,7 +758,7 @@ void *qzDecompressSwQz(void *arg)
             }
 
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                          org_src_sz);
                 goto done;
             }
@@ -789,7 +789,7 @@ void *qzDecompressSwQz(void *arg)
             }
 
             if (decomp_sw_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                          decomp_sw_out_sz, org_src_sz);
                 goto done;
             }
@@ -821,7 +821,7 @@ void *qzDecompressSwQz(void *arg)
             }
 
             if (decomp_qz_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                          decomp_qz_out_sz, org_src_sz);
                 goto done;
             }
@@ -835,13 +835,13 @@ void *qzDecompressSwQz(void *arg)
         {
             QZ_DEBUG("verify data..\n");
             if (memcmp(src, decomp_sw_out, org_src_sz)) {
-                QZ_ERROR("ERROR: SW Decompression FAILED on thread %ld with size: %lu \n!", tid,
+                QZ_ERROR("ERROR: SW Decompression FAILED on thread %ld with size: %lu\n", tid,
                          src_sz);
                 goto done;
             }
 
             if (memcmp(src, decomp_qz_out, org_src_sz)) {
-                QZ_ERROR("ERROR: QZip Decompression FAILED on thread %ld with size: %lu \n!",
+                QZ_ERROR("ERROR: QZip Decompression FAILED on thread %ld with size: %lu\n",
                          tid, src_sz);
                 goto done;
             }
@@ -1016,7 +1016,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
             }
 
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                          org_src_sz);
                 goto done;
             }
@@ -1057,7 +1057,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
             }
 
             if (decomp_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %u != org_src_sz: %lu \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %u != org_src_sz: %lu\n",
                          decomp_out_sz, org_src_sz);
                 goto done;
             }
@@ -1069,7 +1069,7 @@ void *qzCompressDecompressWithFormatOption(void *arg)
 
         QZ_DEBUG("verify data..\n");
         if (memcmp(src, decomp_out, org_src_sz)) {
-            QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu \n!", tid,
+            QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu\n", tid,
                      src_sz);
             goto done;
         }
@@ -1393,7 +1393,7 @@ void *qzTestStopDecompressionOnStreamEnd(void *arg)
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: qzTestEndOfStreamDetectionCompression FAILED with return value: %d\n",
                  rc);
-        QZ_ERROR("ERROR: qzTestEndOfStreamDetection After Compression src_sz: %lu != org_src_sz: %lu \n!",
+        QZ_ERROR("ERROR: qzTestEndOfStreamDetection After Compression src_sz: %lu != org_src_sz: %lu\n",
                  src_sz,
                  orig_sz);
         goto done;
@@ -1408,14 +1408,14 @@ void *qzTestStopDecompressionOnStreamEnd(void *arg)
         goto done;
     }
     if (decomp_sz != org_chunk_sz) {
-        QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_chunk_sz: %lu \n!",
+        QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_chunk_sz: %lu\n",
                  decomp_sz, org_chunk_sz);
         goto done;
     }
     rc = qzGetDeflateEndOfStream(&sess, endofstream);
     QZ_DEBUG("qzGetDeflateEndOfStream return: %d\n", *endofstream);
     if (*endofstream != 1) {
-        QZ_ERROR("ERROR: End of stream not detected \n!");
+        QZ_ERROR("ERROR: End of stream not detected\n");
         goto done;
     }
     QZ_INFO("Decompress stop at first stream end, decomp_sz %lu\n", decomp_sz);
@@ -1432,7 +1432,7 @@ void *qzTestStopDecompressionOnStreamEnd(void *arg)
     }
     rc = qzGetDeflateEndOfStream(&sess, endofstream);
     if (*endofstream != 0) {
-        QZ_ERROR("ERROR: incorrect end of stream detected for Partial stream \n!");
+        QZ_ERROR("ERROR: incorrect end of stream detected for Partial stream\n");
     }
     rc = 0;
     QZ_PRINT("qzTestStopDecompressionOnStreamEnd : PASS\n");
@@ -1535,7 +1535,7 @@ void *qzTestStopDecompressionOnStreamEndMultiStream(void *arg)
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream FAILED with return value: %d\n",
                  rc);
-        QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream After Compression src_sz: %lu != org_src_sz: %lu \n!",
+        QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream After Compression src_sz: %lu != org_src_sz: %lu\n",
                  src_sz,
                  orig_sz);
         goto done;
@@ -1554,7 +1554,7 @@ void *qzTestStopDecompressionOnStreamEndMultiStream(void *arg)
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream FAILED with return value: %d\n",
                  rc);
-        QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream After Compression src_sz: %lu != orig_sz: %lu \n!",
+        QZ_ERROR("ERROR: qzTestStopDecompressionOnStreamEndMultiStream After Compression src_sz: %lu != orig_sz: %lu\n",
                  src_sz,
                  orig_sz);
         goto done;
@@ -1565,7 +1565,7 @@ void *qzTestStopDecompressionOnStreamEndMultiStream(void *arg)
     memcpy(multicomp_src + multicomp_sz, comp_src, comp_sz);
     multicomp_sz += comp_sz;
     /*do decompress Data*/
-    QZ_DEBUG("qzTestStopDecompressionOnStreamEndZlib decompress  multicomp_sz : %lu \n",
+    QZ_DEBUG("qzTestStopDecompressionOnStreamEndZlib decompress  multicomp_sz : %lu\n",
              multicomp_sz);
     rc = qzDecompress(&sess, multicomp_src, (uint32_t *)(&multicomp_sz), decomp_src,
                       (uint32_t *)(&decomp_sz));
@@ -1574,14 +1574,14 @@ void *qzTestStopDecompressionOnStreamEndMultiStream(void *arg)
         goto done;
     }
     if (decomp_sz != src_sz) {
-        QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != src_sz: %lu \n!",
+        QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != src_sz: %lu\n",
                  decomp_sz, src_sz);
         goto done;
     }
     rc = qzGetDeflateEndOfStream(&sess, endofstream);
     QZ_DEBUG("qzGetDeflateEndOfStream return: %d\n", *endofstream);
     if (*endofstream != 1) {
-        QZ_ERROR("ERROR: End of stream not detected \n!");
+        QZ_ERROR("ERROR: End of stream not detected\n");
         goto done;
     }
     rc = 0;
@@ -1665,7 +1665,7 @@ void *qzTestEndOfStreamDetection(void *arg)
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: qzTestEndOfStreamDetectionCompression FAILED with return value: %d\n",
                  rc);
-        QZ_ERROR("ERROR: qzTestEndOfStreamDetection After Compression src_sz: %lu != org_src_sz: %lu \n!",
+        QZ_ERROR("ERROR: qzTestEndOfStreamDetection After Compression src_sz: %lu != org_src_sz: %lu\n",
                  src_sz,
                  orig_sz);
         goto done;
@@ -1821,12 +1821,12 @@ void *qzCompressAndDecompressExt(void *arg)
         src_sz = consumed;
         comp_out_sz = produced;
         if (src_sz != org_src_sz) {
-            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                      org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
         }
-        QZ_DEBUG("DEBUG: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+        QZ_DEBUG("DEBUG: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                  org_src_sz);
     }
 
@@ -1891,7 +1891,7 @@ void *qzCompressAndDecompressExt(void *arg)
             src_sz = consumed;
             comp_out_sz = produced;
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                          org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -1923,7 +1923,7 @@ void *qzCompressAndDecompressExt(void *arg)
 
             decomp_out_sz = produced;
             if (decomp_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                          decomp_out_sz, org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -1937,7 +1937,7 @@ void *qzCompressAndDecompressExt(void *arg)
         if (verify_data && COMP != service) {
             QZ_DEBUG("verify data..\n");
             if (memcmp(src, decomp_out, org_src_sz)) {
-                QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu \n!", tid,
+                QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu\n", tid,
                          src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -1981,7 +1981,7 @@ void *qzCompressAndDecompressExt(void *arg)
         decomp_out_sz = produced;
         if (decomp_out_sz != org_src_sz ||
             memcmp(src, decomp_out, org_src_sz)) {
-            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                      decomp_out_sz, org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -2169,7 +2169,7 @@ void *qzCompressAndDecompress(void *arg)
         src_sz = consumed;
         comp_out_sz = produced;
         if (src_sz != org_src_sz) {
-            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                      org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -2237,7 +2237,7 @@ void *qzCompressAndDecompress(void *arg)
             src_sz = consumed;
             comp_out_sz = produced;
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                          org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -2269,10 +2269,10 @@ void *qzCompressAndDecompress(void *arg)
             }
 
             decomp_out_sz = produced;
-            QZ_DEBUG("DEBUG: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+            QZ_DEBUG("DEBUG: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                      decomp_out_sz, org_src_sz);
             if (decomp_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                          decomp_out_sz, org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -2286,7 +2286,7 @@ void *qzCompressAndDecompress(void *arg)
         if (verify_data && COMP != service) {
             QZ_DEBUG("verify data..\n");
             if (memcmp(src, decomp_out, org_src_sz)) {
-                QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu \n!", tid,
+                QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu\n", tid,
                          src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -2330,7 +2330,7 @@ void *qzCompressAndDecompress(void *arg)
         decomp_out_sz = produced;
         if (decomp_out_sz != org_src_sz ||
             memcmp(src, decomp_out, org_src_sz)) {
-            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                      decomp_out_sz, org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -2478,7 +2478,7 @@ int qzCompressDecompressWithParams(const TestArg_T *arg,
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                  orig_sz);
         goto done;
     }
@@ -2626,7 +2626,7 @@ void *qzCompressStreamAndDecompress(void *arg)
 
 
     if (memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Decompression FAILED with size: %lu \n!", orig_sz);
+        QZ_ERROR("ERROR: Decompression FAILED with size: %lu\n", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpOutputData(comp_sz, comp_src, "comp_out");
         dumpOutputData(decomp_sz, decomp_src, "decomp_out");
@@ -2673,7 +2673,7 @@ void *qzCompressStreamAndDecompress(void *arg)
     QZ_DEBUG("verify data of size %lu ...\n", orig_sz);
     if (produced != orig_sz || consumed != decomp_out_sz ||
         memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Memory compare FAILED with size: %lu \n!", orig_sz);
+        QZ_ERROR("ERROR: Memory compare FAILED with size: %lu\n", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpInputData(orig_sz, decomp_src);
         goto exit;
@@ -2721,7 +2721,7 @@ void *qzCompressStreamAndDecompress(void *arg)
     QZ_DEBUG("verify data of size %lu ...\n", orig_sz);
     if (produced != orig_sz || consumed != decomp_out_sz ||
         memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Decompression FAILED with size: %lu \n!", orig_sz);
+        QZ_ERROR("ERROR: Decompression FAILED with size: %lu\n", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpInputData(orig_sz, decomp_src);
 
@@ -2774,7 +2774,7 @@ test_2_end:
     QZ_DEBUG("verify data of size %lu ...\n", orig_sz);
     if (produced != orig_sz || consumed != decomp_out_sz ||
         memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Memory compare FAILED with size: %lu \n!", orig_sz);
+        QZ_ERROR("ERROR: Memory compare FAILED with size: %lu\n", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpInputData(orig_sz, decomp_src);
         goto exit;
@@ -2823,7 +2823,7 @@ test_3_end:
     QZ_DEBUG("verify data of size %lu ...\n", orig_sz);
     if (produced != orig_sz || consumed != decomp_out_sz ||
         memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Memory compare FAILED with size: %lu \n!", orig_sz);
+        QZ_ERROR("ERROR: Memory compare FAILED with size: %lu\n", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpInputData(orig_sz, decomp_src);
         goto exit;
@@ -3445,7 +3445,7 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
 
 
     if (memcmp(orig_src, decomp_src, orig_sz)) {
-        QZ_ERROR("ERROR: Decompression FAILED with size: %lu \n!", orig_sz);
+        QZ_ERROR("ERROR: Decompression FAILED with size: %lu\n", orig_sz);
         dumpInputData(orig_sz, orig_src);
         dumpOutputData(comp_sz, comp_src, "comp_out");
         dumpOutputData(decomp_sz, decomp_src, "decomp_out");
@@ -3491,12 +3491,12 @@ void *testqzDecompressStreamInvalidParam(void *arg, int test_no)
 
     rc = qzDecompressStream(test_sess, test_strm, last);
     if (rc == QZ_OK) {
-        QZ_ERROR("T#############T ERROR: qzDecompressStream negative test FAILED: %d*** \n",
+        QZ_ERROR("T#############T ERROR: qzDecompressStream negative test FAILED: %d***\n",
                  rc);
         dumpOutputData(comp_sz, comp_src, "decomp_stream__input");
         goto exit;
     }
-    QZ_DEBUG("T#############T: qzDecompressStream return value: %d*** \n", rc);
+    QZ_DEBUG("T#############T: qzDecompressStream return value: %d***\n", rc);
 
 exit:
     qzFree(orig_src);
@@ -3619,11 +3619,11 @@ void *testqzEndStreamInvalidParam(void *arg, int test_no)
 
     rc = qzEndStream(test_sess, test_strm);
     if (rc == QZ_OK) {
-        QZ_ERROR("\nT#############T ERROR: qzEndStream negative test FAILED,return: %d*** \n",
+        QZ_ERROR("\nT#############T ERROR: qzEndStream negative test FAILED,return: %d***\n",
                  rc);
         goto exit;
     }
-    QZ_DEBUG("T#############T: qzEndStream return value: %d*** \n", rc);
+    QZ_DEBUG("T#############T: qzEndStream return value: %d***\n", rc);
 
 exit:
     qzFree(orig_src);
@@ -3801,7 +3801,7 @@ void *qzCompressDecompressSwQZMixed(void *arg)
     for (i = 0; i < NUM_OF_TEST; i++) {
         if (qzCompressDecompressWithParams(arg, test_params[i].comp_params,
                                            test_params[i].decomp_params) < 0) {
-            QZ_ERROR("ERROR: HW/SW mixed function test in: %s \n", test_params[i].name);
+            QZ_ERROR("ERROR: HW/SW mixed function test in: %s\n", test_params[i].name);
             return NULL;
         }
     }
@@ -3853,7 +3853,7 @@ int qzDecompressFailedAtUnknownGzipHeader(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                  orig_sz);
         goto done;
     }
@@ -3926,7 +3926,7 @@ int qzDecompressSWFailedAtUnknownGzipBlock(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                  orig_sz);
         goto done;
     }
@@ -4012,7 +4012,7 @@ int qzDecompressHWFailedAtUnknownGzipBlock(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                  orig_sz);
         goto done;
     }
@@ -4084,7 +4084,7 @@ int qzDecompressForceSW(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                  orig_sz);
         goto done;
     }
@@ -4188,7 +4188,7 @@ int qzDecompressStandalone(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                  orig_sz);
         goto done;
     }
@@ -4383,7 +4383,7 @@ int qzCompressSWL9DecompressHW(void)
                     (uint32_t *)(&comp_sz), 1);
     if (rc != QZ_OK || src_sz != orig_sz) {
         QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
-        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                  orig_sz);
         goto done;
     }
@@ -4799,7 +4799,7 @@ void *qzLSMcompressPerf(void *arg)
         pthread_exit((void *)"qzInit failed");
     }
 
-    /* According to contorl flow, adjust LSM matrix table*/
+    /* According to control flow, adjust LSM matrix table*/
     if (HW_only_flag) {
         if (qz_sess->sess_params.is_sensitive_mode) {
             for (int i = 0; i < LSM_MET_DEPTH; i++) {
@@ -4910,7 +4910,7 @@ void *qzLSMcompressPerf(void *arg)
             src_sz = consumed;
             comp_out_sz = produced;
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                          org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -5041,7 +5041,7 @@ void *qzLSMdecompressPerf(void *arg)
         pthread_exit((void *)"qzInit failed");
     }
 
-    /* According to contorl flow, adjust LSM matrix table*/
+    /* According to control flow, adjust LSM matrix table*/
     qz_sess = (QzSess_T *)(sess.internal);
     if (qz_sess == NULL) {
         pthread_exit((void *)"qzInit failed");
@@ -5121,7 +5121,7 @@ void *qzLSMdecompressPerf(void *arg)
     src_sz = consumed;
     comp_out_sz = produced;
     if (src_sz != org_src_sz) {
-        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+        QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                  org_src_sz);
         dumpInputData(src_sz, src);
         goto done;
@@ -5181,7 +5181,7 @@ void *qzLSMdecompressPerf(void *arg)
 
             decomp_out_sz = produced;
             if (decomp_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                          decomp_out_sz, org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -5200,7 +5200,7 @@ void *qzLSMdecompressPerf(void *arg)
     */
     if (verify_data) {
         if (memcmp(src, decomp_out, org_src_sz)) {
-            QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu \n!", tid,
+            QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu\n", tid,
                      src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -5305,7 +5305,7 @@ void *qzLSMHeterogeneousPerf(void *arg)
         pthread_exit((void *)"qzInit failed");
     }
 
-    /* According to contorl flow, adjust LSM matrix table*/
+    /* According to control flow, adjust LSM matrix table*/
     qz_sess = (QzSess_T *)(sess.internal);
     if (qz_sess == NULL) {
         pthread_exit((void *)"qzInit failed");
@@ -5656,7 +5656,7 @@ void *qzAsyncCompressAndDecompress(void *arg)
         src_sz = consumed;
         comp_out_sz = produced;
         if (src_sz != org_src_sz) {
-            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                      org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -5744,7 +5744,7 @@ void *qzAsyncCompressAndDecompress(void *arg)
             src_sz = consumed;
             comp_out_sz = produced;
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                          org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -5811,7 +5811,7 @@ void *qzAsyncCompressAndDecompress(void *arg)
 
             decomp_out_sz = produced;
             if (decomp_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                          decomp_out_sz, org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -5829,7 +5829,7 @@ void *qzAsyncCompressAndDecompress(void *arg)
     if (verify_data && COMP != service) {
         QZ_DEBUG("verify data..\n");
         if (memcmp(src, decomp_out, org_src_sz)) {
-            QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu \n!", tid,
+            QZ_ERROR("ERROR: Decompression FAILED on thread %ld with size: %lu\n", tid,
                      src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -5868,7 +5868,7 @@ void *qzAsyncCompressAndDecompress(void *arg)
         decomp_out_sz = produced;
         if (decomp_out_sz != org_src_sz ||
             memcmp(src, decomp_out, org_src_sz)) {
-            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+            QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                      decomp_out_sz, org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -6076,7 +6076,7 @@ void *qzAsyncPerfCompressAndDecompress(void *arg)
         src_sz = consumed;
         comp_out_sz = produced;
         if (src_sz != org_src_sz) {
-            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+            QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                      org_src_sz);
             dumpInputData(src_sz, src);
             goto done;
@@ -6168,7 +6168,7 @@ void *qzAsyncPerfCompressAndDecompress(void *arg)
             src_sz = consumed;
             comp_out_sz = comp_output_size;
             if (src_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu \n!", src_sz,
+                QZ_ERROR("ERROR: After Compression src_sz: %lu != org_src_sz: %lu\n", src_sz,
                          org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -6241,7 +6241,7 @@ void *qzAsyncPerfCompressAndDecompress(void *arg)
             }
             decomp_out_sz = decomp_output_size;
             if (decomp_out_sz != org_src_sz) {
-                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu \n!",
+                QZ_ERROR("ERROR: After Decompression decomp_out_sz: %lu != org_src_sz: %lu\n",
                          decomp_out_sz, org_src_sz);
                 dumpInputData(src_sz, src);
                 goto done;
@@ -6339,9 +6339,9 @@ done:
     "Optional options can be:\n"                                                \
     "\n"                                                                        \
     "    -i inputfile          input source file\n"                             \
-    "                          default by random generate data \n"              \
+    "                          default by random generate data\n"               \
     "    -t thread_count       maximum forks permitted in the current thread\n" \
-    "                          0 means no forking permitted. \n"                \
+    "                          0 means no forking permitted.\n"                 \
     "    -l loop count         default is 2\n"                                  \
     "    -v                    verify, disabled by default\n"                   \
     "    -e init engine        enable | disable. enabled by default\n"          \
@@ -6354,20 +6354,20 @@ done:
     "                          data into pieces. qzCompress/qzDecompress will\n"\
     "                          de/compress block_size bytes every time.\n"      \
     "                          It must be the power of 2. The minimum is 4k,\n" \
-    "                          and maximum is 1M. Default is -1, don't split \n" \
+    "                          and maximum is 1M. Default is -1, don't split\n" \
     "                          the test data.\n"                                \
     "    -D direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
     "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s | zlib\n"\
-    "                          For zlib and deflate raw the block size must be same \n"\
-    "                          as HW buffer size, e.g '-b' and '-C' should be same. \n" \
+    "                          For zlib and deflate raw the block size must be same\n"\
+    "                          as HW buffer size, e.g '-b' and '-C' should be same.\n" \
     "    -T huffmanType        static | dynamic\n"                              \
     "    -r req_cnt_thrshold   max in-flight request num, default is 16\n"       \
     "    -S thread_sleep       the unit is milliseconds, default is a random time\n"       \
     "    -P polling            set polling mode, default is periodical polling\n" \
-    "                          when set busy polling mode, it would automatically \n"    \
-    "                          enable the LSM(latency sensitive mode) \n"    \
+    "                          when set busy polling mode, it would automatically\n"    \
+    "                          enable the LSM(latency sensitive mode)\n"    \
     "    -M svm                set perf mode with file input, default is non\n" \
     "                          svm mode. When set to svm, all memory will\n"    \
     "                          be allocated with malloc instead of qzMalloc\n"  \

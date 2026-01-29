@@ -260,7 +260,7 @@ static void dcEventCallback(const CpaInstanceHandle instanceHandle,
         QZ_INFO("QAT instance %ld detected Event 'fatal error'\n", i);
         break;
     default:
-        QZ_ERROR("QAT instance %ld detected Unknow Event!\n", i);
+        QZ_ERROR("QAT instance %ld detected Unknown Event!\n", i);
     }
 }
 
@@ -1694,7 +1694,7 @@ static void *doCompressOut(void *in)
                     }
                 } else {
                     /* polled HW respond */
-                    QZ_DEBUG("\tHW CompOut: consumed = %d, produced = %d, seq_in = %ld\n",
+                    QZ_DEBUG("HW CompOut: consumed = %d, produced = %d, seq_in = %ld\n",
                              resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq);
 
                     unsigned int dest_receive_sz = outputHeaderSz(data_fmt) + resl->produced +
@@ -2167,10 +2167,10 @@ static void *doDecompressIn(void *in)
             do {
                 j = getUnusedBuffer(i, j);
 
-                /* if decompres is in single thread mode, no body gone consume the
+                /* if decompress is in single thread mode, no body gone consume the
                  * buffer, it shows something wrong in program, need to exit with
                  * error, otherwise, program will hang at the nanosleep, it would
-                 * never get the avaliable buffer.
+                 * never get the available buffer.
                  */
                 if (qz_sess->single_thread) {
                     if (unlikely((-1 == j) ||
@@ -2246,7 +2246,7 @@ static void *doDecompressIn(void *in)
         qz_sess->submitted++;
         /*stop_decompression_stream_end is valid for gzip and gzip ext where multiple decompress requests can be submitted.
         Given we can identify streams/chunk with header and footer. Zlib and deflate raw always takes decompression as a single job
-        as we cannot identify the stream boundries.Job size can be as big as QAT HW buffer*/
+        as we cannot identify the stream boundaries.Job size can be as big as QAT HW buffer*/
         if (qz_sess->stop_submitting ||
             qz_sess->sess_params.stop_decompression_stream_end == 1) {
             remaining = 0;
@@ -2340,7 +2340,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                     }
                 } else {
                     resl = &g_process.qz_inst[i].stream[j].res;
-                    QZ_DEBUG("\tHW DecompOut: consumed = %d, produced = %d, seq_in = %ld, src_send_sz = %u\n",
+                    QZ_DEBUG("HW DecompOut: consumed = %d, produced = %d, seq_in = %ld, src_send_sz = %u\n",
                              resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq,
                              g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes);
 
@@ -2359,7 +2359,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                     qz_sess->qz_out_len += resl->produced;
                     dest_avail_len -= resl->produced;
                     if (resl->endOfLastBlock == CPA_TRUE) {
-                        QZ_DEBUG("\tHW DecompOut: endOfLastBlock \n");
+                        QZ_DEBUG("HW DecompOut: endOfLastBlock\n");
                         setDeflateEndOfStream(qz_sess, 1);
                     }
                 }
@@ -3285,7 +3285,7 @@ static void *AsyncCompressOut(void *in)
             /* this will cause the in-flight request is not finished */
             QZ_ERROR("Error in DcPoll: %d\n", sts);
             /* TODO: This would cause the background polling thread exit
-             * Maybe we should never let this happend, otherwise we need
+             * Maybe we should never let this happen, otherwise we need
              * mechanism to check the status of this polling thread.
              */
             goto err_exit;
@@ -3320,7 +3320,7 @@ static void *AsyncCompressOut(void *in)
                     } else {
                         compOutSkipErrorRespond(i, j, qz_sess);
                         req_prv = req;
-                        /* if process equel to submit, it means a request definatly complete */
+                        /* if process equal to submit, it means a request definitely complete */
                         if (qz_sess->processed == qz_sess->submitted) {
                             CallAsyncbackfn(&req_prv, QZ_FAIL, sess);
                         }
@@ -3350,7 +3350,7 @@ static void *AsyncCompressOut(void *in)
                     /* Even one request failed, we still allow Compressin thread
                      * to offload new request */
                     sess->thd_sess_stat = QZ_FAIL;
-                    /* If it's last buffer of request, excute Exception handle directly */
+                    /* If it's last buffer of request, execute Exception handle directly */
                     if (qz_sess->processed == qz_sess->submitted) {
                         CallAsyncbackfn(&req, QZ_FAIL, sess);
                         req_prv = NULL;
@@ -3359,7 +3359,7 @@ static void *AsyncCompressOut(void *in)
                 }
 
                 /* polled HW respond */
-                QZ_DEBUG("\tHW CompOut: consumed = %d, produced = %d, seq_in = %ld\n",
+                QZ_DEBUG("HW CompOut: consumed = %d, produced = %d, seq_in = %ld\n",
                          resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq);
 
                 unsigned int dest_receive_sz = outputHeaderSz(data_fmt) + resl->produced +
@@ -3701,7 +3701,7 @@ static void *AsyncDecompressOut(void *in)
                     } else {
                         decompOutSkipErrorRespond(i, j, qz_sess);
                         req_prv = req;
-                        /* if process equel to submit, it means a request definatly complete */
+                        /* if process equal to submit, it means a request definitely complete */
                         if (qz_sess->processed == qz_sess->submitted) {
                             CallAsyncbackfn(&req_prv, QZ_FAIL, sess);
                         }
@@ -3724,7 +3724,7 @@ static void *AsyncDecompressOut(void *in)
                                  qz_sess->seq_in);
                         decompOutSkipErrorRespond(i, j, qz_sess);
                         sess->thd_sess_stat = QZ_FAIL;
-                        /* If it's last buffer of request, excute Exception handle directly */
+                        /* If it's last buffer of request, execute Exception handle directly */
                         if (qz_sess->processed == qz_sess->submitted) {
                             CallAsyncbackfn(&req, QZ_FAIL, sess);
                             req_prv = NULL;
@@ -3733,7 +3733,7 @@ static void *AsyncDecompressOut(void *in)
                     }
                 } else {
                     resl = &g_process.qz_inst[i].stream[j].res;
-                    QZ_DEBUG("\tHW DecompOut: consumed = %d, produced = %d, seq_in = %ld, src_send_sz = %u\n",
+                    QZ_DEBUG("HW DecompOut: consumed = %d, produced = %d, seq_in = %ld, src_send_sz = %u\n",
                              resl->consumed, resl->produced, g_process.qz_inst[i].stream[j].seq,
                              g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes);
 
@@ -4147,7 +4147,7 @@ int qzCompress2(QzSession_T *sess, const unsigned char *src,
     /* For now, use glibc calloc to create request, it may reduce async perf
      * when request num is small, But as the number of requests increases, the
      * glibc memory slab would help to reduce the Memory allocation overhead.
-     * For future, we would use the request memory pool to replace currect
+     * For future, we would use the request memory pool to replace correct
      * implement.
      */
     QzAsyncReq_T *req = calloc(1, sizeof(QzAsyncReq_T));
@@ -4190,7 +4190,7 @@ int qzDecompress2(QzSession_T *sess, const unsigned char *src,
     /* For now, use glibc calloc to create request, it may reduce async perf
      * when request num is small, But as the number of requests increases, the
      * glibc memory slab would help to reduce the Memory allocation overhead.
-     * For future, we would use the request memory pool to replace currect
+     * For future, we would use the request memory pool to replace correct
      * implement.
      */
     QzAsyncReq_T *req = calloc(1, sizeof(QzAsyncReq_T));

@@ -301,7 +301,7 @@ int main(int argc, char **argv)
                         }
 
                         QZ_DEBUG(" this is a 7z archive, "
-                                 "going to decompress ... \n");
+                                 "going to decompress ...\n");
                         g_params_th.data_fmt = QZIP_DEFLATE_RAW;
                         if (qatzipSetup(&g_sess, &g_params_th)) {
                             fprintf(stderr, "qatzipSetup session  failed\n");
