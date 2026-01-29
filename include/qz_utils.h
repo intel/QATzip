@@ -147,7 +147,7 @@ void logMessage(QzLogLevel_T level, const char *file, int line,
     } \
     fprintf(fd, "%s", "Info: "); \
     fprintf(fd, __VA_ARGS__); \
-    fprintf(fd, " \n"); \
+    fprintf(fd, "\n"); \
 }
 #endif
 

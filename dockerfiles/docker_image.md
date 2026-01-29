@@ -7,7 +7,7 @@ QATzip is a user-space library built on top of the Intel® QuickAssist Technolog
 # How to Use This Image
 
 ## BIOS Setting
-- Intel VT-d and SR-IOV must be enabled in the platform (BIOS). 
+- Intel VT-d and SR-IOV must be enabled in the platform (BIOS).
 For more details, refer to the link [Updating the BIOS settings](https://intel.github.io/quickassist/AppNotes/Containers/setup.html#updating-the-bios-settings).
 
 ## Grub Settings

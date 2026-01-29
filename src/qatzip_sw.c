@@ -588,7 +588,7 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
                  unsigned int *dest_len, unsigned int last)
 {
 #ifdef ENABLE_TESTLOG
-    QZ_TESTLOG(2, 0, "SW_FALLBACK", "sw fallback happend!");
+    QZ_TESTLOG(2, 0, "SW_FALLBACK", "sw fallback happened!");
 #endif
     int ret = QZ_FAIL;
     DataFormatInternal_T data_fmt;
@@ -627,7 +627,7 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
                    unsigned int *dest_len)
 {
 #ifdef ENABLE_TESTLOG
-    QZ_TESTLOG(2, 0, "SW_FALLBACK", "sw fallback happend!");
+    QZ_TESTLOG(2, 0, "SW_FALLBACK", "sw fallback happeneed!");
 #endif
     int ret = QZ_FAIL;
     DataFormatInternal_T data_fmt;
@@ -666,7 +666,7 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
                         unsigned int *dest_len)
 {
 #ifdef ENABLE_TESTLOG
-    QZ_TESTLOG(2, 0, "SW_FALLBACK", "sw fallback happend!");
+    QZ_TESTLOG(2, 0, "SW_FALLBACK", "sw fallback happened!");
 #endif
     int ret = QZ_FAIL;
     DataFormatInternal_T data_fmt;
@@ -919,7 +919,7 @@ int compLSMFallback(QzSession_T *sess, const unsigned char *src,
 
     end_time_stamp = rdtsc();
     /* The reduction for sw latency here is for offloading more request to
-     * SW when QAT devcie is busy, maybe we could optimize this value in
+     * SW when QAT device is busy, maybe we could optimize this value in
      * the future.
      */
     metrixUpdate(&qz_sess->SWT, (end_time_stamp - start_time_stamp) >> 2);
@@ -956,7 +956,7 @@ int decompLSMFallback(QzSession_T *sess, const unsigned char *src,
 
     end_time_stamp = rdtsc();
     /* The reduction for sw latency here is for offloading more request to
-     * SW when QAT devcie is busy, maybe we could optimize this value in
+     * SW when QAT device is busy, maybe we could optimize this value in
      * the future.
      */
     metrixUpdate(&qz_sess->SWT, (end_time_stamp - start_time_stamp) >> 2);

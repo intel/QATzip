@@ -355,7 +355,7 @@ typedef enum QzSoftwareComponentType_E {
 #define QZ_POST_PROCESS_ERROR   (-117)
 /**< Using post process: post process callback encountered an error */
 #define QZ_METADATA_OVERFLOW    (-118)
-/**< Insufficent memory allocated for metadata */
+/**< Insufficient memory allocated for metadata */
 #define QZ_OUT_OF_RANGE         (-119)
 /**< Metadata block_num specified is out of range */
 #define QZ_NOT_SUPPORTED        (-200)

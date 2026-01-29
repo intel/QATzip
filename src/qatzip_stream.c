@@ -719,7 +719,7 @@ int qzDecompressStream(QzSession_T *sess, QzStream_T *strm, unsigned int last)
                 rc = QZ_FAIL;
                 goto done;
             } else {
-                QZ_INFO("Recoverable buffer error occurs... \n");
+                QZ_INFO("Recoverable buffer error occurs...\n");
                 rc = QZ_OK;
             }
         }

@@ -269,7 +269,7 @@ void printEndHeader(Qz7zEndHeader_T *eheader)
     QZ_DEBUG("-----print end header-------\n");
     if (eheader->propertyInfo) {
         QZ_DEBUG(" ----------ArchiveProperties-------------\n");
-        QZ_DEBUG("Develop ID: %lx \n", eheader->propertyInfo->id);
+        QZ_DEBUG("Develop ID: %lx\n", eheader->propertyInfo->id);
     }
 
     if (eheader->streamsInfo) {
@@ -289,13 +289,13 @@ void printEndHeader(Qz7zEndHeader_T *eheader)
         }
 
         QZ_DEBUG("\n ----------SubstreamsInfo-------------------\n");
-        QZ_DEBUG("    NumUnpackSubstreamsInFolders: \n");
+        QZ_DEBUG("    NumUnpackSubstreamsInFolders:\n");
         for (i = 0; i < eheader->streamsInfo->codersInfo->numFolders; ++i) {
             if (eheader->streamsInfo->substreamsInfo->numUnPackStreams) {
                 QZ_DEBUG(" %lu ",
                          eheader->streamsInfo->substreamsInfo->
                          numUnPackStreams[i]);
-                QZ_DEBUG("\n unpacksize: \n");
+                QZ_DEBUG("\n unpacksize:\n");
                 for (j = 0; j < eheader->streamsInfo->substreamsInfo->
                      numUnPackStreams[i]; ++j) {
                     QZ_DEBUG(" %lu ", eheader->streamsInfo->substreamsInfo->
@@ -956,7 +956,7 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
             }
             n = fread(p->coder_list->codecID, 1, id_size, fp);
             CHECK_FREAD_RETURN(n, id_size)
-            QZ_DEBUG("codec id: %0x %0x %0x \n",
+            QZ_DEBUG("codec id: %0x %0x %0x\n",
                      p->coder_list->codecID[0],
                      p->coder_list->codecID[1],
                      p->coder_list->codecID[2]);
@@ -1052,7 +1052,7 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
             }
 
             if (total - n_folder == 0) {
-                QZ_DEBUG("every folder has one file. No unpacksize part. \n");
+                QZ_DEBUG("every folder has one file. No unpacksize part.\n");
             } else {
                 substreams->unPackSize = qzMalloc((total - n_folder) *
                                                   sizeof(uint64_t), QZ_AUTO_SELECT_NUMA_NODE,
@@ -1070,7 +1070,7 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
                 }
             }
 
-            QZ_DEBUG("resolve kSize(0x09) done \n");
+            QZ_DEBUG("resolve kSize(0x09) done\n");
             unpacksize_resolved = 1;
             break;
 
@@ -1798,7 +1798,7 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     uint64_t fil_num = 0;
     uint64_t file_index = 0;
     int is_last;
-    int n_part; // how much parts can the src file be splitted
+    int n_part; // how much parts can the src file be split
     int n_part_i;
     Qz7zSignatureHeader_T *sheader = NULL;
     Qz7zEndHeader_T *eheader = NULL;
@@ -3245,7 +3245,7 @@ Qz7zItemList_T *itemListCreate(int n, char **files)
                     struct dirent *dentry;
                     dirp = opendir(processing->fileName);
                     if (!dirp) {
-                        QZ_ERROR("errors ocurs: %s \n", strerror(errno));
+                        QZ_ERROR("Opendir error : %s\n", strerror(errno));
                         goto error;
                     }
 
