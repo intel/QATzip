@@ -3,7 +3,7 @@
 #                                                                         \
 #   BSD LICENSE                                                           \
 #                                                                         \
-#   Copyright(c) 2024-2026 Intel Corporation.                                  \
+#   Copyright(c) 2024-2026 Intel Corporation.                             \
 #   All rights reserved.                                                  \
 #                                                                         \
 #   Redistribution and use in source and binary forms, with or without    \
@@ -38,10 +38,8 @@
 ARG UBUNTU_BASE=ubuntu:22.04
 FROM ${UBUNTU_BASE} AS builder
 
-ARG QATLIB_VERSION="24.02.0"
-ARG QATZIP_VERSION="v1.3.1"
-ARG QATZSTD_PLUG_VERSION="v0.2.0"
-ARG ZSTD_VERSION="v1.5.5"
+ARG QATLIB_VERSION="25.08.0"
+ARG ZSTD_VERSION="v1.5.7"
 ARG GID
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -64,6 +62,7 @@ RUN apt-get update && \
     lua5.4 \
     liblua5.4-dev \
     autoconf \
+    autoconf-archive \
     automake \
     cmake \
     liblz4-dev \
@@ -73,8 +72,9 @@ RUN apt-get update && \
     dpkg-dev \
     libtool && \
     git clone --depth 1 -b $QATLIB_VERSION https://github.com/intel/qatlib && \
-    git clone --depth 1 -b $QATZIP_VERSION https://github.com/intel/QATzip.git && \
-    git clone --depth 1 -b $QATZSTD_PLUG_VERSION https://github.com/intel/QAT-ZSTD-Plugin.git && \
+    #Update QATZip and QAT-ZSTD-Plugin clone with -b <version> to pick released version
+    git clone --depth 1 https://github.com/intel/QATzip.git && \
+    git clone --depth 1 https://github.com/intel/QAT-ZSTD-Plugin.git && \
     git clone --depth 1 -b $ZSTD_VERSION https://github.com/facebook/zstd.git && \
     git clone --depth 1 -b $ZSTD_VERSION https://github.com/facebook/zstd.git zstd_with_plugin
 
@@ -104,7 +104,7 @@ RUN make -C lib -j"$(nproc)" && make install
 WORKDIR /QATzip
 RUN ./autogen.sh && \
     ./configure --enable-lz4s-postprocessing && \
-    make qzstd && \
+    make && \
     make install -j"$(nproc)"
 
 # Build ZSTD_WITH_PLUGIN

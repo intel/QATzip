@@ -36,7 +36,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([qatzip], [1.3.1], [])
+AC_INIT([qatzip], [1.3.2], [])
 AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign subdir-objects tar-pax])
 
 AM_SILENT_RULES([yes])
@@ -47,7 +47,7 @@ AC_CONFIG_MACRO_DIRS([m4])
 # The lib version would be calculate from this value
 # Not directly use this version, if the LIBQATZIP_VERSION is x.y.z
 # lib major version would be x-z, second version is z, and last is y
-AC_SUBST([LIBQATZIP_VERSION], [5:0:2])
+AC_SUBST([LIBQATZIP_VERSION], [5:1:2])
 # Checks for programs.
 AC_PROG_AWK
 AC_PROG_CC
