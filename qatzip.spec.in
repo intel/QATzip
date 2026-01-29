@@ -87,6 +87,10 @@ rm -vf %{buildroot}%{_mandir}/*.pdf
 %{_libdir}/pkgconfig/*.pc
 
 %changelog
+* Thur Jan 29 2026 Deepak Sundar <deepak.sundar@intel.com> - 1.3.2-1
+- Update to qatzip v1.3.2
+- Bug fixes
+
 * Thu Apr 10 2025 xinghong <xinghong.chen@intel.com> - 1.3.1-1
 - Update to qatzip v1.3.1
 - Fix qatzip docker file build broken issue

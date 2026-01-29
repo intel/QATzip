@@ -2,7 +2,7 @@
 QATzip is a user-space library built on top of the Intel® QuickAssist Technology (QAT) user-space library. It provides extended compression and decompression capabilities by offloading these operations to Intel® QAT Accelerators.
 
 # Docker Image
-- intel/intel-qatzip:1.3.1-1
+- intel/intel-qatzip:<version>
 
 # How to Use This Image
 
@@ -75,36 +75,36 @@ For more details, refer to the link [Updating the BIOS settings](https://intel.g
   chmod 660 /dev/vfio/*
   ```
 
+## Build Image
+To build the Docker image, use the following command:
+
+```sh
+docker build --build-arg GID=$(getent group qat | cut -d ':' -f 3) -t <docker_image_name> <Dockerfile_path>
+```
+
 ## Run Image
 To run the Docker image, use the following command:
 ```sh
 
 Compress:
-docker run --rm -it --cap-add=IPC_LOCK --security-opt seccomp=unconfined --security-opt apparmor=unconfined $(for i in `ls /dev/vfio/*`; do echo --device $i; done) --env QAT_POLICY=1 --ulimit memlock=50000000:50000000 intel/intel-qatzip:1.3.1-1 qzip -k calgary  -O gzipext -A deflate
+docker run --rm -it --cap-add=IPC_LOCK --security-opt seccomp=unconfined --security-opt apparmor=unconfined $(for i in `ls /dev/vfio/*`; do echo --device $i; done) --env QAT_POLICY=1 --ulimit memlock=50000000:50000000 <qatzip-docker-image> qzip -k calgary  -O gzipext -A deflate
 
 Decompress:
-docker run --rm -it --cap-add=IPC_LOCK --security-opt seccomp=unconfined --security-opt apparmor=unconfined $(for i in `ls /dev/vfio/*`; do echo --device $i; done) --env QAT_POLICY=1 --ulimit memlock=50000000:50000000 intel/intel-qatzip:1.3.1-1 qzip -d calgary.gz -A deflate
+docker run --rm -it --cap-add=IPC_LOCK --security-opt seccomp=unconfined --security-opt apparmor=unconfined $(for i in `ls /dev/vfio/*`; do echo --device $i; done) --env QAT_POLICY=1 --ulimit memlock=50000000:50000000 <qatzip-docker-image> qzip -d calgary.gz -A deflate
 
 ```
 
 NOTE: "Warning, users who have access to the docker group also have root access"
 
-## Sample Test Output
+## Test Commands
 ```sh
 
 Compress:
-docker run --rm -it --cap-add=IPC_LOCK --security-opt seccomp=unconfined --security-opt apparmor=unconfined $(for i in `ls /dev/vfio/*`; do echo --device $i; done) --env QAT_POLICY=1 --ulimit memlock=50000000:50000000 -v /opt/opt --memory=8g -w $PWD  amr-fm-registry.caas.intel.com/esh-user/intel-qatzip:1.3.1-1 qzip -k calgary  -O gzipext -A deflate
-Compressing...
-Time taken:        4.177 ms
-Throughput:     6227.423 Mbit/s
-Space Savings:    64.132 %
-Compression ratio: 2.788 : 1
+docker run --rm -it --cap-add=IPC_LOCK --security-opt seccomp=unconfined --security-opt apparmor=unconfined $(for i in `ls /dev/vfio/*`; do echo --device $i; done) --env QAT_POLICY=1 --ulimit memlock=50000000:50000000 -v /opt/opt --memory=8g -w $PWD  <qatzip-docker-image> qzip -k calgary  -O gzipext -A deflate
+
 
 Decompress:
-docker run --rm -it --cap-add=IPC_LOCK --security-opt seccomp=unconfined --security-opt apparmor=unconfined $(for i in `ls /dev/vfio/*`; do echo --device $i; done) --env QAT_POLICY=1 --ulimit memlock=50000000:50000000 -v /opt/opt --memory=8g -w $PWD  amr-fm-registry.caas.intel.com/esh-user/intel-qatzip:1.3.1-1 qzip -d calgary.gz -A deflate
-Decompressing...
-Time taken:        4.645 ms
-Throughput:     5599.988 Mbit/s
+docker run --rm -it --cap-add=IPC_LOCK --security-opt seccomp=unconfined --security-opt apparmor=unconfined $(for i in `ls /dev/vfio/*`; do echo --device $i; done) --env QAT_POLICY=1 --ulimit memlock=50000000:50000000 -v /opt/opt --memory=8g -w $PWD  <qatzip-docker-image> qzip -d calgary.gz -A deflate
 
 ```
 
