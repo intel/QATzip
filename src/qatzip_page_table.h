@@ -34,8 +34,8 @@
  ***************************************************************************/
 
 
-#ifndef _QATZIP_PAGE_TABLE_H
-#define _QATZIP_PAGE_TABLE_H
+#ifndef QATZIP_PAGE_TABLE_H
+#define QATZIP_PAGE_TABLE_H
 
 #include <stdint.h>
 #include <sys/mman.h>

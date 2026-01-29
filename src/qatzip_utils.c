@@ -1587,6 +1587,9 @@ inline void metrixReset(LatencyMetrix_T *m)
     }
     if (m->latency_array == NULL) {
         m->latency_array = calloc(LSM_MET_DEPTH, sizeof(*(m->latency_array)));
+        if (m->latency_array == NULL) {
+            return;
+        }
     }
 
     for (int i = 0; i < LSM_MET_DEPTH; i++) {
@@ -1782,7 +1785,14 @@ QzRing_T *QzRingCreate(int size)
     }
     QzRing_T *ring;
     ring = (QzRing_T *)calloc(1, sizeof(QzRing_T));
+    if (ring == NULL) {
+        return NULL;
+    }
     ring->elems = (void *)calloc(size, sizeof(void *));
+    if (ring->elems == NULL) {
+        free(ring);
+        return NULL;
+    }
     ring->size = size;
     ring->mask = size - 1;
     ring->capacity = size;

@@ -33,8 +33,8 @@
  *
  ***************************************************************************/
 
-#ifndef _UTILS_QZIP_H
-#define _UTILS_QZIP_H
+#ifndef UTILS_QZIP_H
+#define UTILS_QZIP_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -588,11 +588,11 @@ typedef struct Qz7zEndHeader_S {
  *     This structure presents a 7z category
  *
  ******************************************************************************/
-typedef struct QzCatagory_S {
+typedef struct QzCategory_S {
     unsigned char    cat_id;
     const char      *cat_name;
     QzListHead_T    *cat_files;
-} QzCatagory_T;
+} QzCategory_T;
 
 /**
  ******************************************************************************
@@ -603,10 +603,10 @@ typedef struct QzCatagory_S {
  *     This structure presents all categories
  *
  ******************************************************************************/
-typedef struct QzCatagoryTable_S {
+typedef struct QzCategoryTable_S {
     unsigned int     cat_num;
-    QzCatagory_T     *catas; /* array: catas[cat_num] */
-} QzCatagoryTable_T;
+    QzCategory_T     *catas; /* array: catas[cat_num] */
+} QzCategoryTable_T;
 
 /**
  ******************************************************************************
@@ -621,7 +621,7 @@ typedef struct QzCatagoryTable_S {
  ******************************************************************************/
 typedef struct Qz7zItemList_S {
     QzListHead_T       *items[2];
-    QzCatagoryTable_T  *table;
+    QzCategoryTable_T  *table;
 } Qz7zItemList_T;
 
 /* create a list return list head */
@@ -659,8 +659,8 @@ Qz7zStreamsInfo_T *resolveMainStreamsInfo(FILE *fp);
 Qz7zEndHeader_T *resolveEndHeader(FILE *fp, Qz7zSignatureHeader_T *sheader);
 
 /* create category list */
-QzCatagoryTable_T *createCatagoryList(void);
-int scanFilesIntoCatagory(Qz7zItemList_T *the_list);
+QzCategoryTable_T *createCategoryList(void);
+int scanFilesIntoCategory(Qz7zItemList_T *the_list);
 /*
  * generate functions
  */

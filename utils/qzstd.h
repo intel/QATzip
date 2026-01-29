@@ -33,8 +33,8 @@
  *
  ***************************************************************************/
 
-#ifndef _UTILS_QZSTD_H
-#define _UTILS_QZSTD_H
+#ifndef UTILS_QZSTD_H
+#define UTILS_QZSTD_H
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include <stdio.h>

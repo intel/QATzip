@@ -47,8 +47,8 @@
  *
  *****************************************************************************/
 
-#ifndef _QZ_UTILS_H_
-#define _QZ_UTILS_H_
+#ifndef QZ_UTILS_H
+#define QZ_UTILS_H
 
 #include <stdarg.h>
 #include <stdint.h>
