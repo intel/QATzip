@@ -1,14 +1,7 @@
-# automake file
-autom4te.cache
-m4
-src/.deps
-src/.libs
-utils/.deps
-test/.deps
-
+# Autotools generated files
+autom4te.cache/
+m4/
 aclocal.m4
-Makefile
-Makefile.in
 ar-lib
 compile
 config.guess
@@ -21,17 +14,58 @@ install-sh
 libtool
 ltmain.sh
 missing
+stamp-h1
+Makefile
+Makefile.in
+*/Makefile
+*/Makefile.in
+
+# Build artifacts
+*.la
+*.lo
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dylib
+.deps/
+.dirstamp
+.libs/
+
+# Generated package files
 qatzip.spec
+qatzip.pc
+*.tar.gz
+*.tar.xz
+*.tar.bz2
+rpmbuild/
 
-# compile obj
-src/*.lo
-src/*.o
-src/*.la
-utils/*.o
-test/*.o
-
-# app
+# Built executables
 test/bt
 test/qatzip-test
 utils/qzip
 utils/qzstd
+
+# Editor and IDE files
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+*.sublime-*
+tags
+TAGS
+cscope.*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Debug and coverage files
+*.gcov
+*.gcda
+*.gcno
+core
+core.*
+vgcore.*
