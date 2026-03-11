@@ -2,6 +2,8 @@
 
 QATzip is a user-space library built on top of the Intel&reg; QuickAssist Technology (QAT) user-space library. It provides extended compression and decompression capabilities by offloading these operations to Intel&reg; QAT Accelerators. QATzip generates data in the standard gzip\* format (RFC1952) with extended headers or [lz4\* blocks](https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md) and using the [lz4\* frame format](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md). The resulting data can be decompressed using any compliant gzip\* or lz4\* implementation. QATzip is optimized to fully leverage the performance benefits of Intel&reg; QuickAssist Technology.
 
+QATzip is a user-space library built on top of the Intel&reg; QuickAssist Technology (QAT) user-space library. It provides extended compression and decompression capabilities by offloading these operations to Intel&reg; QAT Accelerators. QATzip generates data in the standard gzip\* format (RFC1952) with extended headers or [lz4\* blocks](https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md) and using the [lz4\* frame format](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md). The resulting data can be decompressed using any compliant gzip\* or lz4\* implementation. QATzip is optimized to fully leverage the performance benefits of Intel&reg; QuickAssist Technology.
+
 ## Table of Contents
 
 - [Supported Formats](#supported-formats)
@@ -32,60 +34,7 @@ QATzip is a user-space library built on top of the Intel&reg; QuickAssist Techno
 | `QZ_DEFLATE_RAW`       | deflate\* | QAT 1.x & QAT 2.0  | Data is in raw DEFLATE\* without any additional header. (Compression only; decompression falls back to software.) |
 | `QZ_LZ4`               | lz4\*     | QAT 2.0            | Data is in LZ4\* wrapped by an lz4\* frame.                                                   |
 | `QZ_LZ4S`              | lz4s\*    | QAT 2.0            | Data is in LZ4S\* blocks.                                                                     |
-| `QZ_ZSTD`              | zstd\*    | QAT 5.x            | Data is in zstd\* wrapped by zstd\* frame.                                                    |
-
-## Features
-
-- Accelerated compression and decompression using Intel&reg; QuickAssist Technology, including utilities for file compression and decompression.
-- Dynamic memory allocation for zero-copy operations via `qzMalloc()` and `qzFree()`, enabling pinned, contiguous buffers for DMA operations.
-- Instance over-subscription, allowing multiple threads in the same process to share fewer hardware instances seamlessly.
-- Memory allocation backed by huge pages and kernel memory for pinned, contiguous memory access, with fallback to huge pages during kernel memory contention.
-- Configurable accelerator device sharing across processes.
-- Optional software failover for compression and decompression, ensuring functionality even when system resources are insufficient.
-- Streaming interfaces for compression and decompression to improve compression ratios and throughput for piecemeal data submissions.
-- Asynchronous interfaces for compression and decompression to achieve lower latency and higher throughput (not supported by the `qzip` utility). This is particularly beneficial for fewer instances or smaller data packets (below 64KB).
-- Latency Sensitive Mode: Designed for high-stress scenarios, this mode offloads part of the workload to the CPU, leveraging Intel's multi-core processors to enhance throughput and reduce latency.
-  > Note: It is not recommended to enable this mode in low-stress scenarios or for smaller data workloads (below 8KB), as it may result in reduced throughput.
-- Adaptive polling mechanisms to reduce CPU usage under stress.
-- Support for compressing files and directories into the 7z format using the `qzip` utility.
-- Compatibility with QATzip Gzip\* format, which includes a 10-byte header and an 8-byte footer:
-
-  ```
-  | ID1 (1B) | ID2(0x8B) (1B) | Compression Method (8 = DEFLATE*) (1B) | Flags (1B) | Modification Time (4B) | Extra Flags (1B) | OS (1B) | Deflate Block | CRC32 (4B) | ISIZE (4B) |
-  ```
-
-- Support for QATzip Gzip\* extended format, which extends the standard 10-byte Gzip\* header by an additional 14 bytes:
-
-  ```
-  | Length of ext. header (2B) | SI1('Q') (1B) | SI2('Z') (1B) | Length of subheader (2B) | Intel(R) defined field 'Chunksize' (4B) | Intel(R) defined field 'Blocksize' (4B) |
-  ```
-
-- Support for Intel&reg; QATzip 4-byte headers, indicating the length of the compressed block:
-
-  ```
-  | Intel(R) defined Header (4B) | deflate\* block |
-  ```
-
-- Support for QATzip lz4\* format, structured as follows:
-
-  ```
-  | MagicNb (4B) | FLG (1B) | BD (1B) | CS (8B) | HC (1B) | lz4\* Block | EndMark (4B) |
-  ```
-
-## QATzip Compression Level Mapping
-
-The following table shows how standard software `zlib*` compression levels map to `QATzip` levels for QAT 1.x and QAT 2.0:
-
-| Software `zlib*` Levels | QAT 1.x Equivalent | QAT 2.0 Equivalent |
-|-------------------------|--------------------|---------------------|
-| 1 - 4                  | QATzip Level 1     | QATzip Level 1      |
-| 5                      | QATzip Level 5     | QATzip Level 1      |
-| 6 - 8                  | QATzip Level 5     | QATzip Level 6      |
-| 9                      | QATzip Level 9     | QATzip Level 9      |
-| 10 - 12                | Unsupported        | QATzip Level 9      |
-
-Refer to [QAT Compression levels](https://intel.github.io/quickassist/PG/services_compression_api.html#compression-levels) that summarizes how QATzip Level translates to hardware-accelerated levels for each QAT generation.
-
+| `QZ_ZSTD`              | zstd\*    | QAT 5.x            | Data is in ZSTD\* wrapped by a zstd\* frame.                                                  |
 ## Hardware Requirements
 
 This QATzip library supports compression and decompression offload on the platforms with the following QAT devices
@@ -106,6 +55,43 @@ acceleration devices:
 - Zstandard (zstd): v1.5.0 or later
 
 Distributions like Fedora 34+, RHEL 8.4+ & 9.0+, CentOS 9 Stream, SUSE SLES15 SP3+, Ubuntu 24.04+ and Debian13+ include the `qatzip` RPM package in their repositories. This package is built with the QAT_HW `qatlib` in-tree driver, specifically for 4xxx devices.
+
+Distributions like Fedora 34+, RHEL 8.4+ & 9.0+, CentOS 9 Stream, SUSE SLES15 SP3+, Ubuntu 24.04+ and Debian13+ include the `qatzip` RPM package in their repositories. This package is built with the QAT_HW `qatlib` in-tree driver, specifically for 4xxx devices.
+
+### QATzip Compression Level Mapping
+
+#### QAT 1.x Compression Levels
+- The compression levels in QATzip for QAT 1.x are mapped to standard zlib\* levels as follows:
+  - **QATzip Levels 1 - 4**: Correspond to zlib\* Levels 1 - 4.
+  - **QATzip Levels 5 - 8**: Mapped to QATzip Level 4.
+  - **QATzip Level 9**: Uses software zlib\* for compression at Level 9.
+
+#### QAT 2.0 Compression Levels
+- The compression levels in QATzip for QAT 2.0 will be mapped to standard zlib\* or lz4\* levels. Details will be provided in future releases.
+
+#### Detailed Compression Level Mapping
+
+## Limitations
+
+* The partitioned internal chunk size of 16 KB is disabled, this chunk is used for QAT hardware DMA.
+* For stream object, user should reset the stream object by calling qzEndStream() before reuse it
+  in the other session.
+* For stream object, user should clear stream object by calling qzEndStream() before clear session
+  object with qzTeardownSession(). Otherwise, memory leak happens.
+* For stream object, stream length must be smaller than `strm_buff_sz`, or QATzip would generate multiple
+  deflate block in order and has the last block with BFIN set.
+* For stream object, we will optimize the performance of the pre-allocation process using a thread-local
+  stream buffer list in a future release.
+* For 7z format, decompression only supports \*.7z archives compressed by qzip.
+* For 7z format, decompression only supports software.
+* For 7z format, the header compression is not supported.
+* For lz4\* (de)compression, QATzip only supports 32KB history buffer.
+* For zstd format compression, qzstd only supports `hw_buffer_sz` which is less than 128KB.
+* Stream APIs only support "DEFLATE_GZIP", "DEFLATE_GZIP_EXT", "DEFLATE_RAW" for compression
+  and "DEFLATE_GZIP", "DEFLATE_GZIP_EXT" for decompression now.
+* DEFLATE_RAW hardware decompression is supported and input data must be complete deflate block. If input data is not complete block and software backup is enabled decompression will fallback on software else failure will be returned.
+
+## Installation Instructions
 
 ## Install Instructions
 
@@ -132,6 +118,44 @@ export QZ_ROOT=$(pwd)
 ./configure
 make clean && make && sudo make install
 ```
+
+#### Install from RPM Packaging
+
+Refer to the [QAT Installation Guide](https://intel.github.io/quickassist/GSG/2.X/installation.html) for detailed setup instructions.
+
+> **Note**: For non-root users, see the [non-root user guide](https://intel.github.io/quickassist/GSG/2.X/installation.html#running-applications-as-non-root-user). When SVM is disabled, QAT hardware requires DMA-accessible memory. Use QAT USDM component to allocate and free DMA-able memory (see the [USDM settings guide](https://intel.github.io/quickassist/PG/infrastructure_memory_management.html#huge-pages)).
+
+1. **Install dependencies**:
+
+   ```bash
+   # RHEL-based
+   sudo dnf install -y autoconf autoconf-archive automake libtool zlib-devel lz4-devel numactl-devel
+
+   # Debian-based
+   sudo apt -y install autoconf autoconf-archive automake libtool zlib1g-dev liblz4-dev libnuma-dev
+   ```
+
+2. **Configure**:
+
+   ```bash
+   cd QATzip/
+   export QZ_ROOT=$(pwd)
+   export ICP_ROOT=/QAT/PACKAGE/PATH
+   ./autogen.sh
+   ./configure  # Run ./configure -h for options
+   ```
+
+3. **Build and install**:
+
+   ```bash
+   make clean && make && sudo make install
+   ```
+
+### Install from Docker Image
+
+- **Pre-built image**: [intel/intel-qatzip](https://hub.docker.com/r/intel/intel-qatzip)
+- **Build image**: Use the [Dockerfile](dockerfiles/README.md)
+Note: This is built with QATlib in-tree driver
 
 ### Install with the out-of-tree QAT package
 
@@ -295,10 +319,7 @@ Please refer to file `QATzip-man.pdf` under the `docs` folder and Refer this [li
 - For latency-sensitive mode:
   - Avoid enabling this mode in low-stress scenarios or for smaller data workloads (below 8 KB), as it may result in decreased throughput for QATzip.
 
-## Licensing
-
-- **Intel&reg; QuickAssist Technology (QAT) QATzip**: BSD-3-Clause License. Refer to the `LICENSE` file in the top-level directory for details.
-- **Example Intel&reg; QuickAssist Technology Driver Configuration Files**: Dual BSD/GPLv2 License. Refer to the file headers and the `LICENSE.GPL` file in the `config_file` directory for details.
+## Known Issues
 
 ## Legal
 

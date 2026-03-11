@@ -52,8 +52,8 @@ QzipParams_T g_params_th = {
     .hw_buff_sz = QZ_HW_BUFF_SZ,
     .polling_mode = QZ_PERIODICAL_POLLING,
     .req_cnt_thrshold = QZ_REQ_THRESHOLD_DEFAULT,
+    .dict_filename = NULL,
     .is_sensitive_mode = false,
-    .dict_filename = NULL
 };
 
 /* Estimate maximum data expansion after decompression */
@@ -79,10 +79,10 @@ const struct option g_long_opts[] = {
                                   directory */
     {"polling",    1, 0, 'P'}, /* set polling mode when compressing and
                                   decompressing */
+    {"dictionary", 1, 0, 'D'}, /* set dictionary file */
     {"loglevel",   1, 0, 'g'}, /* set log level */
     {"blocksz",   1, 0, 'b'}, /* set block source buffer size */
     {"lsm",       1, 0, 's'}, /* enable latency sensitive mode */
-    {"dictionary", 1, 0, 'D'}, /* set dictionary file */
     { 0, 0, 0, 0 }
 };
 
@@ -117,13 +117,13 @@ void help(void)
         "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
         "  -P, --polling     set polling mode, only supports busy polling settings",
+        "  -D, --dictionary  set dictionary file, the maximum dictionary length supported by QAT"
+        "                    is 64KB, if dictionary file is large than 64KB, the first 64KB of",
+        "                    dictionary file is read.",
         "  -s,               enable latency sensitive mode",
         "  -g, --loglevel    set qatzip loglevel(none|error|warn|info|debug)",
         "  -b, --blocksz     If set this option, the qzip will split input file into pieces.",
         "                    qzCompress/qzDecompress will process block_size bytes every time.",
-        "  -D, --dictionary  set dictionary file, the maximum dictionary length supported by QAT"
-        "                    is 64KB, if dictionary file is large than 64KB, the first 64KB of",
-        "                    dictionary file is read."
         "",
         "With no FILE, read standard input.",
         0
@@ -197,6 +197,7 @@ int doProcessBuffer(QzSession_T *sess,
     unsigned int block_dest_len = dst_len;
     unsigned int consumed = 0;
     unsigned int produced = 0;
+#ifdef HAVE_QAT_DC_CAPABILITIES
     QzDictionaryParams_T dict_param = {0};
     QzResult_T result = {0};
 
@@ -206,6 +207,7 @@ int doProcessBuffer(QzSession_T *sess,
         dict_param.compressed = 0;
         dict_param.crc64Addr = NULL;
     }
+#endif
 
     while (time_node->next) {
         time_node = time_node->next;
@@ -224,20 +226,24 @@ int doProcessBuffer(QzSession_T *sess,
 
     while (!done) {
         if (is_compress) {
+            /* Compression: process in block_buff_len chunks */
+            block_src_len = (*src_len - consumed) > block_buff_len ?
+                            block_buff_len : (*src_len - consumed);
+            block_dest_len = dst_len - produced;
+
+#ifdef HAVE_QAT_DC_CAPABILITIES
             if (dict) {
                 result.status = 0;
-                result.src_len = *src_len;
-                result.dest_len = dst_len;
-                ret = qzCompressWithDictionary(sess, src, dst,
+                result.src_len = block_src_len;
+                result.dest_len = block_dest_len;
+                ret = qzCompressWithDictionary(sess, src + consumed,
+                                              dst + produced,
                                               &dict_param, NULL, &result);
                 block_src_len = result.src_len;
                 block_dest_len = result.dest_len;
-            } else {
-                /* Compression: process in block_buff_len chunks */
-                block_src_len = (*src_len - consumed) > block_buff_len ?
-                                block_buff_len : (*src_len - consumed);
-                block_dest_len = dst_len - produced;
-
+            } else
+#endif
+            {
                 ret = qzCompress(sess, src + consumed, &block_src_len,
                                  dst + produced, &block_dest_len, 1);
             }
@@ -245,19 +251,23 @@ int doProcessBuffer(QzSession_T *sess,
                 done = 1;
             }
         } else {
+            /* Decompression: process remaining input */
+            block_src_len = *src_len - consumed;
+            block_dest_len = dst_len - produced;
+
+#ifdef HAVE_QAT_DC_CAPABILITIES
             if (dict) {
                 result.status = 0;
-                result.src_len = *src_len;
-                result.dest_len = dst_len;
-                ret = qzDecompressWithDictionary(sess, src, dst,
+                result.src_len = block_src_len;
+                result.dest_len = block_dest_len;
+                ret = qzDecompressWithDictionary(sess, src + consumed,
+                                                dst + produced,
                                                 &dict_param, NULL, &result);
                 block_src_len = result.src_len;
                 block_dest_len = result.dest_len;
-            } else {
-                /* Decompression: process remaining input */
-                block_src_len = *src_len - consumed;
-                block_dest_len = dst_len - produced;
-
+            } else
+#endif
+            {
                 ret = qzDecompress(sess, src + consumed, &block_src_len,
                                    dst + produced, &block_dest_len);
             }
@@ -418,6 +428,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     }
 
     /* Load dictionary file */
+#ifdef HAVE_QAT_DC_CAPABILITIES
     if (g_params_th.dict_filename != NULL) {
         dict_buffer = malloc(DICT_BUFF_MAX_LEN);
         if (!dict_buffer) {
@@ -433,6 +444,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
             exit(ERROR);
         }
     }
+#endif
 
     src_buffer = malloc(src_buffer_size);
     assert(src_buffer != NULL);
@@ -528,8 +540,10 @@ exit:
     close(src_fd);
     free(src_buffer);
     free(dst_buffer);
+#ifdef HAVE_QAT_DC_CAPABILITIES
     if(dict_buffer)
         free(dict_buffer);
+#endif
     if (!g_keep && OK == ret) {
         unlink(src_file_name);
     }
@@ -618,6 +632,7 @@ int qzipSetupSessionLZ4(QzSession_T *sess, QzipParams_T *params)
     return OK;
 }
 
+#ifdef HAVE_QAT_DC_ZSTD
 int qzipSetupSessionZSTD(QzSession_T *sess, QzipParams_T *params)
 {
     int status;
@@ -644,6 +659,13 @@ int qzipSetupSessionZSTD(QzSession_T *sess, QzipParams_T *params)
 
     return OK;
 }
+#else
+int qzipSetupSessionZSTD(QzSession_T *sess, QzipParams_T *params)
+{
+    QZ_ERROR("ZSTD session setup is not supported.\n");
+    return ERROR;
+}
+#endif /* HAVE_QAT_DC_ZSTD */
 
 int qzipSetupSessionLZ4S(QzSession_T *sess, QzipParams_T *params)
 {
@@ -702,12 +724,14 @@ int qatzipSetup(QzSession_T *sess, QzipParams_T *params)
             QZ_ERROR("qzipSetupSessionLZ4 fail with error: %d\n", status);
         }
         break;
+#ifdef HAVE_QAT_DC_ZSTD
     case QZIP_ZSTD:
         status = qzipSetupSessionZSTD(sess, params);
         if (status != OK) {
             QZ_ERROR("qzipSetupSessionZSTD fail with error: %d\n", status);
         }
         break;
+#endif
     case QZIP_LZ4S_BK:
         status = qzipSetupSessionLZ4S(sess, params);
         if (status != OK) {
@@ -744,10 +768,14 @@ QzSuffix_T getSuffix(const char *filename)
     }  else if (len >= strlen(SUFFIX_LZ4) &&
                 !strcmp(filename + (len - strlen(SUFFIX_LZ4)), SUFFIX_LZ4)) {
         s = E_SUFFIX_LZ4;
-    }  else if (len >= strlen(SUFFIX_ZSTD) &&
+    }
+#ifdef HAVE_QAT_DC_ZSTD
+    else if (len >= strlen(SUFFIX_ZSTD) &&
                 !strcmp(filename + (len - strlen(SUFFIX_ZSTD)), SUFFIX_ZSTD)) {
         s = E_SUFFIX_ZSTD;
-    }  else if (len >= strlen(SUFFIX_LZ4S) &&
+    }
+#endif
+    else if (len >= strlen(SUFFIX_LZ4S) &&
                 !strcmp(filename + (len - strlen(SUFFIX_LZ4S)), SUFFIX_LZ4S)) {
         s = E_SUFFIX_LZ4S;
     }
@@ -764,12 +792,14 @@ bool hasSuffix(const char *fname)
             return 1;
         }
         break;
+#ifdef HAVE_QAT_DC_ZSTD
     case QZIP_ZSTD:
         if (len >= strlen(SUFFIX_ZSTD) &&
             !strcmp(fname + (len - strlen(SUFFIX_ZSTD)), SUFFIX_ZSTD)) {
             return 1;
         }
         break;
+#endif
     case QZIP_LZ4S_BK:
         if (len >= strlen(SUFFIX_LZ4S) &&
             !strcmp(fname + (len - strlen(SUFFIX_LZ4S)), SUFFIX_LZ4S)) {
@@ -830,7 +860,9 @@ QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
         } else {
             return E_CHECK_SUFFIX_OK;
         }
-    } else if (E_SUFFIX_ZSTD == suffix) {
+    }
+#ifdef HAVE_QAT_DC_ZSTD
+    else if (E_SUFFIX_ZSTD == suffix) {
         if (!is_format_set) {
             g_params_th.data_fmt = QZIP_ZSTD;
             return E_CHECK_SUFFIX_OK;
@@ -840,7 +872,9 @@ QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
         } else {
             return E_CHECK_SUFFIX_OK;
         }
-    } else {    /* Unsupported suffix */
+    }
+#endif
+    else {    /* Unsupported suffix */
         return E_CHECK_SUFFIX_UNSUPPORT;
     }
 }
@@ -858,10 +892,14 @@ int makeOutName(const char *in_name, const char *out_name,
         if (g_params_th.data_fmt == QZIP_LZ4_FH) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4);
-        } else if (g_params_th.data_fmt == QZIP_ZSTD) {
+        }
+#ifdef HAVE_QAT_DC_ZSTD
+        else if (g_params_th.data_fmt == QZIP_ZSTD) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_ZSTD);
-        } else if (g_params_th.data_fmt == QZIP_LZ4S_BK) {
+        }
+#endif
+        else if (g_params_th.data_fmt == QZIP_LZ4S_BK) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4S);
         } else if (g_params_th.data_fmt == QZIP_DEFLATE_RAW) {
@@ -882,9 +920,13 @@ int makeOutName(const char *in_name, const char *out_name,
         if (NULL == out_name) {
             if (g_params_th.data_fmt == QZIP_LZ4_FH) {
                 oname[strlen(in_name) - strlen(SUFFIX_LZ4)] = '\0';
-            } else if (g_params_th.data_fmt == QZIP_ZSTD) {
+            }
+#ifdef HAVE_QAT_DC_ZSTD
+            else if (g_params_th.data_fmt == QZIP_ZSTD) {
                 oname[strlen(in_name) - strlen(SUFFIX_ZSTD)] = '\0';
-            } else {
+            }
+#endif
+            else {
                 oname[strlen(in_name) - strlen(SUFFIX_GZ)] = '\0';
             }
         }

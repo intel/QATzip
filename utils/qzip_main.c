@@ -117,9 +117,13 @@ int main(int argc, char **argv)
                 g_params_th.data_fmt = QZIP_LZ4_FH;
             } else if (strcmp(optarg, "lz4s") == 0) {
                 g_params_th.data_fmt = QZIP_LZ4S_BK;
-            } else if (strcmp(optarg, "zstd") == 0) {
+            }
+#ifdef HAVE_QAT_DC_ZSTD
+            else if (strcmp(optarg, "zstd") == 0) {
                 g_params_th.data_fmt = QZIP_ZSTD;
-            } else {
+            }
+#endif
+            else {
                 printf("Error gzip header format arg: %s\n", optarg);
                 return -1;
             }
@@ -165,6 +169,9 @@ int main(int argc, char **argv)
                 return -1;
             }
             break;
+        case 'D':
+            g_params_th.dict_filename = optarg;
+            break;
         case 'g':
             if (strcmp(optarg, "none") == 0) {
                 qzSetLogLevel(LOG_NONE);
@@ -189,9 +196,6 @@ int main(int argc, char **argv)
                 printf("Error block size arg: %s\n", optarg);
                 return -1;
             }
-            break;
-        case 'D':
-            g_params_th.dict_filename = optarg;
             break;
         default:
             tryHelp();
@@ -324,7 +328,9 @@ int main(int argc, char **argv)
                         }
                         processFile(&g_sess, argv[optind++], out_name,
                                     g_decompress == 0);
-                    } else if (suffix == E_SUFFIX_ZSTD) {
+                    }
+#ifdef HAVE_QAT_DC_ZSTD
+                    else if (suffix == E_SUFFIX_ZSTD) {
                         if (g_params_th.data_fmt != QZIP_ZSTD) {
                             QZ_ERROR("Error: Suffix(.zst) doesn't match the data format,"
                                      "please confirm the data format\n");
@@ -332,7 +338,9 @@ int main(int argc, char **argv)
                         }
                         processFile(&g_sess, argv[optind++], out_name,
                                     g_decompress == 0);
-                    } else {
+                    }
+#endif
+                    else {
                         QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: "
                                  "7z/gz/lz4/zst.\n", argv[optind]);
                         exit(ERROR);

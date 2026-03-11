@@ -225,8 +225,8 @@ typedef struct QzipParams_S {
     unsigned int recursive_mode;
     unsigned int req_cnt_thrshold;
     char *output_filename;
-    unsigned int is_sensitive_mode;
     char *dict_filename;
+    unsigned int is_sensitive_mode;
 } QzipParams_T;
 
 #define QZ7Z_PROPERTY_ID_INTEL7Z_1001   ((QZ7Z_DEVELOP_PREFIX << 56) | \
