@@ -133,8 +133,8 @@ typedef enum {
     TEST_DEFLATE_4B,
     TEST_LZ4,
     TEST_LZ4S,
-    TEST_ZLIB,
-    TEST_ZSTD
+    TEST_ZSTD,
+    TEST_ZLIB
 } TEST_FORMAT_T;
 
 typedef struct CPUCore_S {
@@ -677,8 +677,6 @@ int qzInitSetupsessionExt(QzSession_T *sess, TestArg_T *arg)
 
     return rc;
 }
-
-
 int qzInitSetupsession(QzSession_T *sess, TestArg_T *arg)
 {
     int rc = QZ_OK;
@@ -703,11 +701,11 @@ int qzInitSetupsession(QzSession_T *sess, TestArg_T *arg)
         case TEST_LZ4S:
             rc = qzSetupLZ4S(sess, arg);
             break;
-        case TEST_ZLIB:
-            rc = qzSetupDeflateExt(sess, arg);
-            break;
         case TEST_ZSTD:
             rc = qzSetupZSTD(sess, arg);
+            break;
+        case TEST_ZLIB:
+            rc = qzSetupDeflateExt(sess, arg);
             break;
         default:
             QZ_ERROR("Unsupported data format\n");
@@ -2318,7 +2316,8 @@ void *qzCompressAndDecompress(void *arg)
 
             for (int i = 0; i < num_blocks; i ++) {
                 in_sz = compressed_blocks_sz[i];
-                out_sz = decomp_out_sz - produced;
+                out_sz = block_size < (decomp_out_sz - produced) ? block_size :
+                         (decomp_out_sz - produced);
                 if (((TestArg_T *)arg)->dict_sz > 0 && ((TestArg_T *)arg)->dict_buf) {
                     result.status = 0;
                     result.src_len = in_sz;
@@ -6443,7 +6442,7 @@ done:
     "    -d direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
-    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s | zlib | zstd\n"\
+    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s | zstd | zlib\n"\
     "                          For zlib and deflate raw the block size must be same\n"\
     "                          as HW buffer size, e.g '-b' and '-C' should be same.\n" \
     "    -T huffmanType        static | dynamic\n"                              \
@@ -6461,10 +6460,11 @@ done:
     "                          If set common, memory of compress buffer will be allocated through malloc\n" \
     "                          If set pinned, memory of compress buffer will be allocated in huge page, the\n" \
     "                          allocation limit is 2M\n"                        \
-    "    -g loglevel           set qatzip loglevel(none|error|warn|info|debug)\n"  \
+    "    -D dictionary_file    set dictionary file to compression or decompression\n"                 \
+    "    -g, --loglevel        set qatzip loglevel(none|error|warn|info|debug)\n"  \
     "    -a sensitive_mode     Enable Latency sensitive mode\n" \
     "    -q async_queue_sz     default is 100, it's for async queue size\n"     \
-    "    -D dictionary_file    set dictionary file to compression or decompression\n"                 \
+    "    -x lsm_met_len_shift  set LSM metric length shift (default is 6, LSM_MET_DEPTH = 1 << shift)\n" \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -6518,7 +6518,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:g:q:vha";
+    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:g:d:q:x:vha";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -6588,10 +6588,10 @@ int main(int argc, char *argv[])
                 args.test_format = TEST_LZ4;
             } else if (strcmp(optarg, "lz4s") == 0) {
                 args.test_format = TEST_LZ4S;
-            } else if (strcmp(optarg, "zlib") == 0) {
-                args.test_format = TEST_ZLIB;
             } else if (strcmp(optarg, "zstd") == 0) {
                 args.test_format = TEST_ZSTD;
+            } else if (strcmp(optarg, "zlib") == 0) {
+                args.test_format = TEST_ZLIB;
             } else {
                 QZ_ERROR("Error service arg: %s\n", optarg);
                 return -1;
@@ -6736,6 +6736,9 @@ int main(int argc, char *argv[])
                 return -1;
             }
             break;
+        case 'D':
+            dict_file_name = optarg;
+            break;
         case 'g':
             if (strcmp(optarg, "none") == 0) {
                 qzSetLogLevel(LOG_NONE);
@@ -6758,8 +6761,8 @@ int main(int argc, char *argv[])
                 return -1;
             }
             break;
-        case 'D':
-            dict_file_name = optarg;
+        case 'x':
+            lsm_met_len_shift = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
             break;
         default:
             qzPrintUsageAndExit(argv[0]);

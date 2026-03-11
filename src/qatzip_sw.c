@@ -172,6 +172,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
             dest = dest + sizeof(Qz4BH_T);
         }
         /* Load dictionary */
+#ifdef HAVE_QAT_DC_CAPABILITIES
         if (qz_sess->sess_params.dictionary_flag) {
             ret = deflateSetDictionary(stream, qz_sess->sess_params.dictionary,
                                  qz_sess->sess_params.dictionary_len);
@@ -180,6 +181,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
                 return QZ_FAIL;
             }
         }
+#endif
     } else {
         if (NULL == stream) {
             QZ_ERROR("ERR: deflate stream is NULL\n");
@@ -376,6 +378,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
         qz_sess->inflate_stat = InflateError;
         goto done;
     case Z_NEED_DICT:
+#ifdef HAVE_QAT_DC_CAPABILITIES
         if (qz_sess->sess_params.dictionary_flag) {
             ret = inflateSetDictionary(stream, qz_sess->sess_params.dictionary,
                                        qz_sess->sess_params.dictionary_len);
@@ -392,6 +395,12 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
             ret = QZ_FAIL;
             goto done;
         }
+#else
+        QZ_ERROR("Failed to set dictionary\n");
+        qz_sess->inflate_stat = InflateError;
+        ret = QZ_FAIL;
+        goto done;
+#endif
         break;
     default:
         QZ_INFO("ERR: inflate failed with error code %d\n", ret);
@@ -611,6 +620,7 @@ out:
     return ret;
 }
 
+#ifdef HAVE_QAT_DC_ZSTD
 /* ZSTD compress and decompress SW fallback */
 int qzZSTDSWCompress(QzSession_T *sess, const unsigned char *src,
                      unsigned int *src_len, unsigned char *dest,
@@ -747,6 +757,7 @@ zstd_decompress_fail:
     *dest_len  = 0;
     return QZ_FAIL;
 }
+#endif /* HAVE_QAT_DC_ZSTD */
 
 /* The software failover function for compression request */
 int qzSWCompress(QzSession_T *sess, const unsigned char *src,
@@ -777,9 +788,11 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     case LZ4_FH:
         ret = qzLZ4SWCompress(sess, src, src_len, dest, dest_len, last);
         break;
+#ifdef HAVE_QAT_DC_ZSTD
     case ZSTD:
         ret = qzZSTDSWCompress(sess, src, src_len, dest, dest_len, last);
         break;
+#endif
     default:
         QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
         *src_len = 0;
@@ -819,9 +832,11 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     case LZ4_FH:
         ret = qzLZ4SWDecompress(sess, src, src_len, dest, dest_len);
         break;
+#ifdef HAVE_QAT_DC_ZSTD
     case ZSTD:
         ret = qzZSTDSWDecompress(sess, src, src_len, dest, dest_len);
         break;
+#endif
     default:
         QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
         *src_len = 0;
@@ -861,9 +876,11 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
     case LZ4_FH:
         ret = qzSWDecompressMultiLZ4(sess, src, src_len, dest, dest_len);
         break;
+#ifdef HAVE_QAT_DC_ZSTD
     case ZSTD:
         ret = qzSWDecompressMultiZSTD(sess, src, src_len, dest, dest_len);
         break;
+#endif
     default:
         QZ_ERROR("Unknown/unsupported data format: %d\n", data_fmt);
         *src_len = 0;
