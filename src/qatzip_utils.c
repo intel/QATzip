@@ -318,12 +318,15 @@ static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
         }
         break;
     case LZ4_FH:
+    case LZ4_BLOCK:
 #if CPA_DC_API_VERSION_AT_LEAST(3, 1)
         session_setup_data->compType = CPA_DC_LZ4;
         session_setup_data->checksum = CPA_DC_XXHASH32;
         session_setup_data->lz4BlockChecksum = 0;
         session_setup_data->autoSelectBestHuffmanTree = CPA_DC_ASB_ENABLED;
         session_setup_data->lz4BlockMaxSize = CPA_DC_LZ4_MAX_BLOCK_SIZE_64K;
+        // For LZ4_BLOCK format, blocks are independent 
+        session_setup_data->lz4BlockIndependence = (params->data_fmt == LZ4_BLOCK) ? CPA_TRUE : CPA_FALSE;
         break;
 #else
         QZ_ERROR("QAT driver does not support lz4 algorithm\n");
@@ -343,7 +346,7 @@ static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
         QZ_ERROR("QAT driver does not support lz4s algorithm\n");
         return QZ_UNSUPPORTED_FMT;
 #endif
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
     case ZSTD:
         session_setup_data->compType = CPA_DC_ZSTD;
         session_setup_data->checksum = CPA_DC_XXHASH64;
@@ -501,6 +504,7 @@ static int qzCheckParamsCommon(QzSessionParamsCommon_T *params)
 
     if ((params->comp_algorithm != QZ_DEFLATE) &&
         (params->comp_algorithm != QZ_LZ4) &&
+        (params->comp_algorithm != QZ_LZ4_BLOCK) &&
         (params->comp_algorithm != QZ_LZ4s) &&
         (params->comp_algorithm != QZ_ZSTD)) {
         QZ_ERROR("Invalid comp_algorithm value\n");
@@ -638,6 +642,30 @@ int qzCheckParamsLZ4(QzSessionParamsLZ4_T *params)
     return QZ_OK;
 }
 
+#ifdef CPM_5X
+int qzCheckParamsLZ4Block(QzSessionParamsLZ4_T *params)
+{
+    assert(params);
+
+    if (qzCheckParamsCommon(&params->common_params) != QZ_OK) {
+        return QZ_PARAMS;
+    }
+
+    if (params->common_params.comp_algorithm != QZ_LZ4_BLOCK) {
+        QZ_ERROR("Invalid comp_algorithm value\n");
+        return QZ_PARAMS;
+    }
+
+    if ((params->common_params.comp_lvl < QZ_LZS_COMP_LVL_MINIMUM) ||
+        (params->common_params.comp_lvl > QZ_LZS_COMP_LVL_MAXIMUM)) {
+        QZ_ERROR("Invalid comp_lvl value\n");
+        return QZ_PARAMS;
+    }
+
+    return QZ_OK;
+}
+#endif /* CPM_5X */
+
 int qzCheckParamsLZ4S(QzSessionParamsLZ4S_T *params)
 {
     assert(params);
@@ -671,7 +699,7 @@ int qzCheckParamsLZ4S(QzSessionParamsLZ4S_T *params)
     return QZ_OK;
 }
 
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
 int qzCheckParamsZSTD(QzSessionParamsZstd_T *params)
 {
     assert(params);
@@ -695,7 +723,7 @@ int qzCheckParamsZSTD(QzSessionParamsZstd_T *params)
 
     return QZ_OK;
 }
-#endif /* HAVE_QAT_DC_ZSTD */
+#endif /* CPM_5X */
 
 static void qzSetParamsCommon(QzSessionParamsCommon_T *params,
                               QzSessionParamsInternal_T *internal_params)
@@ -803,6 +831,18 @@ void qzSetParamsLZ4(QzSessionParamsLZ4_T *params,
     internal_params->data_fmt = LZ4_FH;
 }
 
+#ifdef CPM_5X
+void qzSetParamsLZ4Block(QzSessionParamsLZ4_T *params,
+    QzSessionParamsInternal_T *internal_params)
+{
+    assert(params);
+    assert(internal_params);
+
+    qzSetParamsCommon(&params->common_params, internal_params);
+    internal_params->data_fmt = LZ4_BLOCK;
+}
+#endif /* CPM_5X */
+
 /**
  * Set LZ4S session params into internal params
  */
@@ -819,7 +859,7 @@ void qzSetParamsLZ4S(QzSessionParamsLZ4S_T *params,
     internal_params->lz4s_mini_match = params->lz4s_mini_match;
 }
 
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
 void qzSetParamsZSTD(QzSessionParamsZstd_T *params,
                      QzSessionParamsInternal_T *internal_params)
 {
@@ -827,12 +867,10 @@ void qzSetParamsZSTD(QzSessionParamsZstd_T *params,
     assert(internal_params);
 
     qzSetParamsCommon(&params->common_params, internal_params);
-#ifdef HAVE_QAT_DC_ZSTD
     internal_params->data_fmt = ZSTD;
-#endif
     //TODO: Update zstd hist buffer block in internal
 }
-#endif /* HAVE_QAT_DC_ZSTD */
+#endif /* CPM_5X */
 
 /**
  * Get session params from internal params
@@ -944,6 +982,21 @@ void qzGetParamsLZ4(QzSessionParamsInternal_T *internal_params,
     params->common_params.comp_algorithm = QZ_LZ4;
 }
 
+#ifdef CPM_5X
+ /**
+  * Get LZ4 Block session params from internal params
+  */
+ void qzGetParamsLZ4Block(QzSessionParamsInternal_T *internal_params,
+    QzSessionParamsLZ4_T *params)
+{
+    assert(params);
+    assert(internal_params);
+
+    qzGetParamsCommon(internal_params, &params->common_params);
+    params->common_params.comp_algorithm = QZ_LZ4_BLOCK;
+}
+#endif /* CPM_5X */
+
 /**
  * Get LZ4S session params from internal params
  */
@@ -963,7 +1016,7 @@ void qzGetParamsLZ4S(QzSessionParamsInternal_T *internal_params,
     params->lz4s_mini_match = internal_params->lz4s_mini_match;
 }
 
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
 void qzGetParamsZSTD(QzSessionParamsInternal_T *internal_params,
                      QzSessionParamsZstd_T *params)
 {
@@ -975,7 +1028,7 @@ void qzGetParamsZSTD(QzSessionParamsInternal_T *internal_params,
     params->blockSize = QZ_ZSTD_BLOCKSIZE_DEFAULT;
     params->historyBuffer = QZ_ZSTD_HIST_BUFF_DEFAULT;
 }
-#endif /* HAVE_QAT_DC_ZSTD */
+#endif /* CPM_5X */
 
 inline unsigned long outputFooterSz(DataFormatInternal_T data_fmt)
 {
@@ -989,7 +1042,8 @@ inline unsigned long outputFooterSz(DataFormatInternal_T data_fmt)
     case LZ4_FH:
         size = qzLZ4FooterSz();
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+    case LZ4_BLOCK:
     case ZSTD:
 #endif
     case LZ4S_BK:
@@ -1023,10 +1077,13 @@ unsigned long outputHeaderSz(DataFormatInternal_T data_fmt)
     case LZ4_FH:
         size = qzLZ4HeaderSz();
         break;
+    case LZ4_BLOCK:
+        size = 0;  // LZ4_BLOCK handles its own headers within compressed data
+        break;
     case LZ4S_BK:
         size = qzLZ4SBlockHeaderSz();
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
     case ZSTD:
         break;
 #endif
@@ -1058,10 +1115,13 @@ void outputHeaderGen(unsigned char *ptr,
     case LZ4_FH:
         qzLZ4HeaderGen(ptr, res);
         break;
+    case LZ4_BLOCK:
+        // LZ4_BLOCK handles its own headers - no separate header generation needed
+        break;
     case LZ4S_BK:
         qzLZ4SBlockHeaderGen(ptr, res);
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
     case ZSTD:
         break;
 #endif
@@ -1085,9 +1145,10 @@ inline void outputFooterGen(unsigned char *ptr,
     case LZ4_FH:
         qzLZ4FooterGen(ptr, res);
         break;
+    case LZ4_BLOCK:
     case LZ4S_BK:
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
     case ZSTD:
         break;
 #endif
@@ -1101,7 +1162,7 @@ inline void outputFooterGen(unsigned char *ptr,
     }
 }
 
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
 int isQATZSTDProcessable(const unsigned char *ptr,
                          const unsigned int *const src_len,
                          QzSess_T *const qz_sess)
@@ -1132,7 +1193,7 @@ int isQATZSTDProcessable(const unsigned char *ptr,
     }
     return rc;
 }
-#endif /* HAVE_QAT_DC_ZSTD */
+#endif /* CPM_5X */
 
 int isQATProcessable(const unsigned char *ptr,
                      const unsigned int *const src_len,
@@ -1156,7 +1217,10 @@ int isQATProcessable(const unsigned char *ptr,
     case LZ4_FH:
         rc = isQATLZ4Processable(ptr, src_len, qz_sess);
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+    case LZ4_BLOCK:
+        rc = isQATLZ4BlockProcessable(ptr, src_len, qz_sess);
+        break;
     case ZSTD:
         rc = isQATZSTDProcessable(ptr, src_len, qz_sess);
         break;
@@ -1381,11 +1445,16 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
     unsigned char *src_ptr = src;
     unsigned int compressed_sz = 0;
     unsigned int uncompressed_sz = 0;
+    unsigned int block_sz = 0;
     StdGzF_T *qzFooter = NULL;
     int isEndWithFooter = 0;
     int ret = 0;
     QzLZ4H_T *qzLZ4Header = NULL;
     QzLZ4F_T *lz4Footer = NULL;
+    unsigned int num_sub_blocks = 0;
+    unsigned int total_src = 0;
+    unsigned int sub_block_count = 0;
+    unsigned int blk_avail = 0;
     DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
 
     if ((src_avail_len <= 0) || (dest_avail_len <= 0)) {
@@ -1445,7 +1514,36 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         compressed_sz = (unsigned char *)lz4Footer - src_ptr - qzLZ4HeaderSz();
         uncompressed_sz = qzLZ4Header->cnt_size;
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+    case LZ4_BLOCK: 
+        /* Walk all sub-blocks that constitute one hw_buff_sz chunk so the
+         * entire chunk can be sent to QAT HW in a single decompression
+         * request, mirroring the compression path. */
+        num_sub_blocks = QZ_CEIL_DIV(qz_sess->sess_params.hw_buff_sz,
+                                                   QZ_LZ4_BLK_MAX_SIZE);
+        unsigned char *blk_ptr = src_ptr;
+        blk_avail = src_avail_len;
+
+        while (sub_block_count < num_sub_blocks && blk_avail >= QZ_LZ4_BLK_HEADER_SIZE) {
+            unsigned int bsz = (*(unsigned int *)blk_ptr) & QZ_LZ4_BLK_SIZE_MASK;
+            if (bsz == 0 || bsz > blk_avail - QZ_LZ4_BLK_HEADER_SIZE) {
+                break;
+            }
+            total_src += QZ_LZ4_BLK_HEADER_SIZE + bsz;
+            blk_ptr  += QZ_LZ4_BLK_HEADER_SIZE + bsz;
+            blk_avail -= QZ_LZ4_BLK_HEADER_SIZE + bsz;
+            sub_block_count++;
+        }
+
+        if (sub_block_count == 0) {
+            QZ_DEBUG("checkHeader: insufficient data for LZ4 block header\n");
+            return QZ_BUF_ERROR;
+        }
+        block_sz = total_src;
+        compressed_sz = total_src;
+        uncompressed_sz = (qz_sess->sess_params.hw_buff_sz > dest_avail_len) ?
+                          dest_avail_len : qz_sess->sess_params.hw_buff_sz;
+        break;
     case ZSTD:
         compressed_sz = ZSTD_findFrameCompressedSize(src_ptr, src_avail_len);
         uncompressed_sz = ZSTD_getFrameContentSize(src_ptr, src_avail_len);
@@ -1491,14 +1589,32 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
 
     if (compressed_sz + outputHeaderSz(data_fmt) + outputFooterSz(data_fmt) >
         src_avail_len) {
-        QZ_DEBUG("checkHeader: incomplete source buffer\n");
-        return QZ_DATA_ERROR;
+        /* For LZ4_BLOCK, block_sz now holds the total src bytes for all
+         * sub-blocks in the chunk (headers included). */
+        if (data_fmt == LZ4_BLOCK) {
+            if (block_sz > src_avail_len) {
+                QZ_DEBUG("checkHeader LZ4_BLOCK: incomplete source buffer - total_src=%u > src_avail=%u\n",
+                         block_sz, src_avail_len);
+                return QZ_DATA_ERROR;
+            }
+        } else {
+            QZ_DEBUG("checkHeader: incomplete source buffer\n");
+            return QZ_DATA_ERROR;
+        }
     } else if (uncompressed_sz > dest_avail_len) {
         QZ_DEBUG("checkHeader: insufficient destination buffer length\n");
         return QZ_BUF_ERROR;
     }
-    hdr->extra.qz_e.dest_sz = compressed_sz;
-    hdr->extra.qz_e.src_sz = uncompressed_sz;
+    
+    if (data_fmt == LZ4_BLOCK) {
+        /* dest_sz = total compressed bytes for all sub-blocks (including their
+         * 4-byte headers); src_sz = expected uncompressed size for the chunk. */
+        hdr->extra.qz_e.dest_sz = block_sz;
+        hdr->extra.qz_e.src_sz = uncompressed_sz;
+    } else {
+        hdr->extra.qz_e.dest_sz = compressed_sz;
+        hdr->extra.qz_e.src_sz = uncompressed_sz;
+    }
     return QZ_OK;
 }
 
@@ -1531,7 +1647,11 @@ void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
     g_process.qz_inst[i].stream[j].res.checksum = 0;
 
     swapDataBuffer(i, j);
-    src_ptr += outputHeaderSz(data_fmt);
+    
+    // For LZ4_BLOCK, don't skip the header - hardware needs it
+    if (data_fmt != LZ4_BLOCK) {
+        src_ptr += outputHeaderSz(data_fmt);
+    }
 
     src_send_sz = hdr->extra.qz_e.dest_sz;
     dest_receive_sz = hdr->extra.qz_e.src_sz;
@@ -1541,7 +1661,7 @@ void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
 
     QZ_DEBUG("doDecompressIn: Sending %u bytes starting at 0x%lx\n",
              src_send_sz, (unsigned long)src_ptr);
-    QZ_DEBUG("sending seq number %d %d %ld\n", i, j, qz_sess->seq);
+    QZ_DEBUG("sending seq number %lu %d %ld\n", i, j, qz_sess->seq);
 
     if (DEFLATE_GZIP_EXT == data_fmt ||
         DEFLATE_GZIP == data_fmt) {
@@ -1552,6 +1672,11 @@ void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
         lz4Footer = (QzLZ4F_T *)(src_ptr + src_send_sz); //TODO
         g_process.qz_inst[i].stream[j].checksum = lz4Footer->cnt_cksum;
         g_process.qz_inst[i].stream[j].orgdatalen = hdr->extra.qz_e.src_sz;
+#ifdef CPM_5X
+    } else if (LZ4_BLOCK == data_fmt) {
+        g_process.qz_inst[i].stream[j].checksum = 0;
+        g_process.qz_inst[i].stream[j].orgdatalen = hdr->extra.qz_e.src_sz;
+#endif
     } else if (DEFLATE_ZLIB == data_fmt) {
         zlibFooter = (StdZlibF_T *)(src_ptr + src_send_sz);
         g_process.qz_inst[i].stream[j].checksum = zlibFooter->adler32;
@@ -1581,6 +1706,9 @@ void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
 
     *tmp_src_avail_len = (outputHeaderSz(data_fmt) + src_send_sz + outputFooterSz(
                               data_fmt));
+    if (data_fmt == LZ4_BLOCK) {
+        *tmp_src_avail_len = src_send_sz;
+    }
     *tmp_dest_avail_len = dest_receive_sz;
 }
 
@@ -1645,7 +1773,8 @@ int decompOutCheckSum(int i, int j, QzSession_T *sess,
     /* For DEFLATE_4B, it don't include the frame header/Footer, no need to
      * check the checksum. For ZSTD, driver already check the decompression
      * checksum, if "Content_Checksum_flag" enabled in zstd frame header, no
-     * need to check in qatzip level.
+     * need to check in qatzip level. For LZ4_BLOCK, individual blocks don't
+     * have footers with checksums like LZ4_FH format.
      */
     //alder32_swap to read the checksum in proper order.
     if (qz_sess->sess_params.data_fmt == DEFLATE_ZLIB) {
@@ -1672,7 +1801,8 @@ int decompOutCheckSum(int i, int j, QzSession_T *sess,
                  g_process.qz_inst[i].stream[j].checksum);
     }
     int skip_checksum = (qz_sess->sess_params.data_fmt == DEFLATE_4B ||
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+                         qz_sess->sess_params.data_fmt == LZ4_BLOCK ||
                          qz_sess->sess_params.data_fmt == ZSTD ||
 #endif
                          qz_sess->sess_params.data_fmt == DEFLATE_RAW);

@@ -172,7 +172,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
             dest = dest + sizeof(Qz4BH_T);
         }
         /* Load dictionary */
-#ifdef HAVE_QAT_DC_CAPABILITIES
+#ifdef CPM_5X
         if (qz_sess->sess_params.dictionary_flag) {
             ret = deflateSetDictionary(stream, qz_sess->sess_params.dictionary,
                                  qz_sess->sess_params.dictionary_len);
@@ -349,6 +349,22 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
         total_in = 0;
         stream->total_out = 0;
         total_out = 0;
+#ifdef CPM_5X
+        /* For raw deflate, inflate() will not return Z_NEED_DICT since there
+         * is no zlib header to signal dictionary usage.  We must set the
+         * dictionary proactively before the first inflate() call. */
+        if (qz_sess->sess_params.dictionary_flag &&
+            (data_fmt == DEFLATE_RAW || data_fmt == DEFLATE_4B)) {
+            ret = inflateSetDictionary(stream, qz_sess->sess_params.dictionary,
+                                       qz_sess->sess_params.dictionary_len);
+            if (Z_OK != ret) {
+                QZ_ERROR("Failed to set dictionary for raw deflate\n");
+                qz_sess->inflate_stat = InflateError;
+                ret = QZ_FAIL;
+                goto done;
+            }
+        }
+#endif
     } else {
         total_in = GET_LOWER_32BITS(stream->total_in);
         total_out = GET_LOWER_32BITS(stream->total_out);
@@ -378,7 +394,7 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
         qz_sess->inflate_stat = InflateError;
         goto done;
     case Z_NEED_DICT:
-#ifdef HAVE_QAT_DC_CAPABILITIES
+#ifdef CPM_5X
         if (qz_sess->sess_params.dictionary_flag) {
             ret = inflateSetDictionary(stream, qz_sess->sess_params.dictionary,
                                        qz_sess->sess_params.dictionary_len);
@@ -387,8 +403,23 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
                 qz_sess->inflate_stat = InflateError;
                 goto done;
             }
-            ret = QZ_OK;
-            qz_sess->inflate_stat = InflateEnd;
+            /* After setting the dictionary, inflate() must be called again
+             * to continue decompression per the zlib contract. */
+            zlib_ret = inflate(stream, Z_SYNC_FLUSH);
+            if (zlib_ret == Z_STREAM_END) {
+                ret = QZ_OK;
+                qz_sess->inflate_stat = InflateEnd;
+                setDeflateEndOfStream(qz_sess, 1);
+            } else if (zlib_ret == Z_OK) {
+                ret = QZ_OK;
+                qz_sess->inflate_stat = InflateOK;
+            } else {
+                QZ_ERROR("inflate after inflateSetDictionary failed: %d\n",
+                         zlib_ret);
+                ret = QZ_DATA_ERROR;
+                qz_sess->inflate_stat = InflateError;
+                goto done;
+            }
         } else {
             QZ_ERROR("Failed to set dictionary\n");
             qz_sess->inflate_stat = InflateError;
@@ -620,7 +651,162 @@ out:
     return ret;
 }
 
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+int qzLZ4BlockSWCompress(QzSession_T *sess, const unsigned char *src,
+                         unsigned int *src_len, unsigned char *dest,
+                         unsigned int *dest_len, unsigned int last)
+{
+    unsigned int block_size = 0;
+    unsigned int total_out = 0;
+    unsigned int total_in = 0;
+    unsigned int remaining = *src_len;
+    unsigned char *src_ptr = (unsigned char *)src;
+    unsigned char *dest_ptr = dest;
+    int compressed_size = QZ_OK;
+    QZ_DEBUG("Enter qzLZ4BlockSWCompress: src_len %u dest_len %u\n", *src_len, *dest_len);
+    while (remaining > 0) {
+        block_size = (remaining > QZ_LZ4_BLK_MAX_SIZE) ? QZ_LZ4_BLK_MAX_SIZE : remaining;
+
+        // Reserve space for block header (will be filled after compression)
+        unsigned char *header_ptr = dest_ptr;
+        dest_ptr += QZ_LZ4_BLK_HEADER_SIZE;
+
+        // Compress the block
+        compressed_size = LZ4_compress_default((const char *)src_ptr, (char *)dest_ptr,
+                                                   block_size, *dest_len - total_out - QZ_LZ4_BLK_HEADER_SIZE);
+        if (compressed_size <= 0) {
+            QZ_ERROR("LZ4_compress_default error\n");
+            goto lz4_block_compress_fail;
+        }
+
+        // Write block header with compressed size to match hardware format
+        *(unsigned int *)header_ptr = compressed_size & QZ_LZ4_BLK_SIZE_MASK;
+
+        dest_ptr += compressed_size;
+        total_out += QZ_LZ4_BLK_HEADER_SIZE + compressed_size;
+        src_ptr += block_size;
+        total_in += block_size;
+        remaining -= block_size;
+    }
+
+    *src_len = total_in;
+    *dest_len = total_out;
+
+    QZ_DEBUG("Exit qzLZ4BlockSWCompress: src_len %u dest_len %u\n",
+        *src_len, *dest_len);
+
+    return QZ_OK;
+
+lz4_block_compress_fail:
+    *src_len = 0;
+    *dest_len = 0;
+    return QZ_FAIL;
+}
+
+int qzLZ4BlockSWDecompress(QzSession_T *sess, const unsigned char *src,
+                           unsigned int *src_len, unsigned char *dest,
+                           unsigned int *dest_len)
+{
+    unsigned int block_size = 0;
+    unsigned int total_out = 0;
+    unsigned int total_in = 0;
+    unsigned int remaining = *src_len;
+    unsigned char *src_ptr = (unsigned char *)src;
+    unsigned char *dest_ptr = dest;
+    int decompressed_size = 0;
+
+    QZ_DEBUG("qzLZ4BlockSWDecompress: src_len=%u, dest_len=%u, remaining=%u\n", 
+             *src_len, *dest_len, remaining);
+
+    while (remaining > QZ_LZ4_BLK_HEADER_SIZE) {
+        // Read block header
+        unsigned int raw_header = *(unsigned int *)src_ptr;
+        int is_uncompressed = (raw_header & QZ_LZ4_STOREDBLOCK_FLAG) != 0;
+        block_size = raw_header & QZ_LZ4_BLK_SIZE_MASK;
+        src_ptr += QZ_LZ4_BLK_HEADER_SIZE;
+        remaining -= QZ_LZ4_BLK_HEADER_SIZE;
+
+        if (block_size > remaining) {
+            QZ_ERROR("Invalid block size in LZ4 block header\n");
+            goto lz4_block_decompress_fail;
+        }
+
+        if (is_uncompressed) {
+            if (block_size > *dest_len - total_out) {
+                QZ_ERROR("Uncompressed block size exceeds output buffer\n");
+                goto lz4_block_decompress_fail;
+            }
+            memcpy(dest_ptr, src_ptr, block_size);
+            decompressed_size = block_size;
+        } else {
+            decompressed_size = LZ4_decompress_safe((const char *)src_ptr, (char *)dest_ptr,
+                                                        block_size, *dest_len - total_out);
+            if (decompressed_size < 0) {
+                QZ_ERROR("LZ4_decompress_safe error\n");
+                goto lz4_block_decompress_fail;
+            }
+        }
+
+        src_ptr += block_size;
+        dest_ptr += decompressed_size;
+        total_out += decompressed_size;
+        total_in += QZ_LZ4_BLK_HEADER_SIZE + block_size;
+        remaining -= block_size;
+        QZ_DEBUG("qzLZ4BlockSWDecompress: block completed, total_in=%u, total_out=%u, remaining=%u\n", 
+                 total_in, total_out, remaining);
+    }
+
+    *src_len = total_in;
+    *dest_len = total_out;
+    return QZ_OK;
+
+lz4_block_decompress_fail:
+    *src_len = 0;
+    *dest_len = 0;
+    return QZ_FAIL;
+}
+
+int qzSWDecompressMultiLZ4Block(QzSession_T *sess, const unsigned char *src,
+                                unsigned int *src_len, unsigned char *dest,
+                                unsigned int *dest_len)
+{
+    int ret = QZ_OK;
+    unsigned int block_src_len = 0;
+    unsigned int block_dest_len = 0;
+    unsigned int total_out = 0;
+    unsigned int total_in = 0;
+    unsigned int remaining = *src_len;
+    unsigned char *src_ptr = (unsigned char *)src;
+    unsigned char *dest_ptr = dest;
+#ifdef QATZIP_DEBUG
+    insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
+#endif
+    QZ_DEBUG("Enter qzSWDecompressMultiLZ4Block: src_len %u dest_len %u\n", *src_len, *dest_len);
+
+    while (remaining > QZ_LZ4_BLK_HEADER_SIZE) {
+        block_src_len = remaining;
+        block_dest_len = *dest_len - total_out;
+
+        ret = qzLZ4BlockSWDecompress(sess, src_ptr, &block_src_len, dest_ptr, &block_dest_len);
+        if (ret != QZ_OK) {
+            goto out;
+        }
+
+        src_ptr += block_src_len;
+        dest_ptr += block_dest_len;
+        total_in += block_src_len;
+        total_out += block_dest_len;
+        remaining -= block_src_len;
+    }
+
+    *src_len = total_in;
+    *dest_len = total_out;
+
+out:
+    QZ_DEBUG("Exit qzSWDecompressMultiLZ4Block: src_len %u dest_len %u\n", *src_len, *dest_len);
+    return ret;
+}
+
 /* ZSTD compress and decompress SW fallback */
 int qzZSTDSWCompress(QzSession_T *sess, const unsigned char *src,
                      unsigned int *src_len, unsigned char *dest,
@@ -757,7 +943,7 @@ zstd_decompress_fail:
     *dest_len  = 0;
     return QZ_FAIL;
 }
-#endif /* HAVE_QAT_DC_ZSTD */
+#endif /* CPM_5X */
 
 /* The software failover function for compression request */
 int qzSWCompress(QzSession_T *sess, const unsigned char *src,
@@ -788,7 +974,10 @@ int qzSWCompress(QzSession_T *sess, const unsigned char *src,
     case LZ4_FH:
         ret = qzLZ4SWCompress(sess, src, src_len, dest, dest_len, last);
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+    case LZ4_BLOCK:
+        ret = qzLZ4BlockSWCompress(sess, src, src_len, dest, dest_len, last);
+        break;
     case ZSTD:
         ret = qzZSTDSWCompress(sess, src, src_len, dest, dest_len, last);
         break;
@@ -832,7 +1021,10 @@ int qzSWDecompress(QzSession_T *sess, const unsigned char *src,
     case LZ4_FH:
         ret = qzLZ4SWDecompress(sess, src, src_len, dest, dest_len);
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+    case LZ4_BLOCK:
+        ret = qzLZ4BlockSWDecompress(sess, src, src_len, dest, dest_len);
+        break;
     case ZSTD:
         ret = qzZSTDSWDecompress(sess, src, src_len, dest, dest_len);
         break;
@@ -876,7 +1068,10 @@ int qzSWDecompressMulti(QzSession_T *sess, const unsigned char *src,
     case LZ4_FH:
         ret = qzSWDecompressMultiLZ4(sess, src, src_len, dest, dest_len);
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+    case LZ4_BLOCK:
+        ret = qzSWDecompressMultiLZ4Block(sess, src, src_len, dest, dest_len);
+        break;
     case ZSTD:
         ret = qzSWDecompressMultiZSTD(sess, src, src_len, dest, dest_len);
         break;

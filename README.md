@@ -56,8 +56,6 @@ acceleration devices:
 
 Distributions like Fedora 34+, RHEL 8.4+ & 9.0+, CentOS 9 Stream, SUSE SLES15 SP3+, Ubuntu 24.04+ and Debian13+ include the `qatzip` RPM package in their repositories. This package is built with the QAT_HW `qatlib` in-tree driver, specifically for 4xxx devices.
 
-Distributions like Fedora 34+, RHEL 8.4+ & 9.0+, CentOS 9 Stream, SUSE SLES15 SP3+, Ubuntu 24.04+ and Debian13+ include the `qatzip` RPM package in their repositories. This package is built with the QAT_HW `qatlib` in-tree driver, specifically for 4xxx devices.
-
 ### QATzip Compression Level Mapping
 
 #### QAT 1.x Compression Levels
@@ -304,6 +302,7 @@ Please refer to file `QATzip-man.pdf` under the `docs` folder and Refer this [li
   - Decompression is limited to software-only processing.
   - Header compression is not supported.
 - For LZ4\* (de)compression, QATzip supports only a 32 KB history buffer.
+- For `LZ4_BLOCK` format, `hw_buff_sz` must be a multiple of 64 KB (`QZ_LZ4_BLK_MAX_SIZE`). The LZ4 block format contains no end-of-block marker; block boundaries are determined solely by the sub-block count derived from `hw_buff_sz`. Non-multiples of 64 KB would cause the decompressor to miscalculate chunk boundaries.
 - For Zstandard (zstd) format compression, `qzstd` supports only `hw_buffer_sz` values less than 128 KB.
 - Stream APIs currently support the following:
   - Compression: `DEFLATE_GZIP`, `DEFLATE_GZIP_EXT`, and `DEFLATE_RAW`.
@@ -318,6 +317,7 @@ Please refer to file `QATzip-man.pdf` under the `docs` folder and Refer this [li
   - Instance over-subscription is not supported. The number of threads should not exceed the number of instances, as each thread maintains its own session and instance. Additional threads will offload workloads to software.
 - For latency-sensitive mode:
   - Avoid enabling this mode in low-stress scenarios or for smaller data workloads (below 8 KB), as it may result in decreased throughput for QATzip.
+- Static Huffman header (`QZ_STATIC_HDR`) is not supported by QAT hardware from Gen6 onwards. When static Huffman is requested on Gen6 or later hardware, QATzip will automatically fall back to software for both compression and decompression. If software backup is disabled (`sw_backup=0`), the operation will fail.
 
 ## Known Issues
 

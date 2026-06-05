@@ -1175,6 +1175,9 @@ QATZIP_API int qzSetupSessionDeflate(QzSession_T *sess,
 QATZIP_API int qzSetupSessionLZ4(QzSession_T *sess,
                                  QzSessionParamsLZ4_T *params);
 
+QATZIP_API int qzSetupSessionLZ4Block(QzSession_T *sess,
+                                 QzSessionParamsLZ4_T *params);
+
 QATZIP_API int qzSetupSessionLZ4S(QzSession_T *sess,
                                   QzSessionParamsLZ4S_T *params);
 
@@ -2234,6 +2237,8 @@ QATZIP_API int qzSetDefaultsDeflate(QzSessionParamsDeflate_T *defaults);
 
 QATZIP_API int qzSetDefaultsLZ4(QzSessionParamsLZ4_T *defaults);
 
+QATZIP_API int qzSetDefaultsLZ4Block(QzSessionParamsLZ4_T *defaults);
+
 QATZIP_API int qzSetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
 
 QATZIP_API int qzSetDefaultsZstd(QzSessionParamsZstd_T *defaults);
@@ -2282,6 +2287,8 @@ QATZIP_API int qzGetDefaults(QzSessionParams_T *defaults);
 QATZIP_API int qzGetDefaultsDeflate(QzSessionParamsDeflate_T *defaults);
 
 QATZIP_API int qzGetDefaultsLZ4(QzSessionParamsLZ4_T *defaults);
+
+QATZIP_API int qzGetDefaultsLZ4Block(QzSessionParamsLZ4_T *defaults);
 
 QATZIP_API int qzGetDefaultsLZ4S(QzSessionParamsLZ4S_T *defaults);
 

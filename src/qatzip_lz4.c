@@ -216,6 +216,28 @@ int isQATLZ4Processable(const unsigned char *ptr,
     return 1;
 }
 
+#ifdef CPM_5X
+int isQATLZ4BlockProcessable(const unsigned char *ptr,
+                             const unsigned int *const src_len,
+                             QzSess_T *const qz_sess)
+{
+    unsigned int blk_size = 0;
+    
+    if (*src_len < QZ_LZ4_BLK_HEADER_SIZE) {
+        QZ_ERROR("Block header size is smaller than minimum size.\n");
+        return 0;
+    }
+
+    blk_size = *(unsigned int *)ptr & QZ_LZ4_BLK_SIZE_MASK;
+    if (blk_size > QZ_LZ4_BLK_MAX_SIZE) {
+        QZ_ERROR("Block size exceeds maximum allowed size.\n");
+        return 0;
+    }
+
+    return 1;
+}
+#endif
+
 inline unsigned long qzLZ4SBlockHeaderSz(void)
 {
     return QZ_LZ4_BLK_HEADER_SIZE;
