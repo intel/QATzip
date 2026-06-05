@@ -103,7 +103,8 @@ void help(void)
         "Mandatory arguments to long options are mandatory for short options "
         "too.",
         "",
-        "  -A, --algorithm   set algorithm type",
+        "  -A, --algorithm   set algorithm type(deflate|lz4|lz4bk|lz4s|zstd)\n"
+        "                    if set algorithm, have to set output header format also",
         "  -d, --decompress  decompress",
         "  -f, --force       force overwrite of output file and compress links",
         "  -h, --help        give this help",
@@ -112,7 +113,7 @@ void help(void)
         "  -V, --version     display version number",
         "  -L, --level       set compression level",
         "  -C, --chunksz     set chunk size",
-        "  -O, --output      set output header format(gzip|gzipext|7z|deflate_4B|lz4|lz4s)",
+        "  -O, --output      set output header format(gzip|gzipext|7z|deflate_4B|lz4|lz4bk|lz4s|zstd)",
         "  -r,               set max in-flight request number",
         "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
@@ -197,7 +198,7 @@ int doProcessBuffer(QzSession_T *sess,
     unsigned int block_dest_len = dst_len;
     unsigned int consumed = 0;
     unsigned int produced = 0;
-#ifdef HAVE_QAT_DC_CAPABILITIES
+#ifdef CPM_5X
     QzDictionaryParams_T dict_param = {0};
     QzResult_T result = {0};
 
@@ -231,7 +232,7 @@ int doProcessBuffer(QzSession_T *sess,
                             block_buff_len : (*src_len - consumed);
             block_dest_len = dst_len - produced;
 
-#ifdef HAVE_QAT_DC_CAPABILITIES
+#ifdef CPM_5X
             if (dict) {
                 result.status = 0;
                 result.src_len = block_src_len;
@@ -255,7 +256,7 @@ int doProcessBuffer(QzSession_T *sess,
             block_src_len = *src_len - consumed;
             block_dest_len = dst_len - produced;
 
-#ifdef HAVE_QAT_DC_CAPABILITIES
+#ifdef CPM_5X
             if (dict) {
                 result.status = 0;
                 result.src_len = block_src_len;
@@ -428,7 +429,7 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     }
 
     /* Load dictionary file */
-#ifdef HAVE_QAT_DC_CAPABILITIES
+#ifdef CPM_5X
     if (g_params_th.dict_filename != NULL) {
         dict_buffer = malloc(DICT_BUFF_MAX_LEN);
         if (!dict_buffer) {
@@ -540,7 +541,7 @@ exit:
     close(src_fd);
     free(src_buffer);
     free(dst_buffer);
-#ifdef HAVE_QAT_DC_CAPABILITIES
+#ifdef CPM_5X
     if(dict_buffer)
         free(dict_buffer);
 #endif
@@ -632,7 +633,33 @@ int qzipSetupSessionLZ4(QzSession_T *sess, QzipParams_T *params)
     return OK;
 }
 
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+int qzipSetupSessionLZ4Block(QzSession_T *sess, QzipParams_T *params)
+{
+    int status;
+    QzSessionParamsLZ4_T lz4_params;
+
+    status = qzGetDefaultsLZ4Block(&lz4_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    lz4_params.common_params.direction = params->direction;
+    lz4_params.common_params.comp_lvl = params->comp_lvl;
+    lz4_params.common_params.hw_buff_sz = params->hw_buff_sz;
+    lz4_params.common_params.polling_mode = params->polling_mode;
+    lz4_params.common_params.req_cnt_thrshold = params->req_cnt_thrshold;
+
+    status = qzSetupSessionLZ4Block(sess, &lz4_params);
+    if (status < 0) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return ERROR;
+    }
+
+    return OK;
+}
+
 int qzipSetupSessionZSTD(QzSession_T *sess, QzipParams_T *params)
 {
     int status;
@@ -665,7 +692,7 @@ int qzipSetupSessionZSTD(QzSession_T *sess, QzipParams_T *params)
     QZ_ERROR("ZSTD session setup is not supported.\n");
     return ERROR;
 }
-#endif /* HAVE_QAT_DC_ZSTD */
+#endif /* CPM_5X */
 
 int qzipSetupSessionLZ4S(QzSession_T *sess, QzipParams_T *params)
 {
@@ -724,7 +751,13 @@ int qatzipSetup(QzSession_T *sess, QzipParams_T *params)
             QZ_ERROR("qzipSetupSessionLZ4 fail with error: %d\n", status);
         }
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+    case QZIP_LZ4_Block:
+        status = qzipSetupSessionLZ4Block(sess, params);
+        if (status != OK) {
+            QZ_ERROR("qzipSetupSessionLZ4Block fail with error: %d\n", status);
+        }
+        break;
     case QZIP_ZSTD:
         status = qzipSetupSessionZSTD(sess, params);
         if (status != OK) {
@@ -769,7 +802,11 @@ QzSuffix_T getSuffix(const char *filename)
                 !strcmp(filename + (len - strlen(SUFFIX_LZ4)), SUFFIX_LZ4)) {
         s = E_SUFFIX_LZ4;
     }
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+    else if (len >= strlen(SUFFIX_LZ4_BLOCK) &&
+                !strcmp(filename + (len - strlen(SUFFIX_LZ4_BLOCK)), SUFFIX_LZ4_BLOCK)) {
+        s = E_SUFFIX_LZ4_BLOCK;
+    }
     else if (len >= strlen(SUFFIX_ZSTD) &&
                 !strcmp(filename + (len - strlen(SUFFIX_ZSTD)), SUFFIX_ZSTD)) {
         s = E_SUFFIX_ZSTD;
@@ -792,7 +829,13 @@ bool hasSuffix(const char *fname)
             return 1;
         }
         break;
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+    case QZIP_LZ4_Block:
+        if (len >= strlen(SUFFIX_LZ4_BLOCK) &&
+            !strcmp(fname + (len - strlen(SUFFIX_LZ4_BLOCK)), SUFFIX_LZ4_BLOCK)) {
+            return 1;
+        }
+        break;
     case QZIP_ZSTD:
         if (len >= strlen(SUFFIX_ZSTD) &&
             !strcmp(fname + (len - strlen(SUFFIX_ZSTD)), SUFFIX_ZSTD)) {
@@ -860,8 +903,18 @@ QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
         } else {
             return E_CHECK_SUFFIX_OK;
         }
+    } else if (E_SUFFIX_LZ4_BLOCK == suffix) {
+        if (!is_format_set) {
+            g_params_th.data_fmt = QZIP_LZ4_Block;
+            return E_CHECK_SUFFIX_OK;
+        }
+        if (QZIP_LZ4_Block!= g_params_th.data_fmt) {
+            return E_CHECK_SUFFIX_FORMAT_UNMATCH;
+        } else {
+            return E_CHECK_SUFFIX_OK;
+        }
     }
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
     else if (E_SUFFIX_ZSTD == suffix) {
         if (!is_format_set) {
             g_params_th.data_fmt = QZIP_ZSTD;
@@ -893,7 +946,11 @@ int makeOutName(const char *in_name, const char *out_name,
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4);
         }
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+        else if (g_params_th.data_fmt == QZIP_LZ4_Block) {
+            snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
+                     SUFFIX_LZ4_BLOCK);
+        }
         else if (g_params_th.data_fmt == QZIP_ZSTD) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_ZSTD);
@@ -921,7 +978,10 @@ int makeOutName(const char *in_name, const char *out_name,
             if (g_params_th.data_fmt == QZIP_LZ4_FH) {
                 oname[strlen(in_name) - strlen(SUFFIX_LZ4)] = '\0';
             }
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+            else if (g_params_th.data_fmt == QZIP_LZ4_Block) {
+                oname[strlen(in_name) - strlen(SUFFIX_LZ4_BLOCK)] = '\0';
+            }
             else if (g_params_th.data_fmt == QZIP_ZSTD) {
                 oname[strlen(in_name) - strlen(SUFFIX_ZSTD)] = '\0';
             }

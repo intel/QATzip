@@ -132,6 +132,7 @@ typedef enum {
     TEST_GZIPEXT,
     TEST_DEFLATE_4B,
     TEST_LZ4,
+    TEST_LZ4_BLOCK,
     TEST_LZ4S,
     TEST_ZSTD,
     TEST_ZLIB
@@ -588,6 +589,36 @@ int qzSetupLZ4(QzSession_T *sess, TestArg_T *arg)
     return QZ_OK;
 }
 
+#ifdef CPM_5X
+int qzSetupLZ4Block(QzSession_T *sess, TestArg_T *arg)
+{
+    int status;
+
+    QzSessionParamsLZ4_T params;
+
+    status = qzGetDefaultsLZ4Block(&params);
+    if (status < 0) {
+        QZ_ERROR("Get defaults params error with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    params.common_params.comp_lvl = arg->comp_lvl;
+    params.common_params.hw_buff_sz = arg->hw_buff_sz;
+    params.common_params.polling_mode = arg->polling_mode;
+    params.common_params.req_cnt_thrshold = arg->req_cnt_thrshold;
+    params.common_params.max_forks = arg->max_forks;
+    params.common_params.sw_backup = arg->sw_backup;
+
+    status = qzSetupSessionLZ4Block(sess, &params);
+    if (status) {
+        QZ_ERROR("Session setup failed with error: %d\n", status);
+        return QZ_FAIL;
+    }
+
+    return QZ_OK;
+}
+#endif
+
 int qzSetupLZ4S(QzSession_T *sess, TestArg_T *arg)
 {
     int status;
@@ -698,6 +729,11 @@ int qzInitSetupsession(QzSession_T *sess, TestArg_T *arg)
         case TEST_LZ4:
             rc = qzSetupLZ4(sess, arg);
             break;
+#ifdef CPM_5X
+        case TEST_LZ4_BLOCK:
+            rc = qzSetupLZ4Block(sess, arg);
+            break;
+#endif
         case TEST_LZ4S:
             rc = qzSetupLZ4S(sess, arg);
             break;
@@ -6429,7 +6465,8 @@ done:
     "    -v                    verify, disabled by default\n"                   \
     "    -e init engine        enable | disable. enabled by default\n"          \
     "    -s init session       enable | disable. enabled by default\n"          \
-    "    -A comp_algorithm     deflate | lz4 | lz4s | zstd\n"                   \
+    "    -A comp_algorithm     deflate | lz4 | lz4bk | lz4s | zstd\n"                   \
+    "                          if set algorithm, have to set output header format also\n"  \
     "    -B swBack             0 means disable sw\n"                            \
     "                          1 means enable sw\n"                             \
     "    -C hw_buff_sz         default 64K\n"                                   \
@@ -6442,7 +6479,7 @@ done:
     "    -d direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
-    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s | zstd | zlib\n"\
+    "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4bk | lz4s | zstd | zlib\n"\
     "                          For zlib and deflate raw the block size must be same\n"\
     "                          as HW buffer size, e.g '-b' and '-C' should be same.\n" \
     "    -T huffmanType        static | dynamic\n"                              \
@@ -6566,6 +6603,8 @@ int main(int argc, char *argv[])
                 args.comp_algorithm = QZ_DEFLATE;
             } else if (strcmp(optarg, "lz4") == 0) {
                 args.comp_algorithm = QZ_LZ4;
+            } else if (strcmp(optarg, "lz4bk") == 0) {
+                args.comp_algorithm = QZ_LZ4_BLOCK;
             } else if (strcmp(optarg, "lz4s") == 0) {
                 args.comp_algorithm = QZ_LZ4s;
             } else if (strcmp(optarg, "zstd") == 0) {
@@ -6586,6 +6625,8 @@ int main(int argc, char *argv[])
                 args.test_format = TEST_DEFLATE_4B;
             } else if (strcmp(optarg, "lz4") == 0) {
                 args.test_format = TEST_LZ4;
+            } else if (strcmp(optarg, "lz4bk") == 0) {
+                args.test_format = TEST_LZ4_BLOCK;
             } else if (strcmp(optarg, "lz4s") == 0) {
                 args.test_format = TEST_LZ4S;
             } else if (strcmp(optarg, "zstd") == 0) {

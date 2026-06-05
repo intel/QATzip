@@ -48,6 +48,7 @@ int main(int argc, char **argv)
     int recursive_mode = 0;
     errno = 0;
     int is_format_set = 0;
+    int is_algorithm_set = 0;
     char resolved_path[PATH_MAX];
 
     while (true) {
@@ -85,6 +86,8 @@ int main(int argc, char **argv)
                 g_params_th.comp_algorithm = QZ_DEFLATE;
             } else if (strcmp(optarg, "lz4") == 0) {
                 g_params_th.comp_algorithm = QZ_LZ4;
+            } else if (strcmp(optarg, "lz4bk") == 0) {
+                g_params_th.comp_algorithm = QZ_LZ4_BLOCK;
             } else if (strcmp(optarg, "lz4s") == 0) {
                 g_params_th.comp_algorithm = QZ_LZ4s;
             } else if (strcmp(optarg, "zstd") == 0) {
@@ -93,6 +96,7 @@ int main(int argc, char **argv)
                 printf("Error service arg: %s\n", optarg);
                 return -1;
             }
+            is_algorithm_set = 1;
             break;
         case 'H':
             if (strcmp(optarg, "static") == 0) {
@@ -118,8 +122,10 @@ int main(int argc, char **argv)
             } else if (strcmp(optarg, "lz4s") == 0) {
                 g_params_th.data_fmt = QZIP_LZ4S_BK;
             }
-#ifdef HAVE_QAT_DC_ZSTD
-            else if (strcmp(optarg, "zstd") == 0) {
+#ifdef CPM_5X
+            else if (strcmp(optarg, "lz4bk") == 0) {
+                g_params_th.data_fmt = QZIP_LZ4_Block;
+            } else if (strcmp(optarg, "zstd") == 0) {
                 g_params_th.data_fmt = QZIP_ZSTD;
             }
 #endif
@@ -200,6 +206,31 @@ int main(int argc, char **argv)
         default:
             tryHelp();
         }
+    }
+
+    unsigned char expected_algo = QZ_DEFLATE;
+    if (g_params_th.data_fmt == QZIP_LZ4_FH) {
+        expected_algo = QZ_LZ4;
+    } else if (g_params_th.data_fmt == QZIP_LZ4_Block) {
+        expected_algo = QZ_LZ4_BLOCK;
+    } else if (g_params_th.data_fmt == QZIP_LZ4S_BK) {
+        expected_algo = QZ_LZ4s;
+    } else if (g_params_th.data_fmt == QZIP_ZSTD) {
+        expected_algo = QZ_ZSTD;
+    }
+
+    if (is_format_set && !is_algorithm_set) {
+        g_params_th.comp_algorithm = expected_algo;
+    }
+
+    if (is_algorithm_set && !is_format_set) {
+        QZ_ERROR("Error: '-A' requires specifying '-O'.\n");
+        exit(ERROR);
+    }
+
+    if (is_algorithm_set && g_params_th.comp_algorithm != expected_algo) {
+        QZ_ERROR("Error: Algorithm and output format mismatch\n");
+        exit(ERROR);
     }
 
     arg_count = argc - optind;
@@ -321,7 +352,7 @@ int main(int argc, char **argv)
                         processFile(&g_sess, argv[optind++], out_name,
                                     g_decompress == 0);
                     } else if (suffix == E_SUFFIX_LZ4) {
-                        if (g_params_th.data_fmt != QZIP_LZ4_FH) {
+                        if (g_params_th.data_fmt != QZIP_LZ4_FH && g_params_th.data_fmt != QZIP_LZ4_Block) {
                             QZ_ERROR("Error: Suffix(.lz4) doesn't match the data format,"
                                      "please confirm the data format\n");
                             exit(ERROR);
@@ -329,7 +360,16 @@ int main(int argc, char **argv)
                         processFile(&g_sess, argv[optind++], out_name,
                                     g_decompress == 0);
                     }
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+                    else if (suffix == E_SUFFIX_LZ4_BLOCK) {
+                        if (g_params_th.data_fmt != QZIP_LZ4_Block) {
+                            QZ_ERROR("Error: Suffix(.lz4bk) doesn't match the data format,"
+                                     "please confirm the data format\n");
+                            exit(ERROR);
+                        }
+                        processFile(&g_sess, argv[optind++], out_name,
+                                    g_decompress == 0);
+                    }
                     else if (suffix == E_SUFFIX_ZSTD) {
                         if (g_params_th.data_fmt != QZIP_ZSTD) {
                             QZ_ERROR("Error: Suffix(.zst) doesn't match the data format,"

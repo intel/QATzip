@@ -107,6 +107,22 @@ AC_DEFINE([XXH_NAMESPACE], [QATZIP_], [Prefix xxhash API with QATZIP_])
 AC_CHECK_HEADER([zstd.h], , [AC_MSG_ERROR([zstd.h not found])])
 AC_CHECK_LIB([zstd], [ZSTD_compressCCtx], ,AC_MSG_ERROR([ZSTD_compressCCtx not found]))
 
+# CPM5.x detection: checks for three symbols present only in CPM5.x builds
+# Argument $1: QAT library name (qat for system, qat_s for OOT)
+AC_DEFUN([CHECK_CPM5X], [
+    AC_CHECK_LIB([$1], [cpaDcQueryCapabilityByType],
+        [have_qat_dc_cap=yes], [have_qat_dc_cap=no],
+        [-lusdm -lcrypto])
+    AS_IF([test "x$have_qat_dc_cap" = "xyes"],
+        [AC_CHECK_LIB([$1], [cpaDcCompressDataWithDict],
+            [AC_CHECK_LIB([$1], [cpaDcZstdCompressBound],
+                [CFLAGS+=" -DCPM_5X"],
+                [have_qat_dc_cap=no],
+                [-lusdm -lcrypto])],
+            [have_qat_dc_cap=no],
+            [-lusdm -lcrypto])])
+])
+
 # QAT configuration
 AC_ARG_WITH([ICP_ROOT],
     [AS_HELP_STRING([--with-ICP_ROOT=PATH], [Path to QAT driver source])],
@@ -134,29 +150,8 @@ AS_IF([test -n "${ICP_ROOT}"],
          LDFLAGS="${LDFLAGS} -Wl,-rpath,${ICP_ROOT}/build -L${ICP_ROOT}/build"])
     AC_SUBST([ICP_INCLUDE_CFLAGS])
 
-    # Check for CPM5.x dictionary compression headers
-    AC_MSG_CHECKING([for cpa_dc_capabilities.h in ${ICP_ROOT}])
-    AS_IF([test -e ${ICP_ROOT}/quickassist/include/dc/cpa_dc_capabilities.h],
-        [
-            AC_MSG_RESULT([yes])
-            CFLAGS+=" -DHAVE_QAT_DC_CAPABILITIES"
-        ],
-        [
-            AC_MSG_RESULT([no])
-        ]
-    )
-
-    # Check for ZSTD support in QAT driver
-    AC_MSG_CHECKING([for CPA_DC_ZSTD support in ${ICP_ROOT}])
-    AS_IF([grep -q CPA_DC_ZSTD ${ICP_ROOT}/quickassist/include/dc/cpa_dc.h 2>/dev/null],
-        [
-            AC_MSG_RESULT([yes])
-            CFLAGS+=" -DHAVE_QAT_DC_ZSTD"
-        ],
-        [
-            AC_MSG_RESULT([no])
-        ]
-    )
+    # Check for CPM5.x dictionary compression support
+    CHECK_CPM5X([qat_s])
 
     AC_CHECK_LIB([qat_s], [cpaDcCompressData2], [],
         [AC_MSG_ERROR([libqat_s not found in ${ICP_ROOT}/build])])
@@ -181,27 +176,8 @@ AS_IF([test -n "${ICP_ROOT}"],
           #include <qat/cpa.h>
           #endif]])
 
-    # Check for CPM5.x dictionary compression headers in system path
-    AC_CHECK_HEADERS([qat/cpa_dc_capabilities.h],
-        [
-            CFLAGS+=" -DHAVE_QAT_DC_CAPABILITIES"
-        ],
-        [],
-        [#include <qat/cpa.h>
-         #include <qat/cpa_dc.h>
-        ]
-    )
-
-    # Check for ZSTD support in QAT driver system headers
-    AC_COMPILE_IFELSE(
-        [AC_LANG_PROGRAM(
-            [[#include <qat/cpa.h>
-              #include <qat/cpa_dc.h>]],
-            [[int x = CPA_DC_ZSTD;]]
-        )],
-        [CFLAGS+=" -DHAVE_QAT_DC_ZSTD"],
-        []
-    )
+    # Detect QAT 5.1 (CPM5.x) driver via library symbol checks.
+    CHECK_CPM5X([qat])
 
     AC_CHECK_LIB([qat], [cpaDcCompressData2], [],
         [AC_MSG_ERROR([libqat not found. Install qatlib.])],

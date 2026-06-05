@@ -119,6 +119,8 @@ extern"C" {
 #define QZ_LZ4_CNT_CKS_FLAG  0x1
 #define QZ_LZ4_ENDMARK       0x0
 #define QZ_LZ4_MAX_BLK_SIZE  0x4
+#define QZ_LZ4_BLK_MAX_SIZE  (64 * 1024)
+#define QZ_LZ4_BLK_SIZE_MASK 0x7FFFFFFF
 
 #define QZ_LZ4_MAGIC_SIZE      4                     //lz4 magic number length
 #define QZ_LZ4_FD_SIZE         11                    //lz4 frame descriptor length
@@ -191,7 +193,7 @@ typedef struct QzInstance_S {
     Cpa16U intermediate_cnt;
     CpaBufferList **src_buffers;
     CpaBufferList **dest_buffers;
-#ifdef HAVE_QAT_DC_CAPABILITIES
+#ifdef CPM_5X
     CpaDcDictionaryData dict_data;
 #endif
     Cpa16U src_count;
@@ -260,9 +262,11 @@ typedef enum DataFormatInternal_E {
     /**< Data is in raw deflate format */
     LZ4_FH,
     /**< Data is in LZ4 format with frame headers */
+    LZ4_BLOCK,
+    /**< Data is in LZ4 format with block format */
     LZ4S_BK,
     /**< Data is in LZ4s sequences with block header, it's only for post processed */
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
     ZSTD,
     /**< Data is in ZSTD frame */
 #endif
@@ -601,7 +605,10 @@ int qzVerifyLZ4FrameHeader(const unsigned char *const ptr, uint32_t len);
 int isQATLZ4Processable(const unsigned char *ptr,
                         const unsigned int *const src_len,
                         QzSess_T *const qz_sess);
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+int isQATLZ4BlockProcessable(const unsigned char *ptr,
+                         const unsigned int *const src_len,
+                         QzSess_T *const qz_sess);
 int isQATZSTDProcessable(const unsigned char *ptr,
                          const unsigned int *const src_len,
                          QzSess_T *const qz_sess);
@@ -618,8 +625,9 @@ int qzSetupSessionInternal(QzSession_T *sess);
 int qzCheckParams(QzSessionParams_T *params);
 int qzCheckParamsDeflate(QzSessionParamsDeflate_T *params);
 int qzCheckParamsLZ4(QzSessionParamsLZ4_T *params);
+int qzCheckParamsLZ4Block(QzSessionParamsLZ4_T *params);
 int qzCheckParamsLZ4S(QzSessionParamsLZ4S_T *params);
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
 int qzCheckParamsZSTD(QzSessionParamsZstd_T *params);
 #endif
 int qzCheckParamsDeflateExt(QzSessionParamsDeflateExt_T *params);
@@ -630,9 +638,11 @@ void qzGetParamsDeflate(QzSessionParamsInternal_T *internal_params,
                         QzSessionParamsDeflate_T *params);
 void qzGetParamsLZ4(QzSessionParamsInternal_T *internal_params,
                     QzSessionParamsLZ4_T *params);
+void qzGetParamsLZ4Block(QzSessionParamsInternal_T *internal_params,
+                     QzSessionParamsLZ4_T *params);
 void qzGetParamsLZ4S(QzSessionParamsInternal_T *internal_params,
                      QzSessionParamsLZ4S_T *params);
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
 void qzGetParamsZSTD(QzSessionParamsInternal_T *internal_params,
                      QzSessionParamsZstd_T *params);
 #endif
@@ -643,7 +653,9 @@ void qzSetParamsLZ4S(QzSessionParamsLZ4S_T *params,
                      QzSessionParamsInternal_T *internal_params);
 void qzSetParamsLZ4(QzSessionParamsLZ4_T *params,
                     QzSessionParamsInternal_T *internal_params);
-#ifdef HAVE_QAT_DC_ZSTD
+#ifdef CPM_5X
+void qzSetParamsLZ4Block(QzSessionParamsLZ4_T *params,
+                     QzSessionParamsInternal_T *internal_params);
 void qzSetParamsZSTD(QzSessionParamsZstd_T *params,
                      QzSessionParamsInternal_T *internal_params);
 #endif
