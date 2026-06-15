@@ -587,6 +587,7 @@ typedef struct QzDictionaryParams_S
     int compressed; /*< non-zero indicates compressed dictionary supplied */
     unsigned long* crc64Addr; /*< If not NULL, address to store CRC64 generated
                                  on the dictionary */
+    unsigned int dictId; /*< Dictionary ID for ZSTD format (0 if not used) */
 } QzDictionaryParams_T;
 
 typedef struct QzSessionParamsDeflateExt_S {
@@ -629,6 +630,7 @@ typedef struct QzSessionParamsDeflateExt_S {
 #define QZ_ZSTD_COMP_LVL_MAXIMUM         (12)
 #define QZ_ZSTD_HIST_BUFF_DEFAULT        (64*1024)
 #define QZ_ZSTD_BLOCKSIZE_DEFAULT        (128)
+#define QZ_ZSTD_HW_BUFF_SZ               (128*1024)
 
 /**
  *****************************************************************************

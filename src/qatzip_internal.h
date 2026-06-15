@@ -153,6 +153,28 @@ extern"C" {
 
 #define MAX_DICT_SIZE       32768
 
+/* ZSTD dictionary constants */
+#define ZSTD_DICT_MAGIC        0xEC30A437U   /* Fixed identifier for entropy dictionaries */
+#define ZSTD_DICT_MAGIC_SIZE   4             /* Number of bytes used by the magic */
+#define ZSTD_DICT_ID_SIZE      4             /* Number of bytes used by the dictionary ID */
+#define ZSTD_DICT_HEADER_SIZE  8             /* Magic (4) + DictID (4) */
+
+/* ZSTD frame parsing constants */
+#define QAT_ZSTD_MAX_BLOCK_SIZE   (64 * 1024) /* HW supports up to 64 KB blocks */
+#define ZSTD_BLOCK_HEADER_BYTES   3           /* Size of each block header */
+
+#ifndef MIN_LITERALS_FOR_4_STREAMS
+#define MIN_LITERALS_FOR_4_STREAMS 6          /* Minimum literals when using 4 literal streams */
+#endif
+
+#ifndef MIN_SEQUENCES_SIZE
+#define MIN_SEQUENCES_SIZE 1                 /* Smallest valid sequences section */
+#endif
+
+#ifndef LONGNBSEQ
+#define LONGNBSEQ 0x7F00                     /* Offset used when nbSeq is stored in extended form */
+#endif
+
 struct QzAsyncReq_S;
 typedef struct QzAsyncReq_S QzAsyncReq_T;
 
@@ -180,6 +202,7 @@ typedef struct QzInstanceCapability_S {
     CpaBoolean deflate_dict;
     CpaBoolean lz4s_dict;
     CpaBoolean zstd_dict;
+    CpaBoolean dictId;
 } QzInstanceCapability_T;
 
 
@@ -327,6 +350,8 @@ typedef struct QzSessionParamsInternal_S {
     unsigned int dictionary_len;
     /*< Length of dictionary buffer (maximum value of 32KB for ZSTD, otherwise
      * 64KB) */
+    unsigned int dictId;
+    /*< Dictionary ID for ZSTD format (0 if not used) */
     unsigned char stop_decompression_stream_end;
     /* stop decompression at end the stream, default is 0 */
     unsigned char zlib_format;
@@ -612,6 +637,13 @@ int isQATLZ4BlockProcessable(const unsigned char *ptr,
 int isQATZSTDProcessable(const unsigned char *ptr,
                          const unsigned int *const src_len,
                          QzSess_T *const qz_sess);
+int isQATcompressedZSTDFrame(const unsigned char *ptr,
+                             const unsigned int src_len,
+                             QzSess_T *const qz_sess);
+int stripEntropy(const unsigned char *dict_in,
+                            unsigned int dict_in_len,
+                            unsigned char *dict_out,
+                            unsigned int *dict_out_len);
 #endif
 int isQATDeflateProcessable(const unsigned char *ptr,
                             const unsigned int *const src_len,

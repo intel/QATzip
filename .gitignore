@@ -46,6 +46,7 @@ test/bt
 test/qatzip-test
 utils/qzip
 utils/qzstd
+utils/qzstd_parser
 
 # Editor and IDE files
 *~

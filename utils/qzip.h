@@ -61,6 +61,7 @@
 #endif
 #include <pthread.h>
 #include <zlib.h>
+#include <zstd.h>
 #include <libgen.h>
 #include <qatzip_internal.h>
 

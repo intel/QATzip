@@ -72,6 +72,8 @@
 #include "qatzip.h"
 #include "qatzip_internal.h"
 #include "qz_utils.h"
+#define ZSTD_STATIC_LINKING_ONLY
+#include <zstd.h>
 
 /*
  * Process address space name described in the config file for this device.
@@ -331,6 +333,19 @@ QzGetInstCapability(CpaInstanceHandle *dc_inst_handle, QzInstanceCapability_T *i
         inst_cap->zstd_dict = CapabilityResp.boolStatus;
     }
 
+    /* Query dictionaryID capability. */
+    capabilityReq.algo = CPA_DC_ZSTD;
+    capabilityReq.capId = CPA_DC_CAP_BOOL_DICT_ID;
+    capabilityReq.dir = CPA_DC_DIR_COMPRESS;
+    status = cpaDcQueryCapabilityByType(dc_inst_handle,
+                                        capabilityReq, &CapabilityResp);
+    if (CPA_STATUS_SUCCESS != status) {
+        QZ_ERROR("Failed to get dc instance capabilities.\n");
+        return status;
+    } else {
+        inst_cap->dictId = CapabilityResp.boolStatus;
+    }
+
     /* Query deflate dictionary compression capability. */
     capabilityReq.algo = CPA_DC_DEFLATE;
     capabilityReq.capId = CPA_DC_CAP_BOOL_UNCOMPRESSED_DICT;
@@ -361,6 +376,7 @@ QzGetInstCapability(CpaInstanceHandle *dc_inst_handle, QzInstanceCapability_T *i
     inst_cap->deflate_dict = CPA_FALSE;
     inst_cap->lz4s_dict = CPA_FALSE;
     inst_cap->zstd_dict = CPA_FALSE;
+    inst_cap->dictId = CPA_FALSE;
 #endif
 
     return status;
@@ -430,6 +446,10 @@ static inline int qzCheckInstCap(const int i,
             return QZ_FAIL;
         }
         if (params->dictionary_flag && !g_process.qz_inst[i].instance_cap.zstd_dict) {
+            return QZ_FAIL;
+        }
+        if (params->dictionary_flag && params->dictId != 0 &&
+            !g_process.qz_inst[i].instance_cap.dictId) {
             return QZ_FAIL;
         }
         break;
@@ -1230,6 +1250,9 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
         g_process.qz_inst[i].instance_cap.zstd_dict ) {
         CpaDcDictionaryData *dict_data = &g_process.qz_inst[i].dict_data;
         dict_data->dictionaryType = CPA_DC_UNCOMPRESSED_DICT;
+        dict_data->dictId = 0; /* Initialize dictId to 0 */
+        dict_data->calcDictionaryIntegCrc = CPA_FALSE;
+        dict_data->pExtDictionaryData = NULL;
         dict_data->pDictionaryBuff =
             (CpaBufferList *)qzMalloc(sizeof(CpaBufferList),
             QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
@@ -1793,11 +1816,41 @@ static void *doCompressIn(void *in)
 #ifdef CPM_5X
     /* TODO: Avoid unnecessary dictionary copy by adding checksum compare. */
     if (qz_sess->sess_params.dictionary_flag) {
-        QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
-            qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
-            qz_sess->sess_params.dictionary_len);
-        g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->dataLenInBytes =
-            qz_sess->sess_params.dictionary_len;
+        unsigned int dict_len = qz_sess->sess_params.dictionary_len;
+        /* For ZSTD with dictId, process dictionary to strip entropy tables for QAT offload */
+        if (qz_sess->sess_params.data_fmt == ZSTD && qz_sess->sess_params.dictId != 0) {
+            unsigned char temp_dict[MAX_DICT_SIZE];
+            unsigned int processed_dict_len = MAX_DICT_SIZE;
+
+            int ret = stripEntropy(qz_sess->sess_params.dictionary,
+                                              qz_sess->sess_params.dictionary_len,
+                                              temp_dict,
+                                              &processed_dict_len);
+            if (ret == QZ_OK) {
+                QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
+                    temp_dict, MAX_DICT_SIZE, processed_dict_len);
+                dict_len = processed_dict_len;
+            } else {
+                /* Fall back to original dictionary */
+                QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
+                    qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
+                    qz_sess->sess_params.dictionary_len);
+            }
+        } else {
+            QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
+                qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
+                qz_sess->sess_params.dictionary_len);
+        }
+
+        g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->dataLenInBytes = dict_len;
+
+        /* Set dictId for ZSTD format */
+        if (qz_sess->sess_params.data_fmt == ZSTD) {
+            g_process.qz_inst[i].dict_data.dictId = qz_sess->sess_params.dictId;
+            QZ_DEBUG("doCompressIn: Set ZSTD dictId: %u\n", g_process.qz_inst[i].dict_data.dictId);
+        } else {
+            g_process.qz_inst[i].dict_data.dictId = 0;
+        }
     }
 #endif
 
@@ -1831,6 +1884,16 @@ static void *doCompressIn(void *in)
                          g_process.qz_inst[i].stream[j].opData.flushFlag,
                          i, j, g_process.qz_inst[i].stream[j].seq, tag);
 #ifdef CPM_5X
+                CpaBufferList *dict_buff_list =
+                    g_process.qz_inst[i].dict_data.pDictionaryBuff;
+                unsigned int dict_len_dbg __attribute__((unused)) =
+                    (dict_buff_list && dict_buff_list->pBuffers) ?
+                    dict_buff_list->pBuffers->dataLenInBytes : 0;
+                QZ_DEBUG("doCompressIn: dictId=%u dict_len=%u src_len=%u dest_len=%u\n",
+                         g_process.qz_inst[i].dict_data.dictId,
+                         dict_len_dbg,
+                         g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes,
+                         g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes);
                 if (qz_sess->sess_params.dictionary_flag) {
                     rc = cpaDcCompressDataWithDict(g_process.dc_inst_handle[i],
                                                    g_process.qz_inst[i].cpaSess,
@@ -2229,6 +2292,16 @@ int qzCompressCrcExt(QzSession_T *sess, const unsigned char *src,
     if (g_sess_params_internal_default.data_fmt == DEFLATE_ZLIB) {
         qz_sess->sess_params.data_fmt = DEFLATE_ZLIB;
     }
+
+#ifdef CPM_5X
+    if (qz_sess->sess_params.dictionary_flag &&
+        qz_sess->sess_params.dictionary_len > MAX_DICT_SIZE) {
+        QZ_DEBUG("Dictionary not supported: Size %u exceeds MAX_DICT_SIZE - %u, Software fallback.\n",
+                 qz_sess->sess_params.dictionary_len, (unsigned)MAX_DICT_SIZE);
+        goto sw_compression;
+    }
+#endif
+
     DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
     int fmt_valid = (data_fmt == DEFLATE_4B ||
                      data_fmt == DEFLATE_RAW ||
@@ -2457,13 +2530,67 @@ static void *doDecompressIn(void *in)
     QZ_DEBUG("doDecompressIn: Need to g_process %d bytes\n", remaining);
 
 #ifdef CPM_5X
-    /* TODO: Avoid unnecessary dictionary copy by adding checksum compare. */
+    const DataFormatInternal_T data_fmt_d = qz_sess->sess_params.data_fmt;
+    const unsigned int provided_dict_id = qz_sess->sess_params.dictId;
+    unsigned int frame_dict_id = 0;
+
+    if (data_fmt_d == ZSTD && src_avail_len > 0) {
+        frame_dict_id = ZSTD_getDictID_fromFrame(src_ptr, src_avail_len);
+        if (frame_dict_id != 0 &&
+            (!qz_sess->sess_params.dictionary_flag || provided_dict_id == 0)) {
+            QZ_ERROR("Dictionary mismatch: Frame dictId=%u requires dictionary but none supplied\n",
+                    frame_dict_id);
+            sess->thd_sess_stat = QZ_DATA_ERROR;
+            goto err_exit;
+        }
+    }
+
     if (qz_sess->sess_params.dictionary_flag) {
-        QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
-            qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
-            qz_sess->sess_params.dictionary_len);
-        g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->dataLenInBytes =
-            qz_sess->sess_params.dictionary_len;
+        unsigned int dict_len = qz_sess->sess_params.dictionary_len;
+
+        if (data_fmt_d == ZSTD) {
+            if (frame_dict_id != 0 && provided_dict_id != frame_dict_id) {
+                QZ_ERROR("Dictionary mismatch: Frame dictId=%u mismatches provided dictId=%u\n",
+                        frame_dict_id, provided_dict_id);
+                sess->thd_sess_stat = QZ_DATA_ERROR;
+                goto err_exit;
+            } else if (frame_dict_id == 0 && provided_dict_id != 0) {
+                QZ_DEBUG("Dictionary mismatch: Provided dictId=%u but frame has no dictId\n",
+                         provided_dict_id);
+            }
+
+            if (provided_dict_id != 0) {
+                unsigned char temp_dict[MAX_DICT_SIZE];
+                unsigned int processed_dict_len = MAX_DICT_SIZE;
+
+                int ret = stripEntropy(qz_sess->sess_params.dictionary,
+                                                  qz_sess->sess_params.dictionary_len,
+                                                  temp_dict,
+                                                  &processed_dict_len);
+                if (ret == QZ_OK) {
+                    QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
+                              temp_dict, MAX_DICT_SIZE, processed_dict_len);
+                    dict_len = processed_dict_len;
+                } else {
+                    QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
+                              qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
+                              qz_sess->sess_params.dictionary_len);
+                }
+            } else {
+                QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
+                          qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
+                          qz_sess->sess_params.dictionary_len);
+            }
+
+            g_process.qz_inst[i].dict_data.dictId = provided_dict_id;
+        } else {
+            QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
+                      qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
+                      qz_sess->sess_params.dictionary_len);
+            g_process.qz_inst[i].dict_data.dictId = 0;
+        }
+
+        g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->dataLenInBytes = dict_len;
     }
 #endif
 
@@ -2472,10 +2599,24 @@ static void *doDecompressIn(void *in)
         QZ_DEBUG("src_avail_len is %u, dest_avail_len is %u\n",
                  src_avail_len, dest_avail_len);
 
-        rc = checkHeader(qz_sess, src_ptr, src_avail_len, dest_avail_len, &hdr);
-        if (QZ_OK != rc && QZ_FORCE_SW != rc) {
-            sess->thd_sess_stat = rc;
-            goto err_exit;
+#ifdef CPM_5X
+        if (qz_sess->sess_params.data_fmt == ZSTD) {
+            int zstd_rc = isQATcompressedZSTDFrame(src_ptr, src_avail_len, qz_sess);
+            if (zstd_rc == QZ_FORCE_SW) {
+                QZ_DEBUG("ZSTD frame validation failed, forcing software fallback\n");
+                rc = QZ_FORCE_SW;
+            } else if (zstd_rc != QZ_OK) {
+                sess->thd_sess_stat = zstd_rc;
+                goto err_exit;
+            }
+        }
+#endif
+        if (rc != QZ_FORCE_SW) {
+            rc = checkHeader(qz_sess, src_ptr, src_avail_len, dest_avail_len, &hdr);
+            if (QZ_OK != rc && QZ_FORCE_SW != rc) {
+                sess->thd_sess_stat = rc;
+                goto err_exit;
+            }
         }
 
         if (g_process.qz_inst[i].heartbeat != CPA_STATUS_SUCCESS ||
@@ -2527,6 +2668,15 @@ static void *doDecompressIn(void *in)
 #ifdef CPM_5X
                 if (qz_sess->sess_params.dictionary_flag) {
                     g_process.qz_inst[i].stream[j].opData.flushFlag = CPA_DC_FLUSH_FINAL;
+                    CpaBufferList *dict_buff_list = g_process.qz_inst[i].dict_data.pDictionaryBuff;
+                    unsigned int dict_len_dbg __attribute__((unused)) =
+                        (dict_buff_list && dict_buff_list->pBuffers) ?
+                        dict_buff_list->pBuffers->dataLenInBytes : 0;
+                    QZ_DEBUG("doDecompressIn: dictId=%u dict_len=%u src_len=%u dest_len=%u\n",
+                             g_process.qz_inst[i].dict_data.dictId,
+                             dict_len_dbg,
+                             g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes,
+                             g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes);
                     rc = cpaDcDecompressDataWithDict(g_process.dc_inst_handle[i],
                                                      g_process.qz_inst[i].cpaSess,
                                                      g_process.qz_inst[i].src_buffers[j],
@@ -2859,6 +3009,15 @@ int qzDecompressCrcExt(QzSession_T *sess, const unsigned char *src,
     }
     // by default end of stream is set to 0
     setDeflateEndOfStream(qz_sess, 0);
+
+#ifdef CPM_5X
+    if (qz_sess->sess_params.dictionary_flag &&
+        qz_sess->sess_params.dictionary_len > MAX_DICT_SIZE) {
+        QZ_DEBUG("Dictionary not supported: Size %u exceeds MAX_DICT_SIZE - %u, Software fallback.\n",
+                 qz_sess->sess_params.dictionary_len, (unsigned)MAX_DICT_SIZE);
+        goto sw_decompression;
+    }
+#endif
 
     DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
     int dfmt_valid = (data_fmt == DEFLATE_RAW ||
@@ -3640,21 +3799,29 @@ QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
         return QZ_PARAMS;
     }
 
-    /* Maximum value of 32KB dictionary length */
-    if (dict->dictionary_len > MAX_DICT_SIZE) {
-        QZ_ERROR("The dictionary length %d is out of range.\n", dict->dictionary_len);
-        return QZ_PARAMS;
-    }
-
     qz_sess->sess_params.dictionary = dict->dictionary;
     qz_sess->sess_params.dictionary_len = dict->dictionary_len;
     qz_sess->sess_params.dictionary_flag = 1;
 
+    /* For ZSTD, extract dictId from dictionary if not provided by user */
+    if (qz_sess->sess_params.data_fmt == ZSTD) {
+        if (dict->dictId != 0) {
+            /* User provided dictId, use it */
+            qz_sess->sess_params.dictId = dict->dictId;
+        } else {
+            /* Extract dictId from dictionary */
+            qz_sess->sess_params.dictId = ZSTD_getDictID_fromDict(dict->dictionary,
+                                                                  dict->dictionary_len);
+        }
+        QZ_DEBUG("ZSTD dictId for compression: %u\n", qz_sess->sess_params.dictId);
+    } else {
+        qz_sess->sess_params.dictId = 0;
+    }
+
     src_len = qzResults->src_len;
     dest_len = qzResults->dest_len;
 
-    rc = qzCompressCrcExt(sess, src, &src_len, dest, &dest_len,
-                     1, NULL, NULL);
+   rc = qzCompressCrcExt(sess, src, &src_len, dest, &dest_len, 1, NULL, NULL);
     qzResults->status = rc;
     qzResults->src_len = src_len;
     qzResults->dest_len = dest_len;
@@ -3710,15 +3877,24 @@ QATZIP_API int qzDecompressWithDictionary(QzSession_T* sess,
         return QZ_PARAMS;
     }
 
-    /* Maximum value of 32KB dictionary length */
-    if (dict->dictionary_len > MAX_DICT_SIZE) {
-        QZ_ERROR("The dictionary length %d is out of range.\n", dict->dictionary_len);
-        return QZ_PARAMS;
-    }
-
     qz_sess->sess_params.dictionary = dict->dictionary;
     qz_sess->sess_params.dictionary_len = dict->dictionary_len;
     qz_sess->sess_params.dictionary_flag = 1;
+
+    /* For ZSTD, extract dictId from dictionary if not provided by user */
+    if (qz_sess->sess_params.data_fmt == ZSTD) {
+        if (dict->dictId != 0) {
+            /* User provided dictId, use it */
+            qz_sess->sess_params.dictId = dict->dictId;
+        } else {
+            /* Extract dictId from dictionary */
+            qz_sess->sess_params.dictId = ZSTD_getDictID_fromDict(dict->dictionary,
+                                                                  dict->dictionary_len);
+        }
+        QZ_DEBUG("ZSTD dictId for decompression: %u\n", qz_sess->sess_params.dictId);
+    } else {
+        qz_sess->sess_params.dictId = 0;
+    }
 
     src_len = qzResults->src_len;
     dest_len = qzResults->dest_len;
