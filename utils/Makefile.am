@@ -32,7 +32,7 @@
 #
 ################################################################
 
-bin_PROGRAMS = qzip
+bin_PROGRAMS = qzip qzstd_parser
 qzip_SOURCES = \
                qzip_7z.c \
                qzip_main.c \
@@ -49,6 +49,17 @@ qzip_LDADD = \
              $(USDMLIB_FLAGS)
 qzip_LDFLAGS = \
                $(ICP_LDFLAGS)
+               
+qzstd_parser_SOURCES = \
+                             qzstd_parser.c
+qzstd_parser_CFLAGS = \
+                            -I$(abs_top_srcdir)/include/ \
+                            -I$(abs_top_srcdir)/src/    \
+                            -I$(abs_top_srcdir)/utils/  \
+                            $(COMMON_CFLAGS) \
+                            $(ICP_INCLUDE_CFLAGS)
+qzstd_parser_LDADD =
+qzstd_parser_LDFLAGS =
 
 qzip_obj_CFLAGS = \
                   -I$(abs_top_srcdir)/include/ \

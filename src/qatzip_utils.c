@@ -36,7 +36,10 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <qz_utils.h>
+#define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>
+#include <zstd_errors.h>
+#include <zdict.h>
 
 #ifdef HAVE_QAT_HEADERS
 #include <qat/cpa.h>
@@ -868,6 +871,8 @@ void qzSetParamsZSTD(QzSessionParamsZstd_T *params,
 
     qzSetParamsCommon(&params->common_params, internal_params);
     internal_params->data_fmt = ZSTD;
+    internal_params->dictId = 0;
+    internal_params->hw_buff_sz = QZ_ZSTD_HW_BUFF_SZ;
     //TODO: Update zstd hist buffer block in internal
 }
 #endif /* CPM_5X */
@@ -1027,6 +1032,7 @@ void qzGetParamsZSTD(QzSessionParamsInternal_T *internal_params,
     params->common_params.comp_algorithm = QZ_ZSTD;
     params->blockSize = QZ_ZSTD_BLOCKSIZE_DEFAULT;
     params->historyBuffer = QZ_ZSTD_HIST_BUFF_DEFAULT;
+    params->common_params.hw_buff_sz = QZ_ZSTD_HW_BUFF_SZ;
 }
 #endif /* CPM_5X */
 
@@ -1163,6 +1169,253 @@ inline void outputFooterGen(unsigned char *ptr,
 }
 
 #ifdef CPM_5X
+/**
+ * Validate ZSTD frame for QAT HW compatibility.
+ *
+ * @retval QZ_OK         Frame is compatible with HW offload
+ * @retval QZ_FORCE_SW   Frame should fall back to software path
+ * @retval QZ_DATA_ERROR Frame/data is invalid for decompression
+ * @retval QZ_PARAMS     Invalid arguments provided
+ */
+int isQATcompressedZSTDFrame(const unsigned char *ptr,
+                             const unsigned int src_len,
+                             QzSess_T *const qz_sess)
+{
+    size_t frame_header_size, remaining, lit_size;
+    size_t block_remaining, lh_size, lit_reg_size, lit_c_size;
+    const unsigned char *block_ptr, *ilit, *iseq, *istart, *iend, *ip;
+    unsigned int block_header, block_type, block_size;
+    unsigned int lit_enc_type, lhl_code, lhc;
+    unsigned int single_stream, ll_type, of_type, ml_type;
+    int nb_seq;
+
+    if (NULL == ptr || NULL == qz_sess) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: invalid args\n");
+        return QZ_PARAMS;
+    }
+
+    /*
+     * The input pointer points to the start of a ZSTD frame which includes:
+     *   - Magic Number (4 bytes): 0xFD2FB528
+     *   - Frame Header (variable size): contains frame parameters
+     *   - Blocks (variable): the actual compressed data
+     *   - Checksum (optional, 4 bytes)
+     *
+     * We need to skip the frame header to get to the first block.
+     * Use ZSTD_frameHeaderSize() to determine the total header size
+     * (magic number + frame header descriptor).
+     */
+    frame_header_size = ZSTD_frameHeaderSize(ptr, src_len);
+    if (ZSTD_isError(frame_header_size)) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: invalid frame header: %s\n",
+                 ZSTD_getErrorName(frame_header_size));
+        return QZ_DATA_ERROR;
+    }
+
+    QZ_DEBUG("isQATcompressedZSTDFrame: Frame header size=%zu, src_len=%u\n",
+             frame_header_size, src_len);
+
+    if (src_len < frame_header_size + ZSTD_BLOCK_HEADER_BYTES) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: insufficient data for frame header + block header\n");
+        return QZ_FORCE_SW;
+    }
+
+    /* Advance past the frame header to the first block */
+    block_ptr = ptr + frame_header_size;
+    remaining = src_len - frame_header_size;
+
+    block_header = block_ptr[0] | (block_ptr[1] << 8) | (block_ptr[2] << 16);
+    block_type = (block_header >> 1) & 0x3;
+    block_size = block_header >> 3;
+
+    QZ_DEBUG("isQATcompressedZSTDFrame: Block 0 - header=0x%06X type=%u size=%u\n",
+             block_header, block_type, block_size);
+
+    /* Validate block type and size */
+    if (block_type == 3) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: reserved block type\n");
+        return QZ_DATA_ERROR;
+    }
+
+    if (block_type == 2 && block_size > QAT_ZSTD_MAX_BLOCK_SIZE) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: block size %u exceeds max %u\n",
+                 block_size, QAT_ZSTD_MAX_BLOCK_SIZE);
+        return QZ_FORCE_SW;
+    }
+
+    remaining -= ZSTD_BLOCK_HEADER_BYTES;
+
+    if (block_type == 2 && block_size > remaining) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: block size %u exceeds remaining buffer %zu\n",
+                 block_size, remaining);
+        return QZ_FORCE_SW;
+    }
+
+    /* Early return for non-compressed blocks */
+    if (block_type != 2) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: PASS - all checks passed (bType=%u)\n", block_type);
+        return QZ_OK;
+    }
+
+    /* Parse literals section for compressed blocks */
+    block_remaining = block_size;
+    ilit = block_ptr + ZSTD_BLOCK_HEADER_BYTES;
+    lit_enc_type = ilit[0] & 0x3;
+
+    QZ_DEBUG("isQATcompressedZSTDFrame: First literal header byte: %02x, lit_enc_type: %u\n",
+             ilit[0], lit_enc_type);
+
+    /* Check for treeless literals */
+    if (lit_enc_type == 3) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - Literals use set_repeat (Treeless), litEncType=%u\n",
+                 lit_enc_type);
+        return QZ_FORCE_SW;
+    }
+
+    /* Decode literals header based on type */
+    lhl_code = (ilit[0] >> 2) & 0x3;
+    single_stream = 0;
+
+    if (lit_enc_type <= 1) {
+        /* Raw (type 0) or RLE (type 1) literals */
+        switch (lhl_code) {
+        case 0:
+        case 2:
+            lh_size = 1;
+            lit_reg_size = ilit[0] >> 3;
+            break;
+        case 1:
+            lh_size = 2;
+            lit_reg_size = (ilit[0] >> 4) | (block_remaining >= 2 ? (ilit[1] << 4) : 0);
+            break;
+        case 3:
+        default:
+            lh_size = 3;
+            lit_reg_size = (ilit[0] >> 4) |
+                           (block_remaining >= 2 ? (ilit[1] << 4) : 0) |
+                           (block_remaining >= 3 ? (ilit[2] << 12) : 0);
+            break;
+        }
+        lit_c_size = (lit_enc_type == 0) ? lit_reg_size : 1;
+        single_stream = 1;
+    } else {
+        /* Compressed literals (type 2) */
+        lhc = ilit[0] |
+              (block_remaining >= 2 ? (ilit[1] << 8) : 0) |
+              (block_remaining >= 3 ? (ilit[2] << 16) : 0) |
+              (block_remaining >= 4 ? (ilit[3] << 24) : 0);
+
+        switch (lhl_code) {
+        case 0:
+        case 1:
+        default:
+            single_stream = !lhl_code;
+            lh_size = 3;
+            lit_reg_size = (lhc >> 4) & 0x3FF;
+            lit_c_size = (lhc >> 14) & 0x3FF;
+            break;
+        case 2:
+            lh_size = 4;
+            lit_reg_size = (lhc >> 4) & 0x3FFF;
+            lit_c_size = lhc >> 18;
+            break;
+        case 3:
+            lh_size = 5;
+            lit_reg_size = (lhc >> 4) & 0x3FFFF;
+            lit_c_size = (lhc >> 22) + (block_remaining >= 5 ? ((size_t)ilit[4] << 10) : 0);
+            break;
+        }
+    }
+
+    /* Validate literals section */
+    if (lit_reg_size > QAT_ZSTD_MAX_BLOCK_SIZE) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - litRegSize %zu exceeds blockSizeMax\n",
+                 lit_reg_size);
+        return QZ_DATA_ERROR;
+    }
+
+    if (!single_stream && lit_reg_size < MIN_LITERALS_FOR_4_STREAMS) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - Not enough literals (%zu) for 4-streams mode (min %u)\n",
+                 lit_reg_size, MIN_LITERALS_FOR_4_STREAMS);
+        return QZ_DATA_ERROR;
+    }
+
+    if (lit_c_size + lh_size > block_remaining) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - Literal section size (%zu + %zu = %zu) exceeds block data (%zu)\n",
+                 lit_c_size, lh_size, lit_c_size + lh_size, block_remaining);
+        return QZ_DATA_ERROR;
+    }
+
+    /* Parse sequences section */
+    lit_size = lh_size + lit_c_size;
+    block_remaining -= lit_size;
+    iseq = ilit + lit_size;
+    istart = iseq;
+    iend = istart + block_remaining;
+    ip = istart;
+
+    QZ_DEBUG("isQATcompressedZSTDFrame: decoding Sequence Header, remainingSize=%zu\n",
+             block_remaining);
+
+    if (block_remaining < MIN_SEQUENCES_SIZE) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - block_remaining < MIN_SEQUENCES_SIZE\n");
+        return QZ_DATA_ERROR;
+    }
+
+    /* Read number of sequences */
+    nb_seq = *ip++;
+    if (nb_seq > 0x7F) {
+        if (nb_seq == 0xFF) {
+            if (ip + 2 > iend) {
+                QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - insufficient data for nbSeq\n");
+                return QZ_DATA_ERROR;
+            }
+            nb_seq = (ip[0] | (ip[1] << 8)) + LONGNBSEQ;
+            ip += 2;
+        } else {
+            if (ip >= iend) {
+                QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - insufficient data for nbSeq\n");
+                return QZ_DATA_ERROR;
+            }
+            nb_seq = ((nb_seq - 0x80) << 8) + *ip++;
+        }
+    }
+
+    if (nb_seq == 0) {
+        if (ip != iend) {
+            QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - extraneous data in Sequences section\n");
+            return QZ_DATA_ERROR;
+        }
+        QZ_DEBUG("isQATcompressedZSTDFrame: PASS - nbSeq==0, no sequences\n");
+        return QZ_OK;
+    }
+
+    /* Validate FSE table descriptors */
+    if (ip + 1 > iend) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - insufficient data for FSE descriptors\n");
+        return QZ_DATA_ERROR;
+    }
+
+    if (*ip & 0x3) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - Reserved bits in FSE descriptor not zero\n");
+        return QZ_DATA_ERROR;
+    }
+
+    ll_type = (*ip >> 6) & 0x3;
+    of_type = (*ip >> 4) & 0x3;
+    ml_type = (*ip >> 2) & 0x3;
+
+    /* Check for set_repeat FSE tables */
+    if (ll_type == 3 || of_type == 3 || ml_type == 3) {
+        QZ_DEBUG("isQATcompressedZSTDFrame: FAIL - FSE tables use set_repeat (LLtype=%u, OFtype=%u, MLtype=%u)\n",
+                 ll_type, of_type, ml_type);
+        return QZ_FORCE_SW;
+    }
+
+    QZ_DEBUG("isQATcompressedZSTDFrame: PASS - all checks passed (bType=%u)\n", block_type);
+    return QZ_OK;
+}
+
 int isQATZSTDProcessable(const unsigned char *ptr,
                          const unsigned int *const src_len,
                          QzSess_T *const qz_sess)
@@ -2094,6 +2347,103 @@ void QzRingFree(QzRing_T *ring)
         free(ring);
     }
 }
+
+#ifdef CPM_5X
+static int copyDictBuffer(const unsigned char *src,
+                          unsigned int src_len,
+                          unsigned char *dst,
+                          unsigned int *dst_len,
+                          const char *dict_desc)
+{
+    if (src_len > *dst_len) {
+        QZ_ERROR("copyDictBuffer: Output buffer (%u) smaller than %s (%u)\n",
+                 *dst_len, dict_desc, src_len);
+        return QZ_BUF_ERROR;
+    }
+
+    memcpy(dst, src, src_len);
+    *dst_len = src_len;
+    QZ_DEBUG("copyDictBuffer: Copied %s, len=%u\n", dict_desc, src_len);
+
+    return QZ_OK;
+}
+
+/**
+ * Process ZSTD dictionary for QAT offload
+ *
+ * QAT dictionary compression for ZSTD will not use entropy tables in the
+ * dictionary format. This function strips entropy tables from the dictionary
+ * data before submission to QAT.
+ *
+ * @param dict_in       Input dictionary buffer
+ * @param dict_in_len   Input dictionary length
+ * @param dict_out      Output buffer for processed dictionary
+ * @param dict_out_len  Output dictionary length (updated by function)
+ *
+ * @return QZ_OK on success, error code otherwise
+ */
+int stripEntropy(const unsigned char *dict_in,
+                            unsigned int dict_in_len,
+                            unsigned char *dict_out,
+                            unsigned int *dict_out_len)
+{
+    size_t header_size;
+    unsigned int raw_content_offset;
+    unsigned int raw_content_size;
+    unsigned int magic = 0;
+
+    QZ_DEBUG("stripEntropy: Enter - dict_in=%p, dict_in_len=%u, dict_out=%p, *dict_out_len=%u\n",
+             dict_in, dict_in_len, dict_out, dict_out_len ? *dict_out_len : 0);
+
+    if (dict_in == NULL || dict_out == NULL || dict_out_len == NULL) {
+        QZ_ERROR("stripEntropy: Invalid parameters\n");
+        return QZ_PARAMS;
+    }
+
+    if (dict_in_len == 0) {
+        *dict_out_len = 0;
+        return QZ_OK;
+    }
+
+    if (dict_in_len < ZSTD_DICT_HEADER_SIZE) {
+        return copyDictBuffer(dict_in, dict_in_len, dict_out, dict_out_len,
+                              "small raw dictionary");
+    }
+
+    memcpy(&magic, dict_in, sizeof(magic));
+    if (magic != ZSTD_DICT_MAGIC) {
+        return copyDictBuffer(dict_in, dict_in_len, dict_out, dict_out_len,
+                              "non-ZSTD dictionary");
+    }
+
+    header_size = ZDICT_getDictHeaderSize(dict_in, dict_in_len);
+    if (header_size <= ZSTD_DICT_HEADER_SIZE || header_size > dict_in_len) {
+        QZ_ERROR("stripEntropy: Invalid dictionary header size=%zu (dict_len=%u)\n",
+                 header_size, dict_in_len);
+        return QZ_FAIL;
+    }
+
+    QZ_DEBUG("stripEntropy: Stripping entropy tables - dict_len=%u, header_size=%zu\n",
+             dict_in_len, header_size);
+
+    raw_content_offset = (unsigned int)header_size;
+    raw_content_size = dict_in_len - raw_content_offset;
+
+    if (raw_content_size > *dict_out_len) {
+        QZ_ERROR("stripEntropy: Output buffer (%u) smaller than raw content (%u)\n",
+                 *dict_out_len, raw_content_size);
+        return QZ_BUF_ERROR;
+    }
+
+    memcpy(dict_out, dict_in + raw_content_offset, raw_content_size);
+    *dict_out_len = raw_content_size;
+
+    QZ_DEBUG("stripEntropy: Finished stripping entropy tables - raw_offset=%u, raw_content_size=%u\n",
+             raw_content_offset, raw_content_size);
+
+    return QZ_OK;
+}
+#endif /* CPM_5X */
 
 int QzRingProduceEnQueue(QzRing_T *ring, void *obj, int is_single_producer)
 {

@@ -207,6 +207,9 @@ int doProcessBuffer(QzSession_T *sess,
         dict_param.dictionary_len = dict_len;
         dict_param.compressed = 0;
         dict_param.crc64Addr = NULL;
+        dict_param.dictId = 0;
+    } else {
+        QZ_DEBUG("No dictionary provided (dict=NULL)\n");
     }
 #endif
 
@@ -313,40 +316,55 @@ int doProcessBuffer(QzSession_T *sess,
     return ret;
 }
 
-int loadDictionaryFile(const char *dict_file_name,
-                       unsigned char *dict_buffer,
-                       unsigned int *dict_buffer_size)
+int getDictionaryFileSize(const char *dict_file_name, unsigned int *dict_size)
 {
     FILE *dict_file = NULL;
-    int dict_file_size = 0;
+    long dict_file_size = 0;
+    dict_file = fopen(dict_file_name, "r");
+    if (!dict_file) {
+        QZ_ERROR("Failed to open dictionary file %s!\n", dict_file_name);
+        return -1;
+    }
+
+    fseek(dict_file, 0, SEEK_END);
+    dict_file_size = ftell(dict_file);
+    fclose(dict_file);
+
+    if (dict_file_size < 0) {
+        QZ_ERROR("Failed to get dictionary file size!\n");
+        return -1;
+    }
+    if (dict_file_size == 0) {
+        QZ_ERROR("The dictionary file is empty!\n");
+        return -1;
+    }
+
+    *dict_size = (unsigned int)dict_file_size;
+
+    QZ_DEBUG("getDictionaryFileSize: Actual size = %u bytes\n", *dict_size);
+    return 0;
+}
+
+int loadDictionaryFile(const char *dict_file_name,
+                       unsigned char *dict_buffer,
+                       unsigned int dict_buffer_size)
+{
+    FILE *dict_file = NULL;
     size_t ret = 0;
+    QZ_DEBUG("loadDictionaryFile: Loading dictionary from '%s'\n", dict_file_name);
+    QZ_DEBUG("loadDictionaryFile: dict_buffer=%p, dict_buffer_size=%u\n",
+             dict_buffer, dict_buffer_size);
     dict_file = fopen(dict_file_name, "r");
     if (!dict_file) {
         QZ_ERROR("Failed to open dictionary file %s!\n",
                  dict_file_name);
         return -1;
     }
-
-    fseek(dict_file, 0, SEEK_END);
-    dict_file_size = ftell(dict_file);
-    if (dict_file_size < 0) {
-        QZ_ERROR("Failed to get dictionary file size!\n");
-        fclose(dict_file);
-        return -1;
-    }
-    if (dict_file_size == 0) {
-        QZ_ERROR("The dictionary file is empty!\n");
-        fclose(dict_file);
-        return -1;
-    }
-    fseek(dict_file, 0, SEEK_SET);
-
-    if(dict_file_size < *dict_buffer_size) {
-        *dict_buffer_size = dict_file_size;
-    }
-    ret = fread(dict_buffer, 1, *dict_buffer_size, dict_file);
-    if (ret != *dict_buffer_size) {
-        QZ_ERROR("Failed to read dictionary file %s!\n", dict_file_name);
+    
+    ret = fread(dict_buffer, 1, dict_buffer_size, dict_file);
+    if (ret != dict_buffer_size) {
+        QZ_ERROR("Failed to read dictionary file %s (read %zu, expected %u)!\n",
+                 dict_file_name, ret, dict_buffer_size);
         fclose(dict_file);
         return -1;
     }
@@ -417,11 +435,37 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
             exit(ERROR);
         }
     } else {
-        /* For decompression, use initial ratio (typical gzip is 6-10x).
-         * This balances memory usage with avoiding buffer expansion.
+        /*
+         * For ZSTD, use ZSTD_getFrameContentSize() to get the exact
+         * decompressed size, as ZSTD files can have very high compression
+         * ratios that exceed the fixed expansion ratios.
          */
-        dst_buffer_size = src_buffer_size *
-                          g_bufsz_expansion_ratio[ratio_idx++];
+        if (g_params_th.data_fmt == QZIP_ZSTD && src_file_size > 0) {
+            unsigned char *temp_buf = malloc(src_file_size);
+            if (temp_buf) {
+                FILE *temp_file = fdopen(dup(src_fd), "r");
+                if (temp_file) {
+                    fseek(temp_file, 0, SEEK_SET);
+                    size_t read_sz = fread(temp_buf, 1, src_file_size, temp_file);
+                    if (read_sz > 0) {
+                        unsigned long long content_size = ZSTD_getFrameContentSize(temp_buf, read_sz);
+                        if (content_size != ZSTD_CONTENTSIZE_UNKNOWN &&
+                            content_size != ZSTD_CONTENTSIZE_ERROR) {
+                            dst_buffer_size = (unsigned int)content_size;
+                            QZ_DEBUG("ZSTD frame content size: %llu bytes\n", content_size);
+                            ratio_idx = sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
+                        }
+                    }
+                    fclose(temp_file);
+                }
+                free(temp_buf);
+                lseek(src_fd, 0, SEEK_SET);
+            }
+        }
+        if (dst_buffer_size == 0) {
+            dst_buffer_size = src_buffer_size *
+                              g_bufsz_expansion_ratio[ratio_idx++];
+        }
     }
 
     if (0 == src_file_size && is_compress) {
@@ -431,13 +475,26 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     /* Load dictionary file */
 #ifdef CPM_5X
     if (g_params_th.dict_filename != NULL) {
-        dict_buffer = malloc(DICT_BUFF_MAX_LEN);
-        if (!dict_buffer) {
-            QZ_ERROR("Failed to allocate memory for dictionary buffer.\n");
+        QZ_DEBUG("Dictionary file specified: '%s'\n", g_params_th.dict_filename);
+
+        /* Get actual dictionary file size first */
+        ret = getDictionaryFileSize(g_params_th.dict_filename, &dict_buffer_size);
+        if (ret) {
+            QZ_ERROR("Failed to get dictionary file size.\n");
             close(src_fd);
             exit(ERROR);
         }
-        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer, &dict_buffer_size);
+
+        /* Allocate buffer based on actual file size */
+        dict_buffer = malloc(dict_buffer_size);
+        if (!dict_buffer) {
+            QZ_ERROR("Failed to allocate %u bytes for dictionary buffer.\n", dict_buffer_size);
+            close(src_fd);
+            exit(ERROR);
+        }
+
+        /* Load the dictionary file */
+        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer, dict_buffer_size);
         if(ret) {
             QZ_ERROR("Failed to load dictionary file.\n");
             close(src_fd);
@@ -1125,12 +1182,22 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
 
     /* Load dictionary file */
     if (g_params_th.dict_filename != NULL) {
-        dict_buffer = malloc(DICT_BUFF_MAX_LEN);
-        if (!dict_buffer) {
-            QZ_ERROR("Failed to allocate memory for dictionary buffer.\n");
+        /* Get actual dictionary file size first */
+        ret = getDictionaryFileSize(g_params_th.dict_filename, &dict_buffer_size);
+        if (ret) {
+            QZ_ERROR("Failed to get dictionary file size.\n");
             exit(ERROR);
         }
-        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer, &dict_buffer_size);
+
+        /* Allocate buffer based on actual file size */
+        dict_buffer = malloc(dict_buffer_size);
+        if (!dict_buffer) {
+            QZ_ERROR("Failed to allocate %u bytes for dictionary buffer.\n", dict_buffer_size);
+            exit(ERROR);
+        }
+        
+        /* Load the dictionary file */
+        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer, dict_buffer_size);
         if(ret) {
             QZ_ERROR("Failed to load dictionary file.\n");
             free(dict_buffer);
