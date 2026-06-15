@@ -192,6 +192,9 @@ typedef enum QzSuffixCheckStatus_E {
     E_CHECK_SUFFIX_FORMAT_UNMATCH
 } QzSuffixCheckStatus_T;
 
+#define SRC_BUFF_LEN         (512 * 1024 * 1024)
+#define DICT_BUFF_MAX_LEN    (32 * 1024)
+
 typedef enum QzipDataFormat_E {
     QZIP_DEFLATE_4B = 0,
     /**< Data is in raw deflate format with 4 byte header */
@@ -223,6 +226,7 @@ typedef struct QzipParams_S {
     unsigned int req_cnt_thrshold;
     char *output_filename;
     unsigned int is_sensitive_mode;
+    char *dict_filename;
 } QzipParams_T;
 
 #define QZ7Z_PROPERTY_ID_INTEL7Z_1001   ((QZ7Z_DEVELOP_PREFIX << 56) | \
@@ -778,7 +782,8 @@ int doProcessBuffer(QzSession_T *sess,
                     unsigned char *src, unsigned int *src_len,
                     unsigned char *dst, unsigned int dst_len,
                     RunTimeList_T *time_list, FILE *dst_file,
-                    off_t *dst_file_size, int is_compress);
+                    off_t *dst_file_size, unsigned char *dict,
+                    unsigned int dict_len, int is_compress);
 
 void doProcessFile(QzSession_T *sess, const char *src_file_name,
                    const char *dst_file_name, int is_compress);
