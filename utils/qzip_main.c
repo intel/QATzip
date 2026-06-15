@@ -190,6 +190,9 @@ int main(int argc, char **argv)
                 return -1;
             }
             break;
+        case 'D':
+            g_params_th.dict_filename = optarg;
+            break;
         default:
             tryHelp();
         }

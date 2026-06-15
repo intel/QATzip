@@ -171,6 +171,15 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
             qz4B_header = (Qz4BH_T *)dest;
             dest = dest + sizeof(Qz4BH_T);
         }
+        /* Load dictionary */
+        if (qz_sess->sess_params.dictionary_flag) {
+            ret = deflateSetDictionary(stream, qz_sess->sess_params.dictionary,
+                                 qz_sess->sess_params.dictionary_len);
+            if (Z_OK != ret) {
+                QZ_ERROR("Failed to set dictionary\n");
+                return QZ_FAIL;
+            }
+        }
     } else {
         if (NULL == stream) {
             QZ_ERROR("ERR: deflate stream is NULL\n");
@@ -366,6 +375,24 @@ int qzDeflateSWDecompress(QzSession_T *sess, const unsigned char *src,
         ret = QZ_DATA_ERROR;
         qz_sess->inflate_stat = InflateError;
         goto done;
+    case Z_NEED_DICT:
+        if (qz_sess->sess_params.dictionary_flag) {
+            ret = inflateSetDictionary(stream, qz_sess->sess_params.dictionary,
+                                       qz_sess->sess_params.dictionary_len);
+            if (Z_OK != ret) {
+                QZ_ERROR("Failed to set dictionary\n");
+                qz_sess->inflate_stat = InflateError;
+                goto done;
+            }
+            ret = QZ_OK;
+            qz_sess->inflate_stat = InflateEnd;
+        } else {
+            QZ_ERROR("Failed to set dictionary\n");
+            qz_sess->inflate_stat = InflateError;
+            ret = QZ_FAIL;
+            goto done;
+        }
+        break;
     default:
         QZ_INFO("ERR: inflate failed with error code %d\n", ret);
         ret = QZ_FAIL;
@@ -595,8 +622,15 @@ int qzZSTDSWCompress(QzSession_T *sess, const unsigned char *src,
     ZSTD_CCtx *cctx = ZSTD_createCCtx();
     /* ZSTD sw fallback better follow HW history buffer size */
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_windowLog, 16);
-    compress_out = ZSTD_compressCCtx(cctx, dest, *dest_len, src, *src_len,
-                                     qz_sess->sess_params.comp_lvl);
+    if (qz_sess->sess_params.dictionary_flag) {
+        compress_out = ZSTD_compress_usingDict(cctx, dest, *dest_len, src, *src_len,
+                                    qz_sess->sess_params.dictionary,
+                                    qz_sess->sess_params.dictionary_len,
+                                    qz_sess->sess_params.comp_lvl);
+    } else {
+        compress_out = ZSTD_compressCCtx(cctx, dest, *dest_len, src, *src_len,
+                                         qz_sess->sess_params.comp_lvl);
+    }
     if (ZSTD_isError(compress_out)) {
         QZ_ERROR("ZSTD_compress error: %s\n", ZSTD_getErrorName(compress_out));
         goto zstd_compress_fail;
@@ -622,6 +656,7 @@ int qzZSTDSWDecompress(QzSession_T *sess, const unsigned char *src,
     size_t in_sz = 0;
     size_t out_sz = 0;
     size_t ret = QZ_OK;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     QZ_DEBUG("Enter qzZSTDSWDecompress: src_len %u dest_len %u\n",
              *src_len, *dest_len);
 
@@ -630,7 +665,13 @@ int qzZSTDSWDecompress(QzSession_T *sess, const unsigned char *src,
     in_sz = *src_len;
     out_sz = *dest_len;
 
-    ret = ZSTD_decompressDCtx(dctx, dest, out_sz, src, in_sz);
+    if (qz_sess->sess_params.dictionary_flag) {
+        ret = ZSTD_decompress_usingDict(dctx, dest, out_sz, src, in_sz,
+                                        qz_sess->sess_params.dictionary,
+                                        qz_sess->sess_params.dictionary_len);
+    } else {
+        ret = ZSTD_decompressDCtx(dctx, dest, out_sz, src, in_sz);
+    }
     if (ZSTD_isError(ret)) {
         QZ_ERROR("ZSTD_decompressDCtx error: %s\n", ZSTD_getErrorName(ret));
         goto zstd_decompress_fail;
@@ -656,11 +697,18 @@ int qzSWDecompressMultiZSTD(QzSession_T *sess, const unsigned char *src,
                             unsigned int *dest_len)
 {
     size_t ret = QZ_OK;
+    QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     QZ_DEBUG("Enter qzZSTDSWDecompress: src_len %u dest_len %u\n",
              *src_len, *dest_len);
 
     ZSTD_DStream *dctx = ZSTD_createDStream();
     ZSTD_initDStream(dctx);
+    if (qz_sess->sess_params.dictionary_flag) {
+        ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only);
+        ZSTD_DCtx_loadDictionary(dctx, qz_sess->sess_params.dictionary,
+            qz_sess->sess_params.dictionary_len);
+    }
+
     ZSTD_DCtx_setParameter(dctx, ZSTD_d_windowLogMax, 17);
 
     ZSTD_inBuffer input = { src, *src_len, 0 };

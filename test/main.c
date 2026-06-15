@@ -160,6 +160,8 @@ typedef struct {
     unsigned char *src;
     unsigned char *comp_out;
     unsigned char *decomp_out;
+    unsigned char *dict_buf;
+    size_t dict_sz;
     int gen_data;
     int comp_algorithm;
     int sw_backup;
@@ -2107,6 +2109,8 @@ void *qzCompressAndDecompress(void *arg)
     const int gen_data = ((TestArg_T *)arg)->gen_data;
     int thread_sleep = ((TestArg_T *)arg)->thread_sleep;
     QzSession_T sess = {0};
+    QzDictionaryParams_T dict_param = {0};
+    QzResult_T result = {0};
 
     if (!org_src_sz) {
         pthread_exit((void *)"input size is 0\n");
@@ -2176,6 +2180,13 @@ void *qzCompressAndDecompress(void *arg)
         goto done;
     }
     memset(compressed_blocks_sz, 0, sizeof(int) * num_blocks);
+    if (((TestArg_T *)arg)->dict_sz > 0 && ((TestArg_T *)arg)->dict_buf) {
+        dict_param.dictionary = ((TestArg_T *)arg)->dict_buf;
+        dict_param.dictionary_len = ((TestArg_T *)arg)->dict_sz;
+        dict_param.compressed = 0;
+        dict_param.crc64Addr = NULL;
+    }
+
     // Compress the data for testing
     if (DECOMP == service) {
         consumed = 0;
@@ -2185,9 +2196,19 @@ void *qzCompressAndDecompress(void *arg)
             in_sz =  block_size < (org_src_sz - consumed) ? block_size :
                      (org_src_sz - consumed);
             out_sz = comp_out_sz - produced;
-            rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
-                            comp_out + produced,
-                            (uint32_t *)(&out_sz), 1);
+            if (((TestArg_T *)arg)->dict_sz > 0 && ((TestArg_T *)arg)->dict_buf) {
+                result.status = 0;
+                result.src_len = in_sz;
+                result.dest_len = out_sz;
+                rc = qzCompressWithDictionary(&sess, src + consumed, comp_out + produced,
+                                              &dict_param, NULL, &result);
+                in_sz = result.src_len;
+                out_sz = result.dest_len;
+            } else {
+                rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
+                                comp_out + produced,
+                                (uint32_t *)(&out_sz), 1);
+            }
             if (rc != QZ_OK) {
                 QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
                 dumpInputData(in_sz, src + consumed);
@@ -2252,10 +2273,19 @@ void *qzCompressAndDecompress(void *arg)
                 in_sz =  block_size < (org_src_sz - consumed) ? block_size :
                          (org_src_sz - consumed);
                 out_sz = comp_out_sz - produced;
-
-                rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
-                                comp_out + produced,
-                                (uint32_t *)(&out_sz), 1);
+                if (((TestArg_T *)arg)->dict_sz > 0 && ((TestArg_T *)arg)->dict_buf) {
+                    result.status = 0;
+                    result.src_len = in_sz;
+                    result.dest_len = out_sz;
+                    rc = qzCompressWithDictionary(&sess, src + consumed, comp_out + produced,
+                                                  &dict_param, NULL, &result);
+                    in_sz = result.src_len;
+                    out_sz = result.dest_len;
+                } else {
+                    rc = qzCompress(&sess, src + consumed, (uint32_t *)(&in_sz),
+                                    comp_out + produced,
+                                    (uint32_t *)(&out_sz), 1);
+                }
                 if (rc != QZ_OK) {
                     QZ_ERROR("ERROR: Compression FAILED with return value: %d\n", rc);
                     dumpInputData(in_sz, src + consumed);
@@ -2288,10 +2318,20 @@ void *qzCompressAndDecompress(void *arg)
 
             for (int i = 0; i < num_blocks; i ++) {
                 in_sz = compressed_blocks_sz[i];
-                out_sz = block_size < (decomp_out_sz - produced) ? block_size :
-                         (decomp_out_sz - produced);
-                rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
-                                  decomp_out + produced, (uint32_t *)(&out_sz));
+                out_sz = decomp_out_sz - produced;
+                if (((TestArg_T *)arg)->dict_sz > 0 && ((TestArg_T *)arg)->dict_buf) {
+                    result.status = 0;
+                    result.src_len = in_sz;
+                    result.dest_len = out_sz;
+                    rc = qzDecompressWithDictionary(&sess, comp_out + consumed,
+                                                    decomp_out + produced,
+                                                    &dict_param, NULL, &result);
+                    in_sz = result.src_len;
+                    out_sz = result.dest_len;
+                } else {
+                    rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
+                                      decomp_out + produced, (uint32_t *)(&out_sz));
+                }
                 if (rc != QZ_OK) {
                     QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
                     dumpInputData(src_sz, src);
@@ -2348,8 +2388,19 @@ void *qzCompressAndDecompress(void *arg)
         for (int i = 0; i < num_blocks; i ++) {
             in_sz = compressed_blocks_sz[i];
             out_sz = decomp_out_sz - produced;
-            rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
-                              decomp_out + produced, (uint32_t *)(&out_sz));
+            if (((TestArg_T *)arg)->dict_sz > 0 && ((TestArg_T *)arg)->dict_buf) {
+                result.status = 0;
+                result.src_len = in_sz;
+                result.dest_len = out_sz;
+                rc = qzDecompressWithDictionary(&sess, comp_out + consumed,
+                                                decomp_out + produced,
+                                                &dict_param, NULL, &result);
+                in_sz = result.src_len;
+                out_sz = result.dest_len;
+            } else {
+                rc = qzDecompress(&sess, comp_out + consumed, (uint32_t *)(&in_sz),
+                                  decomp_out + produced, (uint32_t *)(&out_sz));
+            }
             if (rc != QZ_OK) {
                 QZ_ERROR("ERROR: Decompression FAILED with return value: %d\n", rc);
                 dumpInputData(src_sz, src);
@@ -6389,7 +6440,7 @@ done:
     "                          It must be the power of 2. The minimum is 4k,\n" \
     "                          and maximum is 1M. Default is -1, don't split\n" \
     "                          the test data.\n"                                \
-    "    -D direction          comp | decomp | both\n"                          \
+    "    -d direction          comp | decomp | both\n"                          \
     "    -F format             [comp format]:[orig data size]/...\n"            \
     "    -L comp_lvl           1 - " STR(MAX_LVL) "\n"                          \
     "    -O data_fmt           deflate | gzip | gzipext | deflate_4B | lz4 | lz4s | zlib | zstd\n"\
@@ -6413,6 +6464,7 @@ done:
     "    -g loglevel           set qatzip loglevel(none|error|warn|info|debug)\n"  \
     "    -a sensitive_mode     Enable Latency sensitive mode\n" \
     "    -q async_queue_sz     default is 100, it's for async queue size\n"     \
+    "    -D dictionary_file    set dictionary file to compression or decompression\n"                 \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -6452,6 +6504,9 @@ int main(int argc, char *argv[])
     int block_size = -1;
     PinMem_T compress_buf_type = COMMON_MEM;
     TestArg_T args = {0};
+    char *dict_file_name = NULL;
+    unsigned char *dict_buf = NULL;
+    size_t dict_sz = 0;
 
     unsigned char *input_buf = NULL;
     unsigned int input_buf_len = QATZIP_MAX_HW_SZ;
@@ -6463,7 +6518,7 @@ int main(int argc, char *argv[])
     s1.sa_flags = 0;
     sigaction(SIGINT, &s1, NULL);
 
-    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:g:d:q:vha";
+    const char *optstring = "m:t:A:C:D:F:L:T:i:l:e:s:r:B:O:S:P:M:b:p:g:q:vha";
     int opt = 0, loop_cnt = 2, verify = 0;
     int disable_init_engine = 0, disable_init_session = 0;
     char *stop = NULL;
@@ -6557,7 +6612,7 @@ int main(int argc, char *argv[])
                 return -1;
             }
             break;
-        case 'D':
+        case 'd':
             if (strcmp(optarg, "comp") == 0) {
                 service = COMP;
             } else if (strcmp(optarg, "decomp") == 0) {
@@ -6703,8 +6758,8 @@ int main(int argc, char *argv[])
                 return -1;
             }
             break;
-        case 'd':
-            lsm_met_len_shift = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+        case 'D':
+            dict_file_name = optarg;
             break;
         default:
             qzPrintUsageAndExit(argv[0]);
@@ -6860,6 +6915,37 @@ int main(int argc, char *argv[])
         fclose(file);
     }
 
+    if (dict_file_name != NULL) {
+        FILE *file = NULL;
+        struct stat file_state;
+        if (stat(dict_file_name, &file_state)) {
+            QZ_ERROR("ERROR: fail to get stat of dictionary file %s\n", dict_file_name);
+            return -1;
+        }
+        dict_sz = file_state.st_size;
+        if (compress_buf_type == PINNED_MEM) {
+            if (dict_sz > MAX_HUGE_PAGE_SZ) {
+                QZ_ERROR("ERROR: only can allocate 2M memory in huge page\n");
+                return -1;
+            }
+            dict_buf = qzMalloc(dict_sz, QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+        } else {
+            dict_buf = malloc(dict_sz);
+        }
+        file = fopen(dict_file_name, "rb");
+        if (!file) {
+            QZ_ERROR("ERROR: fail to read file %s\n", dict_buf);
+            goto done;
+        }
+        if (fread(dict_buf, 1, dict_sz, file) != dict_sz) {
+            QZ_ERROR("ERROR: fail to read file %s\n", dict_file_name);
+            fclose(file);
+            goto done;
+        } else {
+            QZ_DEBUG("Read %d bytes from file %s\n", dict_sz, dict_file_name);
+        }
+        fclose(file);
+    }
     for (i = 0; i < thread_count; i++) {
         test_arg[i] = args;
         test_arg[i].thd_id = i;
@@ -6883,6 +6969,8 @@ int main(int argc, char *argv[])
             test_arg[i].decomp_out_sz = test_arg[i].src_sz * 5;
             test_arg[i].decomp_out = malloc(test_arg[i].decomp_out_sz);
         }
+        test_arg[i].dict_buf = dict_buf;
+        test_arg[i].dict_sz = dict_sz;
         test_arg[i].gen_data = g_input_file_name ? 0 : 1;
         test_arg[i].init_engine_disabled = disable_init_engine;
         test_arg[i].init_sess_disabled = disable_init_session;
@@ -6984,6 +7072,14 @@ done:
             qzFree(input_buf);
         } else {
             free(input_buf);
+        }
+    }
+
+    if(NULL != dict_buf) {
+        if (compress_buf_type == PINNED_MEM) {
+            qzFree(dict_buf);
+        } else {
+            free(dict_buf);
         }
     }
 

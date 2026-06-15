@@ -53,13 +53,14 @@ QzipParams_T g_params_th = {
     .polling_mode = QZ_PERIODICAL_POLLING,
     .req_cnt_thrshold = QZ_REQ_THRESHOLD_DEFAULT,
     .is_sensitive_mode = false,
+    .dict_filename = NULL
 };
 
 /* Estimate maximum data expansion after decompression */
 const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-char const g_short_opts[] = "A:H:L:C:r:o:O:P:g:b:dfhkVRs";
+char const g_short_opts[] = "A:H:L:C:r:o:O:P:D:g:b:dfhkVRs";
 const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -81,6 +82,7 @@ const struct option g_long_opts[] = {
     {"loglevel",   1, 0, 'g'}, /* set log level */
     {"blocksz",   1, 0, 'b'}, /* set block source buffer size */
     {"lsm",       1, 0, 's'}, /* enable latency sensitive mode */
+    {"dictionary", 1, 0, 'D'}, /* set dictionary file */
     { 0, 0, 0, 0 }
 };
 
@@ -119,6 +121,9 @@ void help(void)
         "  -g, --loglevel    set qatzip loglevel(none|error|warn|info|debug)",
         "  -b, --blocksz     If set this option, the qzip will split input file into pieces.",
         "                    qzCompress/qzDecompress will process block_size bytes every time.",
+        "  -D, --dictionary  set dictionary file, the maximum dictionary length supported by QAT"
+        "                    is 64KB, if dictionary file is large than 64KB, the first 64KB of",
+        "                    dictionary file is read."
         "",
         "With no FILE, read standard input.",
         0
@@ -180,7 +185,8 @@ int doProcessBuffer(QzSession_T *sess,
                     unsigned char *src, unsigned int *src_len,
                     unsigned char *dst, unsigned int dst_len,
                     RunTimeList_T *time_list, FILE *dst_file,
-                    off_t *dst_file_size, int is_compress)
+                    off_t *dst_file_size, unsigned char *dict,
+                    unsigned int dict_len, int is_compress)
 {
     int ret = QZ_FAIL;
     unsigned int done = 0;
@@ -191,6 +197,15 @@ int doProcessBuffer(QzSession_T *sess,
     unsigned int block_dest_len = dst_len;
     unsigned int consumed = 0;
     unsigned int produced = 0;
+    QzDictionaryParams_T dict_param = {0};
+    QzResult_T result = {0};
+
+    if (dict) {
+        dict_param.dictionary = dict;
+        dict_param.dictionary_len = dict_len;
+        dict_param.compressed = 0;
+        dict_param.crc64Addr = NULL;
+    }
 
     while (time_node->next) {
         time_node = time_node->next;
@@ -209,24 +224,43 @@ int doProcessBuffer(QzSession_T *sess,
 
     while (!done) {
         if (is_compress) {
-            /* Compression: process in block_buff_len chunks */
-            block_src_len = (*src_len - consumed) > block_buff_len ?
-                            block_buff_len : (*src_len - consumed);
-            block_dest_len = dst_len - produced;
+            if (dict) {
+                result.status = 0;
+                result.src_len = *src_len;
+                result.dest_len = dst_len;
+                ret = qzCompressWithDictionary(sess, src, dst,
+                                              &dict_param, NULL, &result);
+                block_src_len = result.src_len;
+                block_dest_len = result.dest_len;
+            } else {
+                /* Compression: process in block_buff_len chunks */
+                block_src_len = (*src_len - consumed) > block_buff_len ?
+                                block_buff_len : (*src_len - consumed);
+                block_dest_len = dst_len - produced;
 
-            ret = qzCompress(sess, src + consumed, &block_src_len,
-                             dst + produced, &block_dest_len, 1);
-
+                ret = qzCompress(sess, src + consumed, &block_src_len,
+                                 dst + produced, &block_dest_len, 1);
+            }
             if (QZ_BUF_ERROR == ret && 0 == block_src_len) {
                 done = 1;
             }
         } else {
-            /* Decompression: process remaining input */
-            block_src_len = *src_len - consumed;
-            block_dest_len = dst_len - produced;
+            if (dict) {
+                result.status = 0;
+                result.src_len = *src_len;
+                result.dest_len = dst_len;
+                ret = qzDecompressWithDictionary(sess, src, dst,
+                                                &dict_param, NULL, &result);
+                block_src_len = result.src_len;
+                block_dest_len = result.dest_len;
+            } else {
+                /* Decompression: process remaining input */
+                block_src_len = *src_len - consumed;
+                block_dest_len = dst_len - produced;
 
-            ret = qzDecompress(sess, src + consumed, &block_src_len,
-                               dst + produced, &block_dest_len);
+                ret = qzDecompress(sess, src + consumed, &block_src_len,
+                                   dst + produced, &block_dest_len);
+            }
 
             if (QZ_DATA_ERROR == ret ||
                 (QZ_BUF_ERROR == ret && 0 == block_src_len) ||
@@ -268,6 +302,48 @@ int doProcessBuffer(QzSession_T *sess,
     return ret;
 }
 
+int loadDictionaryFile(const char *dict_file_name,
+                       unsigned char *dict_buffer,
+                       unsigned int *dict_buffer_size)
+{
+    FILE *dict_file = NULL;
+    int dict_file_size = 0;
+    size_t ret = 0;
+    dict_file = fopen(dict_file_name, "r");
+    if (!dict_file) {
+        QZ_ERROR("Failed to open dictionary file %s!\n",
+                 dict_file_name);
+        return -1;
+    }
+
+    fseek(dict_file, 0, SEEK_END);
+    dict_file_size = ftell(dict_file);
+    if (dict_file_size < 0) {
+        QZ_ERROR("Failed to get dictionary file size!\n");
+        fclose(dict_file);
+        return -1;
+    }
+    if (dict_file_size == 0) {
+        QZ_ERROR("The dictionary file is empty!\n");
+        fclose(dict_file);
+        return -1;
+    }
+    fseek(dict_file, 0, SEEK_SET);
+
+    if(dict_file_size < *dict_buffer_size) {
+        *dict_buffer_size = dict_file_size;
+    }
+    ret = fread(dict_buffer, 1, *dict_buffer_size, dict_file);
+    if (ret != *dict_buffer_size) {
+        QZ_ERROR("Failed to read dictionary file %s!\n", dict_file_name);
+        fclose(dict_file);
+        return -1;
+    }
+
+    fclose(dict_file);
+    return 0;
+}
+
 void doProcessFile(QzSession_T *sess, const char *src_file_name,
                    const char *dst_file_name, int is_compress)
 {
@@ -275,9 +351,11 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     struct stat src_file_stat;
     size_t src_buffer_size = 0;
     size_t dst_buffer_size = 0;
+    unsigned int dict_buffer_size = DICT_BUFF_MAX_LEN;
     off_t src_file_size = 0, dst_file_size = 0, file_remaining = 0;
     unsigned char *src_buffer = NULL;
     unsigned char *dst_buffer = NULL;
+    unsigned char *dict_buffer = NULL;
     FILE *src_file = NULL;
     FILE *dst_file = NULL;
     unsigned int bytes_read = 0;
@@ -339,6 +417,23 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         dst_buffer_size = 1024;
     }
 
+    /* Load dictionary file */
+    if (g_params_th.dict_filename != NULL) {
+        dict_buffer = malloc(DICT_BUFF_MAX_LEN);
+        if (!dict_buffer) {
+            QZ_ERROR("Failed to allocate memory for dictionary buffer.\n");
+            close(src_fd);
+            exit(ERROR);
+        }
+        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer, &dict_buffer_size);
+        if(ret) {
+            QZ_ERROR("Failed to load dictionary file.\n");
+            close(src_fd);
+            free(dict_buffer);
+            exit(ERROR);
+        }
+    }
+
     src_buffer = malloc(src_buffer_size);
     assert(src_buffer != NULL);
     dst_buffer = malloc(dst_buffer_size);
@@ -364,7 +459,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         bytes_lookahead = bytes_read;
         ret = doProcessBuffer(sess, src_buffer, &bytes_read, dst_buffer,
                               dst_buffer_size, time_list_head, dst_file,
-                              &dst_file_size, is_compress);
+                              &dst_file_size, dict_buffer, dict_buffer_size,
+                              is_compress);
 
         if (QZ_DATA_ERROR == ret || QZ_BUF_ERROR == ret) {
             if (bytes_read > 0 && bytes_read < bytes_lookahead) {
@@ -432,6 +528,8 @@ exit:
     close(src_fd);
     free(src_buffer);
     free(dst_buffer);
+    if(dict_buffer)
+        free(dict_buffer);
     if (!g_keep && OK == ret) {
         unlink(src_file_name);
     }
@@ -893,9 +991,11 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
     int ret = OK;
     size_t src_buffer_size = 0;
     size_t dst_buffer_size = 0;
+    unsigned int dict_buffer_size = DICT_BUFF_MAX_LEN;
     off_t dst_file_size = 0;
     unsigned char *src_buffer = NULL;
     unsigned char *dst_buffer = NULL;
+    unsigned char *dict_buffer = NULL;
     unsigned int bytes_read = 0;
     unsigned int ratio_idx = 0;
     const unsigned int ratio_limit =
@@ -921,6 +1021,21 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
                           g_bufsz_expansion_ratio[ratio_idx++];
     }
 
+    /* Load dictionary file */
+    if (g_params_th.dict_filename != NULL) {
+        dict_buffer = malloc(DICT_BUFF_MAX_LEN);
+        if (!dict_buffer) {
+            QZ_ERROR("Failed to allocate memory for dictionary buffer.\n");
+            exit(ERROR);
+        }
+        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer, &dict_buffer_size);
+        if(ret) {
+            QZ_ERROR("Failed to load dictionary file.\n");
+            free(dict_buffer);
+            exit(ERROR);
+        }
+    }
+
     src_buffer = malloc(src_buffer_size);
     assert(src_buffer != NULL);
     dst_buffer = malloc(dst_buffer_size);
@@ -940,7 +1055,8 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
 
         ret = doProcessBuffer(sess, src_buffer, &bytes_read, dst_buffer,
                               dst_buffer_size, time_list_head, dst_file,
-                              &dst_file_size, is_compress);
+                              &dst_file_size, dict_buffer, dict_buffer_size,
+                              is_compress);
 
         if (QZ_DATA_ERROR == ret || QZ_BUF_ERROR == ret) {
             if (!is_compress) {
@@ -990,6 +1106,9 @@ exit:
     freeTimeList(time_list_head);
     free(src_buffer);
     free(dst_buffer);
+    if(dict_buffer) {
+        free(dict_buffer);
+    }
 
     if (ret) {
         exit(ret);

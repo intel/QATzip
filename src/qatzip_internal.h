@@ -152,6 +152,8 @@ extern"C" {
 struct QzAsyncReq_S;
 typedef struct QzAsyncReq_S QzAsyncReq_T;
 
+#define MAX_DICT_SIZE       32768
+
 typedef struct QzCpaStream_S {
     signed long seq;
     signed long src1;
@@ -172,7 +174,10 @@ typedef struct QzCpaStream_S {
 
 typedef struct QzInstanceCapability_S {
     CpaDcInstanceCapabilities inst_common_cap;
-    int zstd_Capability_Resp;
+    CpaBoolean zstd_Capability_Resp;
+    CpaBoolean deflate_dict;
+    CpaBoolean lz4s_dict;
+    CpaBoolean zstd_dict;
 } QzInstanceCapability_T;
 
 
@@ -186,6 +191,9 @@ typedef struct QzInstance_S {
     Cpa16U intermediate_cnt;
     CpaBufferList **src_buffers;
     CpaBufferList **dest_buffers;
+#if CPA_DC_API_VERSION_AT_LEAST(5, 0)
+    CpaDcDictionaryData dict_data;
+#endif
     Cpa16U src_count;
     Cpa16U dest_count;
     QzCpaStream_T *stream;
@@ -309,6 +317,13 @@ typedef struct QzSessionParamsInternal_S {
     unsigned char stop_decompression_stream_end;
     /* stop decompression at end the stream, default is 0 */
     unsigned char zlib_format;
+    unsigned int dictionary_flag;
+    /*< The flag of dictionary buffer */
+    const unsigned char* dictionary;
+    /*< Pointer to dictionary buffer */
+    unsigned int dictionary_len;
+    /*< Length of dictionary buffer (maximum value of 32KB for ZSTD, otherwise
+     * 64KB) */
 } QzSessionParamsInternal_T;
 
 /* lsm_met_len_shift is global variable */
