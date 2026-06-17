@@ -345,7 +345,7 @@ typedef struct QzSessionParamsInternal_S {
     /**< Set lz4s dictionary mini match, which would be 3 or 4 */
     unsigned int dictionary_flag;
     /*< The flag of dictionary buffer */
-    const unsigned char* dictionary;
+    const unsigned char *dictionary;
     /*< Pointer to dictionary buffer */
     unsigned int dictionary_len;
     /*< Length of dictionary buffer (maximum value of 32KB for ZSTD, otherwise
@@ -632,8 +632,8 @@ int isQATLZ4Processable(const unsigned char *ptr,
                         QzSess_T *const qz_sess);
 #ifdef CPM_5X
 int isQATLZ4BlockProcessable(const unsigned char *ptr,
-                         const unsigned int *const src_len,
-                         QzSess_T *const qz_sess);
+                             const unsigned int *const src_len,
+                             QzSess_T *const qz_sess);
 int isQATZSTDProcessable(const unsigned char *ptr,
                          const unsigned int *const src_len,
                          QzSess_T *const qz_sess);
@@ -641,9 +641,9 @@ int isQATcompressedZSTDFrame(const unsigned char *ptr,
                              const unsigned int src_len,
                              QzSess_T *const qz_sess);
 int stripEntropy(const unsigned char *dict_in,
-                            unsigned int dict_in_len,
-                            unsigned char *dict_out,
-                            unsigned int *dict_out_len);
+                 unsigned int dict_in_len,
+                 unsigned char *dict_out,
+                 unsigned int *dict_out_len);
 #endif
 int isQATDeflateProcessable(const unsigned char *ptr,
                             const unsigned int *const src_len,
@@ -671,7 +671,7 @@ void qzGetParamsDeflate(QzSessionParamsInternal_T *internal_params,
 void qzGetParamsLZ4(QzSessionParamsInternal_T *internal_params,
                     QzSessionParamsLZ4_T *params);
 void qzGetParamsLZ4Block(QzSessionParamsInternal_T *internal_params,
-                     QzSessionParamsLZ4_T *params);
+                         QzSessionParamsLZ4_T *params);
 void qzGetParamsLZ4S(QzSessionParamsInternal_T *internal_params,
                      QzSessionParamsLZ4S_T *params);
 #ifdef CPM_5X
@@ -687,7 +687,7 @@ void qzSetParamsLZ4(QzSessionParamsLZ4_T *params,
                     QzSessionParamsInternal_T *internal_params);
 #ifdef CPM_5X
 void qzSetParamsLZ4Block(QzSessionParamsLZ4_T *params,
-                     QzSessionParamsInternal_T *internal_params);
+                         QzSessionParamsInternal_T *internal_params);
 void qzSetParamsZSTD(QzSessionParamsZstd_T *params,
                      QzSessionParamsInternal_T *internal_params);
 #endif

@@ -60,7 +60,11 @@ QzipParams_T g_params_th = {
 const unsigned int g_bufsz_expansion_ratio[] = {5, 20, 50, 100};
 
 /* Command line options*/
-char const g_short_opts[] = "A:H:L:C:r:o:O:P:D:g:b:dfhkVRs";
+char const g_short_opts[] = "A:H:L:C:r:o:O:P:"
+#ifdef CPM_5X
+                            "D:"
+#endif
+                            "g:b:dfhkVRs";
 const struct option g_long_opts[] = {
     /* { name  has_arg  *flag  val } */
     {"decompress", 0, 0, 'd'}, /* decompress */
@@ -79,7 +83,9 @@ const struct option g_long_opts[] = {
                                   directory */
     {"polling",    1, 0, 'P'}, /* set polling mode when compressing and
                                   decompressing */
+#ifdef CPM_5X
     {"dictionary", 1, 0, 'D'}, /* set dictionary file */
+#endif
     {"loglevel",   1, 0, 'g'}, /* set log level */
     {"blocksz",   1, 0, 'b'}, /* set block source buffer size */
     {"lsm",       1, 0, 's'}, /* enable latency sensitive mode */
@@ -118,9 +124,11 @@ void help(void)
         "  -R,               set Recursive mode for a directory",
         "  -o,               set output file name",
         "  -P, --polling     set polling mode, only supports busy polling settings",
+#ifdef CPM_5X
         "  -D, --dictionary  set dictionary file, the maximum dictionary length supported by QAT"
         "                    is 64KB, if dictionary file is large than 64KB, the first 64KB of",
         "                    dictionary file is read.",
+#endif
         "  -s,               enable latency sensitive mode",
         "  -g, --loglevel    set qatzip loglevel(none|error|warn|info|debug)",
         "  -b, --blocksz     If set this option, the qzip will split input file into pieces.",
@@ -241,8 +249,8 @@ int doProcessBuffer(QzSession_T *sess,
                 result.src_len = block_src_len;
                 result.dest_len = block_dest_len;
                 ret = qzCompressWithDictionary(sess, src + consumed,
-                                              dst + produced,
-                                              &dict_param, NULL, &result);
+                                               dst + produced,
+                                               &dict_param, NULL, &result);
                 block_src_len = result.src_len;
                 block_dest_len = result.dest_len;
             } else
@@ -265,8 +273,8 @@ int doProcessBuffer(QzSession_T *sess,
                 result.src_len = block_src_len;
                 result.dest_len = block_dest_len;
                 ret = qzDecompressWithDictionary(sess, src + consumed,
-                                                dst + produced,
-                                                &dict_param, NULL, &result);
+                                                 dst + produced,
+                                                 &dict_param, NULL, &result);
                 block_src_len = result.src_len;
                 block_dest_len = result.dest_len;
             } else
@@ -360,7 +368,7 @@ int loadDictionaryFile(const char *dict_file_name,
                  dict_file_name);
         return -1;
     }
-    
+
     ret = fread(dict_buffer, 1, dict_buffer_size, dict_file);
     if (ret != dict_buffer_size) {
         QZ_ERROR("Failed to read dictionary file %s (read %zu, expected %u)!\n",
@@ -488,14 +496,16 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         /* Allocate buffer based on actual file size */
         dict_buffer = malloc(dict_buffer_size);
         if (!dict_buffer) {
-            QZ_ERROR("Failed to allocate %u bytes for dictionary buffer.\n", dict_buffer_size);
+            QZ_ERROR("Failed to allocate %u bytes for dictionary buffer.\n",
+                     dict_buffer_size);
             close(src_fd);
             exit(ERROR);
         }
 
         /* Load the dictionary file */
-        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer, dict_buffer_size);
-        if(ret) {
+        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer,
+                                 dict_buffer_size);
+        if (ret) {
             QZ_ERROR("Failed to load dictionary file.\n");
             close(src_fd);
             free(dict_buffer);
@@ -599,7 +609,7 @@ exit:
     free(src_buffer);
     free(dst_buffer);
 #ifdef CPM_5X
-    if(dict_buffer)
+    if (dict_buffer)
         free(dict_buffer);
 #endif
     if (!g_keep && OK == ret) {
@@ -861,16 +871,15 @@ QzSuffix_T getSuffix(const char *filename)
     }
 #ifdef CPM_5X
     else if (len >= strlen(SUFFIX_LZ4_BLOCK) &&
-                !strcmp(filename + (len - strlen(SUFFIX_LZ4_BLOCK)), SUFFIX_LZ4_BLOCK)) {
+             !strcmp(filename + (len - strlen(SUFFIX_LZ4_BLOCK)), SUFFIX_LZ4_BLOCK)) {
         s = E_SUFFIX_LZ4_BLOCK;
-    }
-    else if (len >= strlen(SUFFIX_ZSTD) &&
-                !strcmp(filename + (len - strlen(SUFFIX_ZSTD)), SUFFIX_ZSTD)) {
+    } else if (len >= strlen(SUFFIX_ZSTD) &&
+               !strcmp(filename + (len - strlen(SUFFIX_ZSTD)), SUFFIX_ZSTD)) {
         s = E_SUFFIX_ZSTD;
     }
 #endif
     else if (len >= strlen(SUFFIX_LZ4S) &&
-                !strcmp(filename + (len - strlen(SUFFIX_LZ4S)), SUFFIX_LZ4S)) {
+             !strcmp(filename + (len - strlen(SUFFIX_LZ4S)), SUFFIX_LZ4S)) {
         s = E_SUFFIX_LZ4S;
     }
     return s;
@@ -965,7 +974,7 @@ QzSuffixCheckStatus_T checkSuffix(QzSuffix_T suffix, int is_format_set)
             g_params_th.data_fmt = QZIP_LZ4_Block;
             return E_CHECK_SUFFIX_OK;
         }
-        if (QZIP_LZ4_Block!= g_params_th.data_fmt) {
+        if (QZIP_LZ4_Block != g_params_th.data_fmt) {
             return E_CHECK_SUFFIX_FORMAT_UNMATCH;
         } else {
             return E_CHECK_SUFFIX_OK;
@@ -1007,8 +1016,7 @@ int makeOutName(const char *in_name, const char *out_name,
         else if (g_params_th.data_fmt == QZIP_LZ4_Block) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_LZ4_BLOCK);
-        }
-        else if (g_params_th.data_fmt == QZIP_ZSTD) {
+        } else if (g_params_th.data_fmt == QZIP_ZSTD) {
             snprintf(oname, MAX_PATH_LEN, "%s%s", out_name ? out_name : in_name,
                      SUFFIX_ZSTD);
         }
@@ -1038,8 +1046,7 @@ int makeOutName(const char *in_name, const char *out_name,
 #ifdef CPM_5X
             else if (g_params_th.data_fmt == QZIP_LZ4_Block) {
                 oname[strlen(in_name) - strlen(SUFFIX_LZ4_BLOCK)] = '\0';
-            }
-            else if (g_params_th.data_fmt == QZIP_ZSTD) {
+            } else if (g_params_th.data_fmt == QZIP_ZSTD) {
                 oname[strlen(in_name) - strlen(SUFFIX_ZSTD)] = '\0';
             }
 #endif
@@ -1192,13 +1199,15 @@ void processStream(QzSession_T *sess, FILE *src_file, FILE *dst_file,
         /* Allocate buffer based on actual file size */
         dict_buffer = malloc(dict_buffer_size);
         if (!dict_buffer) {
-            QZ_ERROR("Failed to allocate %u bytes for dictionary buffer.\n", dict_buffer_size);
+            QZ_ERROR("Failed to allocate %u bytes for dictionary buffer.\n",
+                     dict_buffer_size);
             exit(ERROR);
         }
-        
+
         /* Load the dictionary file */
-        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer, dict_buffer_size);
-        if(ret) {
+        ret = loadDictionaryFile(g_params_th.dict_filename, dict_buffer,
+                                 dict_buffer_size);
+        if (ret) {
             QZ_ERROR("Failed to load dictionary file.\n");
             free(dict_buffer);
             exit(ERROR);
@@ -1275,7 +1284,7 @@ exit:
     freeTimeList(time_list_head);
     free(src_buffer);
     free(dst_buffer);
-    if(dict_buffer) {
+    if (dict_buffer) {
         free(dict_buffer);
     }
 

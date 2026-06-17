@@ -577,15 +577,14 @@ typedef struct QzSessionParamsZstd_S {
     unsigned char reserved[7];
 } QzSessionParamsZstd_T;
 
-typedef struct QzDictionaryParams_S
-{
-    const unsigned char* dictionary;
+typedef struct QzDictionaryParams_S {
+    const unsigned char *dictionary;
     /*< Pointer to dictionary buffer */
     unsigned int dictionary_len;
     /*< Length of dictionary buffer (maximum value of 32KB for ZSTD, otherwise
      * 64KB) */
     int compressed; /*< non-zero indicates compressed dictionary supplied */
-    unsigned long* crc64Addr; /*< If not NULL, address to store CRC64 generated
+    unsigned long *crc64Addr; /*< If not NULL, address to store CRC64 generated
                                  on the dictionary */
     unsigned int dictId; /*< Dictionary ID for ZSTD format (0 if not used) */
 } QzDictionaryParams_T;
@@ -1178,7 +1177,7 @@ QATZIP_API int qzSetupSessionLZ4(QzSession_T *sess,
                                  QzSessionParamsLZ4_T *params);
 
 QATZIP_API int qzSetupSessionLZ4Block(QzSession_T *sess,
-                                 QzSessionParamsLZ4_T *params);
+                                      QzSessionParamsLZ4_T *params);
 
 QATZIP_API int qzSetupSessionLZ4S(QzSession_T *sess,
                                   QzSessionParamsLZ4S_T *params);
@@ -1538,12 +1537,12 @@ QATZIP_API int qzCompressWithMetadataExt(QzSession_T *sess,
  *      None
  *
  *****************************************************************************/
-QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
-                                        const unsigned char* src,
-                                        unsigned char* dest,
-                                        QzDictionaryParams_T* dictionary,
+QATZIP_API int qzCompressWithDictionary(QzSession_T *sess,
+                                        const unsigned char *src,
+                                        unsigned char *dest,
+                                        QzDictionaryParams_T *dictionary,
                                         qzAsyncCallbackFn callback,
-                                        QzResult_T* qzResults);
+                                        QzResult_T *qzResults);
 
 QATZIP_API int qzCompress2(QzSession_T *sess, const unsigned char *src,
                            unsigned char *dest, qzAsyncCallbackFn callback,
@@ -1753,12 +1752,12 @@ QATZIP_API int qzDecompressCrc64Ext(QzSession_T *sess,
  *      None
  *
  *****************************************************************************/
-QATZIP_API int qzDecompressWithDictionary(QzSession_T* sess,
-                                          const unsigned char* src,
-                                          unsigned char* dest,
-                                          QzDictionaryParams_T* dictionary,
-                                          qzAsyncCallbackFn callback,
-                                          QzResult_T* qzResults);
+QATZIP_API int qzDecompressWithDictionary(QzSession_T *sess,
+        const unsigned char *src,
+        unsigned char *dest,
+        QzDictionaryParams_T *dictionary,
+        qzAsyncCallbackFn callback,
+        QzResult_T *qzResults);
 
 /**
  *****************************************************************************
@@ -2350,8 +2349,8 @@ QATZIP_API int qzGetDefaultsDeflateExt(QzSessionParamsDeflateExt_T *defaults);
  *
  *****************************************************************************/
 QATZIP_API int qzDecompress2(QzSession_T *sess, const unsigned char *src,
-                            unsigned char *dest, qzAsyncCallbackFn callback,
-                            QzResult_T *qzResults);
+                             unsigned char *dest, qzAsyncCallbackFn callback,
+                             QzResult_T *qzResults);
 /**
  *****************************************************************************
  * @ingroup qatZip
