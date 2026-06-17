@@ -175,7 +175,7 @@ int qzDeflateSWCompress(QzSession_T *sess, const unsigned char *src,
 #ifdef CPM_5X
         if (qz_sess->sess_params.dictionary_flag) {
             ret = deflateSetDictionary(stream, qz_sess->sess_params.dictionary,
-                                 qz_sess->sess_params.dictionary_len);
+                                       qz_sess->sess_params.dictionary_len);
             if (Z_OK != ret) {
                 QZ_ERROR("Failed to set dictionary\n");
                 return QZ_FAIL;
@@ -663,9 +663,11 @@ int qzLZ4BlockSWCompress(QzSession_T *sess, const unsigned char *src,
     unsigned char *src_ptr = (unsigned char *)src;
     unsigned char *dest_ptr = dest;
     int compressed_size = QZ_OK;
-    QZ_DEBUG("Enter qzLZ4BlockSWCompress: src_len %u dest_len %u\n", *src_len, *dest_len);
+    QZ_DEBUG("Enter qzLZ4BlockSWCompress: src_len %u dest_len %u\n", *src_len,
+             *dest_len);
     while (remaining > 0) {
-        block_size = (remaining > QZ_LZ4_BLK_MAX_SIZE) ? QZ_LZ4_BLK_MAX_SIZE : remaining;
+        block_size = (remaining > QZ_LZ4_BLK_MAX_SIZE) ? QZ_LZ4_BLK_MAX_SIZE :
+                     remaining;
 
         // Reserve space for block header (will be filled after compression)
         unsigned char *header_ptr = dest_ptr;
@@ -673,7 +675,7 @@ int qzLZ4BlockSWCompress(QzSession_T *sess, const unsigned char *src,
 
         // Compress the block
         compressed_size = LZ4_compress_default((const char *)src_ptr, (char *)dest_ptr,
-                                                   block_size, *dest_len - total_out - QZ_LZ4_BLK_HEADER_SIZE);
+                                               block_size, *dest_len - total_out - QZ_LZ4_BLK_HEADER_SIZE);
         if (compressed_size <= 0) {
             QZ_ERROR("LZ4_compress_default error\n");
             goto lz4_block_compress_fail;
@@ -693,7 +695,7 @@ int qzLZ4BlockSWCompress(QzSession_T *sess, const unsigned char *src,
     *dest_len = total_out;
 
     QZ_DEBUG("Exit qzLZ4BlockSWCompress: src_len %u dest_len %u\n",
-        *src_len, *dest_len);
+             *src_len, *dest_len);
 
     return QZ_OK;
 
@@ -715,7 +717,7 @@ int qzLZ4BlockSWDecompress(QzSession_T *sess, const unsigned char *src,
     unsigned char *dest_ptr = dest;
     int decompressed_size = 0;
 
-    QZ_DEBUG("qzLZ4BlockSWDecompress: src_len=%u, dest_len=%u, remaining=%u\n", 
+    QZ_DEBUG("qzLZ4BlockSWDecompress: src_len=%u, dest_len=%u, remaining=%u\n",
              *src_len, *dest_len, remaining);
 
     while (remaining > QZ_LZ4_BLK_HEADER_SIZE) {
@@ -740,7 +742,7 @@ int qzLZ4BlockSWDecompress(QzSession_T *sess, const unsigned char *src,
             decompressed_size = block_size;
         } else {
             decompressed_size = LZ4_decompress_safe((const char *)src_ptr, (char *)dest_ptr,
-                                                        block_size, *dest_len - total_out);
+                                                    block_size, *dest_len - total_out);
             if (decompressed_size < 0) {
                 QZ_ERROR("LZ4_decompress_safe error\n");
                 goto lz4_block_decompress_fail;
@@ -752,7 +754,7 @@ int qzLZ4BlockSWDecompress(QzSession_T *sess, const unsigned char *src,
         total_out += decompressed_size;
         total_in += QZ_LZ4_BLK_HEADER_SIZE + block_size;
         remaining -= block_size;
-        QZ_DEBUG("qzLZ4BlockSWDecompress: block completed, total_in=%u, total_out=%u, remaining=%u\n", 
+        QZ_DEBUG("qzLZ4BlockSWDecompress: block completed, total_in=%u, total_out=%u, remaining=%u\n",
                  total_in, total_out, remaining);
     }
 
@@ -781,13 +783,15 @@ int qzSWDecompressMultiLZ4Block(QzSession_T *sess, const unsigned char *src,
 #ifdef QATZIP_DEBUG
     insertThread((unsigned int)pthread_self(), DECOMPRESSION, SW);
 #endif
-    QZ_DEBUG("Enter qzSWDecompressMultiLZ4Block: src_len %u dest_len %u\n", *src_len, *dest_len);
+    QZ_DEBUG("Enter qzSWDecompressMultiLZ4Block: src_len %u dest_len %u\n",
+             *src_len, *dest_len);
 
     while (remaining > QZ_LZ4_BLK_HEADER_SIZE) {
         block_src_len = remaining;
         block_dest_len = *dest_len - total_out;
 
-        ret = qzLZ4BlockSWDecompress(sess, src_ptr, &block_src_len, dest_ptr, &block_dest_len);
+        ret = qzLZ4BlockSWDecompress(sess, src_ptr, &block_src_len, dest_ptr,
+                                     &block_dest_len);
         if (ret != QZ_OK) {
             goto out;
         }
@@ -803,7 +807,8 @@ int qzSWDecompressMultiLZ4Block(QzSession_T *sess, const unsigned char *src,
     *dest_len = total_out;
 
 out:
-    QZ_DEBUG("Exit qzSWDecompressMultiLZ4Block: src_len %u dest_len %u\n", *src_len, *dest_len);
+    QZ_DEBUG("Exit qzSWDecompressMultiLZ4Block: src_len %u dest_len %u\n", *src_len,
+             *dest_len);
     return ret;
 }
 
@@ -820,9 +825,9 @@ int qzZSTDSWCompress(QzSession_T *sess, const unsigned char *src,
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_windowLog, 16);
     if (qz_sess->sess_params.dictionary_flag) {
         compress_out = ZSTD_compress_usingDict(cctx, dest, *dest_len, src, *src_len,
-                                    qz_sess->sess_params.dictionary,
-                                    qz_sess->sess_params.dictionary_len,
-                                    qz_sess->sess_params.comp_lvl);
+                                               qz_sess->sess_params.dictionary,
+                                               qz_sess->sess_params.dictionary_len,
+                                               qz_sess->sess_params.comp_lvl);
     } else {
         compress_out = ZSTD_compressCCtx(cctx, dest, *dest_len, src, *src_len,
                                          qz_sess->sess_params.comp_lvl);
@@ -902,7 +907,7 @@ int qzSWDecompressMultiZSTD(QzSession_T *sess, const unsigned char *src,
     if (qz_sess->sess_params.dictionary_flag) {
         ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only);
         ZSTD_DCtx_loadDictionary(dctx, qz_sess->sess_params.dictionary,
-            qz_sess->sess_params.dictionary_len);
+                                 qz_sess->sess_params.dictionary_len);
     }
 
     ZSTD_DCtx_setParameter(dctx, ZSTD_d_windowLogMax, 17);

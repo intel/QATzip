@@ -210,7 +210,7 @@ typedef enum QzipDataFormat_E {
     QZIP_LZ4_FH,
     /**< Data is in LZ4 format with frame headers */
     QZIP_LZ4_Block,
-     /**< Data is in LZ4 block format */
+    /**< Data is in LZ4 block format */
     QZIP_LZ4S_BK,
     /**< Data is in LZ4s format with block headers */
     QZIP_ZSTD,

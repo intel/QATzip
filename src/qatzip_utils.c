@@ -328,8 +328,9 @@ static int qzSetupDcSessionData(CpaDcSessionSetupData *session_setup_data,
         session_setup_data->lz4BlockChecksum = 0;
         session_setup_data->autoSelectBestHuffmanTree = CPA_DC_ASB_ENABLED;
         session_setup_data->lz4BlockMaxSize = CPA_DC_LZ4_MAX_BLOCK_SIZE_64K;
-        // For LZ4_BLOCK format, blocks are independent 
-        session_setup_data->lz4BlockIndependence = (params->data_fmt == LZ4_BLOCK) ? CPA_TRUE : CPA_FALSE;
+        // For LZ4_BLOCK format, blocks are independent
+        session_setup_data->lz4BlockIndependence = (params->data_fmt == LZ4_BLOCK) ?
+                CPA_TRUE : CPA_FALSE;
         break;
 #else
         QZ_ERROR("QAT driver does not support lz4 algorithm\n");
@@ -836,7 +837,7 @@ void qzSetParamsLZ4(QzSessionParamsLZ4_T *params,
 
 #ifdef CPM_5X
 void qzSetParamsLZ4Block(QzSessionParamsLZ4_T *params,
-    QzSessionParamsInternal_T *internal_params)
+                         QzSessionParamsInternal_T *internal_params)
 {
     assert(params);
     assert(internal_params);
@@ -988,11 +989,11 @@ void qzGetParamsLZ4(QzSessionParamsInternal_T *internal_params,
 }
 
 #ifdef CPM_5X
- /**
-  * Get LZ4 Block session params from internal params
-  */
- void qzGetParamsLZ4Block(QzSessionParamsInternal_T *internal_params,
-    QzSessionParamsLZ4_T *params)
+/**
+ * Get LZ4 Block session params from internal params
+ */
+void qzGetParamsLZ4Block(QzSessionParamsInternal_T *internal_params,
+                         QzSessionParamsLZ4_T *params)
 {
     assert(params);
     assert(internal_params);
@@ -1253,7 +1254,8 @@ int isQATcompressedZSTDFrame(const unsigned char *ptr,
 
     /* Early return for non-compressed blocks */
     if (block_type != 2) {
-        QZ_DEBUG("isQATcompressedZSTDFrame: PASS - all checks passed (bType=%u)\n", block_type);
+        QZ_DEBUG("isQATcompressedZSTDFrame: PASS - all checks passed (bType=%u)\n",
+                 block_type);
         return QZ_OK;
     }
 
@@ -1412,7 +1414,8 @@ int isQATcompressedZSTDFrame(const unsigned char *ptr,
         return QZ_FORCE_SW;
     }
 
-    QZ_DEBUG("isQATcompressedZSTDFrame: PASS - all checks passed (bType=%u)\n", block_type);
+    QZ_DEBUG("isQATcompressedZSTDFrame: PASS - all checks passed (bType=%u)\n",
+             block_type);
     return QZ_OK;
 }
 
@@ -1704,10 +1707,12 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
     int ret = 0;
     QzLZ4H_T *qzLZ4Header = NULL;
     QzLZ4F_T *lz4Footer = NULL;
+#ifdef CPM_5X
     unsigned int num_sub_blocks = 0;
     unsigned int total_src = 0;
     unsigned int sub_block_count = 0;
     unsigned int blk_avail = 0;
+#endif
     DataFormatInternal_T data_fmt = qz_sess->sess_params.data_fmt;
 
     if ((src_avail_len <= 0) || (dest_avail_len <= 0)) {
@@ -1768,16 +1773,17 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         uncompressed_sz = qzLZ4Header->cnt_size;
         break;
 #ifdef CPM_5X
-    case LZ4_BLOCK: 
+    case LZ4_BLOCK:
         /* Walk all sub-blocks that constitute one hw_buff_sz chunk so the
          * entire chunk can be sent to QAT HW in a single decompression
          * request, mirroring the compression path. */
         num_sub_blocks = QZ_CEIL_DIV(qz_sess->sess_params.hw_buff_sz,
-                                                   QZ_LZ4_BLK_MAX_SIZE);
+                                     QZ_LZ4_BLK_MAX_SIZE);
         unsigned char *blk_ptr = src_ptr;
         blk_avail = src_avail_len;
 
-        while (sub_block_count < num_sub_blocks && blk_avail >= QZ_LZ4_BLK_HEADER_SIZE) {
+        while (sub_block_count < num_sub_blocks &&
+               blk_avail >= QZ_LZ4_BLK_HEADER_SIZE) {
             unsigned int bsz = (*(unsigned int *)blk_ptr) & QZ_LZ4_BLK_SIZE_MASK;
             if (bsz == 0 || bsz > blk_avail - QZ_LZ4_BLK_HEADER_SIZE) {
                 break;
@@ -1858,7 +1864,7 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
         QZ_DEBUG("checkHeader: insufficient destination buffer length\n");
         return QZ_BUF_ERROR;
     }
-    
+
     if (data_fmt == LZ4_BLOCK) {
         /* dest_sz = total compressed bytes for all sub-blocks (including their
          * 4-byte headers); src_sz = expected uncompressed size for the chunk. */
@@ -1900,7 +1906,7 @@ void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
     g_process.qz_inst[i].stream[j].res.checksum = 0;
 
     swapDataBuffer(i, j);
-    
+
     // For LZ4_BLOCK, don't skip the header - hardware needs it
     if (data_fmt != LZ4_BLOCK) {
         src_ptr += outputHeaderSz(data_fmt);
@@ -2383,9 +2389,9 @@ static int copyDictBuffer(const unsigned char *src,
  * @return QZ_OK on success, error code otherwise
  */
 int stripEntropy(const unsigned char *dict_in,
-                            unsigned int dict_in_len,
-                            unsigned char *dict_out,
-                            unsigned int *dict_out_len)
+                 unsigned int dict_in_len,
+                 unsigned char *dict_out,
+                 unsigned int *dict_out_len)
 {
     size_t header_size;
     unsigned int raw_content_offset;

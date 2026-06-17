@@ -7119,7 +7119,7 @@ done:
         }
     }
 
-    if(NULL != dict_buf) {
+    if (NULL != dict_buf) {
         if (compress_buf_type == PINNED_MEM) {
             qzFree(dict_buf);
         } else {

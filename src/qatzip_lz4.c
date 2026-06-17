@@ -222,7 +222,7 @@ int isQATLZ4BlockProcessable(const unsigned char *ptr,
                              QzSess_T *const qz_sess)
 {
     unsigned int blk_size = 0;
-    
+
     if (*src_len < QZ_LZ4_BLK_HEADER_SIZE) {
         QZ_ERROR("Block header size is smaller than minimum size.\n");
         return 0;

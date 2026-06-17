@@ -85,7 +85,7 @@ typedef struct {
     int is_last;
     int block_type;
     uint32_t block_size;
-    const uint8_t* block_data;
+    const uint8_t *block_data;
 } ZstdBlock_t;
 
 typedef struct {
@@ -98,39 +98,55 @@ typedef struct {
     int ml_mode;  /* Match Lengths */
 } ZstdSequencesInfo_t;
 
-static uint32_t read_le32(const uint8_t* ptr) {
+static uint32_t read_le32(const uint8_t *ptr)
+{
     return (uint32_t)ptr[0] | ((uint32_t)ptr[1] << 8) |
            ((uint32_t)ptr[2] << 16) | ((uint32_t)ptr[3] << 24);
 }
 
-static uint64_t read_le64(const uint8_t* ptr) {
+static uint64_t read_le64(const uint8_t *ptr)
+{
     return (uint64_t)ptr[0] | ((uint64_t)ptr[1] << 8) |
            ((uint64_t)ptr[2] << 16) | ((uint64_t)ptr[3] << 24) |
            ((uint64_t)ptr[4] << 32) | ((uint64_t)ptr[5] << 40) |
            ((uint64_t)ptr[6] << 48) | ((uint64_t)ptr[7] << 56);
 }
 
-static const char* get_block_type_name(int block_type) {
+static const char *get_block_type_name(int block_type)
+{
     switch (block_type) {
-        case ZSTD_BLOCK_RAW: return "Raw (uncompressed)";
-        case ZSTD_BLOCK_RLE: return "RLE (single byte repeated)";
-        case ZSTD_BLOCK_COMPRESSED: return "Compressed";
-        case ZSTD_BLOCK_RESERVED: return "Reserved (invalid)";
-        default: return "Unknown";
+    case ZSTD_BLOCK_RAW:
+        return "Raw (uncompressed)";
+    case ZSTD_BLOCK_RLE:
+        return "RLE (single byte repeated)";
+    case ZSTD_BLOCK_COMPRESSED:
+        return "Compressed";
+    case ZSTD_BLOCK_RESERVED:
+        return "Reserved (invalid)";
+    default:
+        return "Unknown";
     }
 }
 
-static const char* get_compression_mode_name(int mode) {
+static const char *get_compression_mode_name(int mode)
+{
     switch (mode) {
-        case 0: return "Predefined";
-        case 1: return "RLE";
-        case 2: return "FSE Compressed";
-        case 3: return "Repeat";
-        default: return "Unknown";
+    case 0:
+        return "Predefined";
+    case 1:
+        return "RLE";
+    case 2:
+        return "FSE Compressed";
+    case 3:
+        return "Repeat";
+    default:
+        return "Unknown";
     }
 }
 
-static void print_hexdump(const uint8_t* data, size_t size, size_t offset, size_t max_bytes) {
+static void print_hexdump(const uint8_t *data, size_t size, size_t offset,
+                          size_t max_bytes)
+{
     size_t bytes_to_print = (size < max_bytes) ? size : max_bytes;
     size_t i;
 
@@ -164,9 +180,10 @@ static void print_hexdump(const uint8_t* data, size_t size, size_t offset, size_
     }
 }
 
-static int parse_frame_header(const uint8_t* data, size_t size,
-                              ZstdFrameHeader_t* header, size_t* consumed) {
-    const uint8_t* ptr = data;
+static int parse_frame_header(const uint8_t *data, size_t size,
+                              ZstdFrameHeader_t *header, size_t *consumed)
+{
+    const uint8_t *ptr = data;
     size_t offset = 0;
 
     if (size < 4) {
@@ -179,7 +196,8 @@ static int parse_frame_header(const uint8_t* data, size_t size,
     offset += 4;
 
     /* Check for skippable frame */
-    if ((header->magic_number & ZSTD_MAGIC_SKIPPABLE_MASK) == ZSTD_MAGIC_SKIPPABLE_START) {
+    if ((header->magic_number & ZSTD_MAGIC_SKIPPABLE_MASK) ==
+        ZSTD_MAGIC_SKIPPABLE_START) {
         printf("Skippable frame detected (magic: 0x%08X)\n", header->magic_number);
         if (size < 8) {
             fprintf(stderr, "Error: Incomplete skippable frame\n");
@@ -207,8 +225,10 @@ static int parse_frame_header(const uint8_t* data, size_t size,
 
     /* Parse frame descriptor */
     header->content_size_flag = (header->frame_descriptor >> 6) & 0x03;
-    header->single_segment = (header->frame_descriptor & ZSTD_FRAME_SINGLE_SEGMENT_FLAG) != 0;
-    header->has_checksum = (header->frame_descriptor & ZSTD_FRAME_CHECKSUM_FLAG) != 0;
+    header->single_segment = (header->frame_descriptor &
+                              ZSTD_FRAME_SINGLE_SEGMENT_FLAG) != 0;
+    header->has_checksum = (header->frame_descriptor & ZSTD_FRAME_CHECKSUM_FLAG) !=
+                           0;
     header->dict_id_flag = header->frame_descriptor & ZSTD_FRAME_DICT_ID_FLAG;
 
     /* Read window descriptor (if not single segment) */
@@ -234,15 +254,15 @@ static int parse_frame_header(const uint8_t* data, size_t size,
         }
 
         switch (dict_id_size) {
-            case 1:
-                header->dict_id = ptr[offset];
-                break;
-            case 2:
-                header->dict_id = ptr[offset] | (ptr[offset + 1] << 8);
-                break;
-            case 4:
-                header->dict_id = read_le32(ptr + offset);
-                break;
+        case 1:
+            header->dict_id = ptr[offset];
+            break;
+        case 2:
+            header->dict_id = ptr[offset] | (ptr[offset + 1] << 8);
+            break;
+        case 4:
+            header->dict_id = read_le32(ptr + offset);
+            break;
         }
         offset += dict_id_size;
     }
@@ -272,18 +292,18 @@ static int parse_frame_header(const uint8_t* data, size_t size,
             }
 
             switch (fcs_size) {
-                case 1:
-                    header->frame_content_size = ptr[offset];
-                    break;
-                case 2:
-                    header->frame_content_size = ptr[offset] | ((uint64_t)ptr[offset + 1] << 8);
-                    break;
-                case 4:
-                    header->frame_content_size = read_le32(ptr + offset);
-                    break;
-                case 8:
-                    header->frame_content_size = read_le64(ptr + offset);
-                    break;
+            case 1:
+                header->frame_content_size = ptr[offset];
+                break;
+            case 2:
+                header->frame_content_size = ptr[offset] | ((uint64_t)ptr[offset + 1] << 8);
+                break;
+            case 4:
+                header->frame_content_size = read_le32(ptr + offset);
+                break;
+            case 8:
+                header->frame_content_size = read_le64(ptr + offset);
+                break;
             }
             offset += fcs_size;
         }
@@ -293,7 +313,9 @@ static int parse_frame_header(const uint8_t* data, size_t size,
     return 0;
 }
 
-static void print_frame_header(const ZstdFrameHeader_t* header, const uint8_t* raw_data, size_t header_size) {
+static void print_frame_header(const ZstdFrameHeader_t *header,
+                               const uint8_t *raw_data, size_t header_size)
+{
     printf("==================================================\n");
     printf("ZSTD Frame Header\n");
     printf("==================================================\n");
@@ -301,10 +323,18 @@ static void print_frame_header(const ZstdFrameHeader_t* header, const uint8_t* r
     printf("Frame Descriptor:    0x%02X\n", header->frame_descriptor);
     printf("  Content Size Flag: %d ", header->content_size_flag);
     switch (header->content_size_flag) {
-        case 0: printf("(Unknown size)\n"); break;
-        case 1: printf("(1 byte)\n"); break;
-        case 2: printf("(2 or 4 bytes)\n"); break;
-        case 3: printf("(8 bytes)\n"); break;
+    case 0:
+        printf("(Unknown size)\n");
+        break;
+    case 1:
+        printf("(1 byte)\n");
+        break;
+    case 2:
+        printf("(2 or 4 bytes)\n");
+        break;
+    case 3:
+        printf("(8 bytes)\n");
+        break;
     }
     printf("  Single Segment:    %s\n", header->single_segment ? "Yes" : "No");
     printf("  Has Checksum:      %s\n", header->has_checksum ? "Yes" : "No");
@@ -340,8 +370,9 @@ static void print_frame_header(const ZstdFrameHeader_t* header, const uint8_t* r
     printf("\n");
 }
 
-static int parse_block_header(const uint8_t* data, size_t size,
-                              ZstdBlock_t* block, size_t* consumed) {
+static int parse_block_header(const uint8_t *data, size_t size,
+                              ZstdBlock_t *block, size_t *consumed)
+{
     if (size < 3) {
         fprintf(stderr, "Error: Data too small for block header\n");
         return -1;
@@ -367,13 +398,14 @@ static int parse_block_header(const uint8_t* data, size_t size,
     return 0;
 }
 
-static int parse_literals_section(const uint8_t* data, size_t size,
-                                  uint32_t* literals_size, size_t* consumed) {
+static int parse_literals_section(const uint8_t *data, size_t size,
+                                  uint32_t *literals_size, size_t *consumed)
+{
     if (size < 1) {
         return -1;
     }
 
-    const uint8_t* ptr = data;
+    const uint8_t *ptr = data;
     uint8_t header = ptr[0];
     uint8_t literals_type = (header >> 6) & 0x03;
     size_t offset = 1;
@@ -386,23 +418,24 @@ static int parse_literals_section(const uint8_t* data, size_t size,
         int size_format = (header >> 4) & 0x03;
 
         switch (size_format) {
-            case 0:
-            case 2:
-                /* 1 byte size */
-                regenerated_size = header & 0x1F;
-                break;
-            case 1:
-                /* 2 bytes size */
-                if (offset >= size) return -1;
-                regenerated_size = ((header & 0x0F) << 8) | ptr[offset];
-                offset++;
-                break;
-            case 3:
-                /* 3 bytes size */
-                if (offset + 1 >= size) return -1;
-                regenerated_size = ((header & 0x0F) << 16) | (ptr[offset] << 8) | ptr[offset + 1];
-                offset += 2;
-                break;
+        case 0:
+        case 2:
+            /* 1 byte size */
+            regenerated_size = header & 0x1F;
+            break;
+        case 1:
+            /* 2 bytes size */
+            if (offset >= size) return -1;
+            regenerated_size = ((header & 0x0F) << 8) | ptr[offset];
+            offset++;
+            break;
+        case 3:
+            /* 3 bytes size */
+            if (offset + 1 >= size) return -1;
+            regenerated_size = ((header & 0x0F) << 16) | (ptr[offset] << 8) | ptr[offset +
+                               1];
+            offset += 2;
+            break;
         }
 
         if (literals_type == 0) {
@@ -418,40 +451,43 @@ static int parse_literals_section(const uint8_t* data, size_t size,
         int size_format = (header >> 4) & 0x03;
 
         switch (size_format) {
-            case 0:
-            case 1: {
-                /* 1 stream, 1-3 bytes sizes */
-                if (size_format == 0) {
-                    /* 10 bits for both sizes */
-                    if (offset >= size) return -1;
-                    regenerated_size = ((header & 0x0F) << 6) | ((ptr[offset] >> 2) & 0x3F);
-                    compressed_size = ((ptr[offset] & 0x03) << 8) | ptr[offset + 1];
-                    offset += 2;
-                } else {
-                    /* 10 + 10 bits */
-                    if (offset + 1 >= size) return -1;
-                    regenerated_size = ((header & 0x0F) << 6) | ((ptr[offset] >> 2) & 0x3F);
-                    compressed_size = ((ptr[offset] & 0x03) << 8) | ptr[offset + 1];
-                    offset += 2;
-                }
-                break;
+        case 0:
+        case 1: {
+            /* 1 stream, 1-3 bytes sizes */
+            if (size_format == 0) {
+                /* 10 bits for both sizes */
+                if (offset >= size) return -1;
+                regenerated_size = ((header & 0x0F) << 6) | ((ptr[offset] >> 2) & 0x3F);
+                compressed_size = ((ptr[offset] & 0x03) << 8) | ptr[offset + 1];
+                offset += 2;
+            } else {
+                /* 10 + 10 bits */
+                if (offset + 1 >= size) return -1;
+                regenerated_size = ((header & 0x0F) << 6) | ((ptr[offset] >> 2) & 0x3F);
+                compressed_size = ((ptr[offset] & 0x03) << 8) | ptr[offset + 1];
+                offset += 2;
             }
-            case 2: {
-                /* 4 streams, 3 bytes sizes */
-                if (offset + 2 >= size) return -1;
-                regenerated_size = ((header & 0x0F) << 10) | (ptr[offset] << 2) | ((ptr[offset + 1] >> 6) & 0x03);
-                compressed_size = ((ptr[offset + 1] & 0x3F) << 8) | ptr[offset + 2];
-                offset += 3;
-                break;
-            }
-            case 3: {
-                /* 4 streams, 4 bytes sizes */
-                if (offset + 3 >= size) return -1;
-                regenerated_size = ((header & 0x0F) << 14) | (ptr[offset] << 6) | ((ptr[offset + 1] >> 2) & 0x3F);
-                compressed_size = ((ptr[offset + 1] & 0x03) << 16) | (ptr[offset + 2] << 8) | ptr[offset + 3];
-                offset += 4;
-                break;
-            }
+            break;
+        }
+        case 2: {
+            /* 4 streams, 3 bytes sizes */
+            if (offset + 2 >= size) return -1;
+            regenerated_size = ((header & 0x0F) << 10) | (ptr[offset] << 2) | ((
+                                   ptr[offset + 1] >> 6) & 0x03);
+            compressed_size = ((ptr[offset + 1] & 0x3F) << 8) | ptr[offset + 2];
+            offset += 3;
+            break;
+        }
+        case 3: {
+            /* 4 streams, 4 bytes sizes */
+            if (offset + 3 >= size) return -1;
+            regenerated_size = ((header & 0x0F) << 14) | (ptr[offset] << 6) | ((
+                                   ptr[offset + 1] >> 2) & 0x3F);
+            compressed_size = ((ptr[offset + 1] & 0x03) << 16) | (ptr[offset + 2] << 8) |
+                              ptr[offset + 3];
+            offset += 4;
+            break;
+        }
         }
     }
 
@@ -464,13 +500,14 @@ static int parse_literals_section(const uint8_t* data, size_t size,
     return 0;
 }
 
-static int parse_sequences_section(const uint8_t* data, size_t size,
-                                   ZstdSequencesInfo_t* seq_info, size_t* consumed) {
+static int parse_sequences_section(const uint8_t *data, size_t size,
+                                   ZstdSequencesInfo_t *seq_info, size_t *consumed)
+{
     if (size < 1) {
         return -1;
     }
 
-    const uint8_t* ptr = data;
+    const uint8_t *ptr = data;
     size_t offset = 0;
 
     /* Read number of sequences */
@@ -510,9 +547,12 @@ static int parse_sequences_section(const uint8_t* data, size_t size,
 
     printf("    Number of Sequences: %u\n", seq_info->num_sequences);
     printf("    Compression Modes:\n");
-    printf("      Literal Lengths: %s\n", get_compression_mode_name(seq_info->ll_mode));
-    printf("      Offsets:         %s\n", get_compression_mode_name(seq_info->of_mode));
-    printf("      Match Lengths:   %s\n", get_compression_mode_name(seq_info->ml_mode));
+    printf("      Literal Lengths: %s\n",
+           get_compression_mode_name(seq_info->ll_mode));
+    printf("      Offsets:         %s\n",
+           get_compression_mode_name(seq_info->of_mode));
+    printf("      Match Lengths:   %s\n",
+           get_compression_mode_name(seq_info->ml_mode));
 
     /* Parse FSE tables if present (mode 2 = FSE Compressed) */
     if (seq_info->ll_mode == 2) {
@@ -535,7 +575,9 @@ static int parse_sequences_section(const uint8_t* data, size_t size,
     return 0;
 }
 
-static void print_block_info(int block_num, const ZstdBlock_t* block, size_t block_offset) {
+static void print_block_info(int block_num, const ZstdBlock_t *block,
+                             size_t block_offset)
+{
     printf("Block #%d:\n", block_num);
     printf("  Last Block:        %s\n", block->is_last ? "Yes" : "No");
     printf("  Block Type:        %s\n", get_block_type_name(block->block_type));
@@ -543,12 +585,12 @@ static void print_block_info(int block_num, const ZstdBlock_t* block, size_t blo
 
     /* Print block header hex dump (3 bytes) */
     printf("  Block Header Hex:  ");
-    const uint8_t* header_ptr = block->block_data - 3;
+    const uint8_t *header_ptr = block->block_data - 3;
     printf("%02x %02x %02x\n", header_ptr[0], header_ptr[1], header_ptr[2]);
 
     if (block->block_type == ZSTD_BLOCK_COMPRESSED && block->block_size > 0) {
         /* Parse compressed block header for entropy information */
-        const uint8_t* block_data = block->block_data;
+        const uint8_t *block_data = block->block_data;
         size_t remaining_size = block->block_size;
 
         /* First byte contains literals section and sequences section headers */
@@ -558,10 +600,18 @@ static void print_block_info(int block_num, const ZstdBlock_t* block, size_t blo
         printf("  Literals Section:\n");
         printf("    Type:            ");
         switch (literals_type) {
-            case 0: printf("Raw (uncompressed)\n"); break;
-            case 1: printf("RLE (single byte)\n"); break;
-            case 2: printf("Compressed (Huffman)\n"); break;
-            case 3: printf("Treeless (reuse Huffman table)\n"); break;
+        case 0:
+            printf("Raw (uncompressed)\n");
+            break;
+        case 1:
+            printf("RLE (single byte)\n");
+            break;
+        case 2:
+            printf("Compressed (Huffman)\n");
+            break;
+        case 3:
+            printf("Treeless (reuse Huffman table)\n");
+            break;
         }
 
         /* Size format depends on literals type */
@@ -570,39 +620,40 @@ static void print_block_info(int block_num, const ZstdBlock_t* block, size_t blo
             int size_format = (literals_header >> 4) & 0x03;
             printf("    Size Format:     %d ", size_format);
             switch (size_format) {
-                case 0:
-                case 2:
-                    printf("(1 byte)\n");
-                    break;
-                case 1:
-                    printf("(2 bytes)\n");
-                    break;
-                case 3:
-                    printf("(3 bytes)\n");
-                    break;
+            case 0:
+            case 2:
+                printf("(1 byte)\n");
+                break;
+            case 1:
+                printf("(2 bytes)\n");
+                break;
+            case 3:
+                printf("(3 bytes)\n");
+                break;
             }
         } else {
             /* Compressed or Treeless */
             int size_format = (literals_header >> 4) & 0x03;
             printf("    Size Format:     %d ", size_format);
             switch (size_format) {
-                case 0:
-                case 1:
-                    printf("(Streams: 1, 1-3 bytes size)\n");
-                    break;
-                case 2:
-                    printf("(Streams: 4, 3 bytes size)\n");
-                    break;
-                case 3:
-                    printf("(Streams: 4, 4 bytes size)\n");
-                    break;
+            case 0:
+            case 1:
+                printf("(Streams: 1, 1-3 bytes size)\n");
+                break;
+            case 2:
+                printf("(Streams: 4, 3 bytes size)\n");
+                break;
+            case 3:
+                printf("(Streams: 4, 4 bytes size)\n");
+                break;
             }
         }
 
         /* Parse literals section to get sizes */
         uint32_t literals_size = 0;
         size_t literals_consumed = 0;
-        if (parse_literals_section(block_data, remaining_size, &literals_size, &literals_consumed) == 0) {
+        if (parse_literals_section(block_data, remaining_size, &literals_size,
+                                   &literals_consumed) == 0) {
             /* Successfully parsed literals */
             remaining_size -= literals_consumed;
 
@@ -613,7 +664,7 @@ static void print_block_info(int block_num, const ZstdBlock_t* block, size_t blo
                 size_t seq_consumed = 0;
 
                 if (parse_sequences_section(block_data + literals_consumed,
-                                           remaining_size, &seq_info, &seq_consumed) == 0) {
+                                            remaining_size, &seq_info, &seq_consumed) == 0) {
                     if (seq_info.num_sequences == 0) {
                         printf("    Number of Sequences: 0 (literals only block)\n");
                     }
@@ -628,14 +679,16 @@ static void print_block_info(int block_num, const ZstdBlock_t* block, size_t blo
 
     /* Print block data hex dump (up to 128 bytes) */
     if (block->block_size > 0) {
-        printf("  Block Data Hex Dump (offset: 0x%zx, showing up to 128 bytes):\n", block_offset);
+        printf("  Block Data Hex Dump (offset: 0x%zx, showing up to 128 bytes):\n",
+               block_offset);
         print_hexdump(block->block_data, block->block_size, block_offset, 128);
     }
 
     printf("\n");
 }
 
-static int parse_zstd_dict(const uint8_t* data, size_t size, size_t* consumed) {
+static int parse_zstd_dict(const uint8_t *data, size_t size, size_t *consumed)
+{
     if (size < 8) {
         fprintf(stderr, "Error: Data too small for ZSTD dictionary header\n");
         return -1;
@@ -658,7 +711,9 @@ static int parse_zstd_dict(const uint8_t* data, size_t size, size_t* consumed) {
     return 0;
 }
 
-static int parse_zstd_frame(const uint8_t* data, size_t size, size_t* frame_size) {
+static int parse_zstd_frame(const uint8_t *data, size_t size,
+                            size_t *frame_size)
+{
     ZstdFrameHeader_t header = {0};
     size_t offset = 0;
     size_t consumed;
@@ -676,7 +731,8 @@ static int parse_zstd_frame(const uint8_t* data, size_t size, size_t* frame_size
     }
 
     /* Check for skippable frame */
-    if ((header.magic_number & ZSTD_MAGIC_SKIPPABLE_MASK) == ZSTD_MAGIC_SKIPPABLE_START) {
+    if ((header.magic_number & ZSTD_MAGIC_SKIPPABLE_MASK) ==
+        ZSTD_MAGIC_SKIPPABLE_START) {
         *frame_size = consumed;
         return 0;
     }
@@ -726,7 +782,8 @@ static int parse_zstd_frame(const uint8_t* data, size_t size, size_t* frame_size
     return 0;
 }
 
-static void print_usage(const char* prog_name) {
+static void print_usage(const char *prog_name)
+{
     printf("Usage: %s [OPTIONS] <compressed_file>\n", prog_name);
     printf("\nZSTD Compressed Data Parser\n");
     printf("\nParses and displays detailed information about ZSTD compressed frames:\n");
@@ -744,7 +801,8 @@ static void print_usage(const char* prog_name) {
     printf("\n");
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
     int opt;
 
     static struct option long_options[] = {
@@ -755,15 +813,15 @@ int main(int argc, char** argv) {
 
     while ((opt = getopt_long(argc, argv, "vh", long_options, NULL)) != -1) {
         switch (opt) {
-            case 'v':
-                /* Verbose mode - reserved for future use */
-                break;
-            case 'h':
-                print_usage(argv[0]);
-                return 0;
-            default:
-                print_usage(argv[0]);
-                return 1;
+        case 'v':
+            /* Verbose mode - reserved for future use */
+            break;
+        case 'h':
+            print_usage(argv[0]);
+            return 0;
+        default:
+            print_usage(argv[0]);
+            return 1;
         }
     }
 
@@ -773,10 +831,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    const char* input_file = argv[optind];
+    const char *input_file = argv[optind];
 
     /* Load compressed file */
-    FILE* fp = fopen(input_file, "rb");
+    FILE *fp = fopen(input_file, "rb");
     if (!fp) {
         fprintf(stderr, "Error: Cannot open file: %s\n", input_file);
         return 1;
@@ -788,7 +846,7 @@ int main(int argc, char** argv) {
     fseek(fp, 0, SEEK_SET);
 
     /* Allocate buffer */
-    uint8_t* data = malloc(file_size);
+    uint8_t *data = malloc(file_size);
     if (!data) {
         fprintf(stderr, "Error: Failed to allocate memory (%zu bytes)\n", file_size);
         fclose(fp);
@@ -823,7 +881,8 @@ int main(int argc, char** argv) {
         printf("Frame #%d (offset: %zu)\n", frame_num, total_offset);
         printf("**************************************************\n");
 
-        ret = parse_zstd_frame(data + total_offset, file_size - total_offset, &frame_size);
+        ret = parse_zstd_frame(data + total_offset, file_size - total_offset,
+                               &frame_size);
         if (ret != 0) {
             fprintf(stderr, "\nError: Failed to parse frame #%d at offset %zu\n",
                     frame_num, total_offset);

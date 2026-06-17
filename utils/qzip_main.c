@@ -176,8 +176,13 @@ int main(int argc, char **argv)
             }
             break;
         case 'D':
+#ifdef CPM_5X
             g_params_th.dict_filename = optarg;
             break;
+#else
+            printf("Dictionary is not supported\n");
+            return -1;
+#endif
         case 'g':
             if (strcmp(optarg, "none") == 0) {
                 qzSetLogLevel(LOG_NONE);
@@ -352,7 +357,8 @@ int main(int argc, char **argv)
                         processFile(&g_sess, argv[optind++], out_name,
                                     g_decompress == 0);
                     } else if (suffix == E_SUFFIX_LZ4) {
-                        if (g_params_th.data_fmt != QZIP_LZ4_FH && g_params_th.data_fmt != QZIP_LZ4_Block) {
+                        if (g_params_th.data_fmt != QZIP_LZ4_FH &&
+                            g_params_th.data_fmt != QZIP_LZ4_Block) {
                             QZ_ERROR("Error: Suffix(.lz4) doesn't match the data format,"
                                      "please confirm the data format\n");
                             exit(ERROR);
@@ -369,8 +375,7 @@ int main(int argc, char **argv)
                         }
                         processFile(&g_sess, argv[optind++], out_name,
                                     g_decompress == 0);
-                    }
-                    else if (suffix == E_SUFFIX_ZSTD) {
+                    } else if (suffix == E_SUFFIX_ZSTD) {
                         if (g_params_th.data_fmt != QZIP_ZSTD) {
                             QZ_ERROR("Error: Suffix(.zst) doesn't match the data format,"
                                      "please confirm the data format\n");

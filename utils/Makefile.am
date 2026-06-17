@@ -49,7 +49,7 @@ qzip_LDADD = \
              $(USDMLIB_FLAGS)
 qzip_LDFLAGS = \
                $(ICP_LDFLAGS)
-               
+
 qzstd_parser_SOURCES = \
                              qzstd_parser.c
 qzstd_parser_CFLAGS = \

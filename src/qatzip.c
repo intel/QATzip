@@ -288,7 +288,8 @@ static void *PollingHeartBeat(void *arg)
 }
 
 static inline CpaStatus
-QzGetInstCapability(CpaInstanceHandle *dc_inst_handle, QzInstanceCapability_T *inst_cap)
+QzGetInstCapability(CpaInstanceHandle *dc_inst_handle,
+                    QzInstanceCapability_T *inst_cap)
 {
     CpaStatus status = CPA_STATUS_FAIL;
 #ifdef CPM_5X
@@ -299,7 +300,7 @@ QzGetInstCapability(CpaInstanceHandle *dc_inst_handle, QzInstanceCapability_T *i
 #endif
 
     status = cpaDcQueryCapabilities(dc_inst_handle,
-                                   &inst_cap->inst_common_cap);
+                                    &inst_cap->inst_common_cap);
     if (CPA_STATUS_SUCCESS != status) {
         QZ_ERROR("Failed to cpaDcQueryCapabilities status = %d\n", status);
         return status;
@@ -337,13 +338,20 @@ QzGetInstCapability(CpaInstanceHandle *dc_inst_handle, QzInstanceCapability_T *i
     capabilityReq.algo = CPA_DC_ZSTD;
     capabilityReq.capId = CPA_DC_CAP_BOOL_DICT_ID;
     capabilityReq.dir = CPA_DC_DIR_COMPRESS;
-    status = cpaDcQueryCapabilityByType(dc_inst_handle,
-                                        capabilityReq, &CapabilityResp);
-    if (CPA_STATUS_SUCCESS != status) {
-        QZ_ERROR("Failed to get dc instance capabilities.\n");
-        return status;
+    if (CPA_TRUE == inst_cap->zstd_Capability_Resp) {
+        status = cpaDcQueryCapabilityByType(dc_inst_handle,
+                                            capabilityReq, &CapabilityResp);
+        if (CPA_STATUS_UNSUPPORTED == status) {
+            inst_cap->dictId = CPA_FALSE;
+            status = CPA_STATUS_SUCCESS;
+        } else if (CPA_STATUS_SUCCESS != status) {
+            QZ_ERROR("Failed to get dc instance capabilities.\n");
+            return status;
+        } else {
+            inst_cap->dictId = CapabilityResp.boolStatus;
+        }
     } else {
-        inst_cap->dictId = CapabilityResp.boolStatus;
+        inst_cap->dictId = CPA_FALSE;
     }
 
     /* Query deflate dictionary compression capability. */
@@ -476,7 +484,8 @@ static inline int qzCheckInstCap(const int i,
             return QZ_FAIL;
         }
 #ifdef CPM_5X
-        if (params->dictionary_flag && !g_process.qz_inst[i].instance_cap.deflate_dict) {
+        if (params->dictionary_flag &&
+            !g_process.qz_inst[i].instance_cap.deflate_dict) {
             return QZ_FAIL;
         }
 #endif
@@ -1247,7 +1256,7 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
 #ifdef CPM_5X
     if (g_process.qz_inst[i].instance_cap.deflate_dict ||
         g_process.qz_inst[i].instance_cap.lz4s_dict ||
-        g_process.qz_inst[i].instance_cap.zstd_dict ) {
+        g_process.qz_inst[i].instance_cap.zstd_dict) {
         CpaDcDictionaryData *dict_data = &g_process.qz_inst[i].dict_data;
         dict_data->dictionaryType = CPA_DC_UNCOMPRESSED_DICT;
         dict_data->dictId = 0; /* Initialize dictId to 0 */
@@ -1255,17 +1264,17 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
         dict_data->pExtDictionaryData = NULL;
         dict_data->pDictionaryBuff =
             (CpaBufferList *)qzMalloc(sizeof(CpaBufferList),
-            QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+                                      QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         dict_data->pDictionaryBuff->numBuffers = 1;
         dict_data->pDictionaryBuff->pBuffers =
             (CpaFlatBuffer *)qzMalloc(sizeof(CpaFlatBuffer),
-            QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+                                      QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         dict_data->pDictionaryBuff->pBuffers->pData =
             (Cpa8U *)qzMalloc(MAX_DICT_SIZE,
-            QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+                              QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         dict_data->pDictionaryBuff->pPrivateMetaData =
             (Cpa8U *)qzMalloc(g_process.qz_inst[i].buff_meta_size,
-            QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+                              QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
     }
 #endif
 
@@ -1648,7 +1657,8 @@ int qzSetupHW(QzSession_T *sess, int i)
     qz_sess->seq_in = 0;
 
 #ifdef CPM_5X
-    if (qz_sess->session_setup_data.compType == CPA_DC_DEFLATE &&
+    if (CPA_TRUE == g_process.qz_inst[i].instance_cap.zstd_Capability_Resp &&
+        qz_sess->session_setup_data.compType == CPA_DC_DEFLATE &&
         qz_sess->session_setup_data.huffType == CPA_DC_HT_STATIC) {
         QZ_INFO("qzSetupHW: Static Huffman not supported by HW inst %d, "
                 "falling back to software\n", i);
@@ -1734,7 +1744,8 @@ int qzUpdateCpaSession(QzSession_T *sess, int i)
     qzFree(g_process.qz_inst[i].cpaSess);
 
 #ifdef CPM_5X
-    if (qz_sess->session_setup_data.compType == CPA_DC_DEFLATE &&
+    if (CPA_TRUE == g_process.qz_inst[i].instance_cap.zstd_Capability_Resp &&
+        qz_sess->session_setup_data.compType == CPA_DC_DEFLATE &&
         qz_sess->session_setup_data.huffType == CPA_DC_HT_STATIC) {
         QZ_INFO("qzUpdateCpaSession: Static Huffman not supported by HW inst %d, "
                 "falling back to software\n", i);
@@ -1823,31 +1834,33 @@ static void *doCompressIn(void *in)
             unsigned int processed_dict_len = MAX_DICT_SIZE;
 
             int ret = stripEntropy(qz_sess->sess_params.dictionary,
-                                              qz_sess->sess_params.dictionary_len,
-                                              temp_dict,
-                                              &processed_dict_len);
+                                   qz_sess->sess_params.dictionary_len,
+                                   temp_dict,
+                                   &processed_dict_len);
             if (ret == QZ_OK) {
                 QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
-                    temp_dict, MAX_DICT_SIZE, processed_dict_len);
+                          temp_dict, MAX_DICT_SIZE, processed_dict_len);
                 dict_len = processed_dict_len;
             } else {
                 /* Fall back to original dictionary */
                 QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
-                    qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
-                    qz_sess->sess_params.dictionary_len);
+                          qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
+                          qz_sess->sess_params.dictionary_len);
             }
         } else {
             QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
-                qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
-                qz_sess->sess_params.dictionary_len);
+                      qz_sess->sess_params.dictionary, MAX_DICT_SIZE,
+                      qz_sess->sess_params.dictionary_len);
         }
 
-        g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->dataLenInBytes = dict_len;
+        g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->dataLenInBytes =
+            dict_len;
 
         /* Set dictId for ZSTD format */
         if (qz_sess->sess_params.data_fmt == ZSTD) {
             g_process.qz_inst[i].dict_data.dictId = qz_sess->sess_params.dictId;
-            QZ_DEBUG("doCompressIn: Set ZSTD dictId: %u\n", g_process.qz_inst[i].dict_data.dictId);
+            QZ_DEBUG("doCompressIn: Set ZSTD dictId: %u\n",
+                     g_process.qz_inst[i].dict_data.dictId);
         } else {
             g_process.qz_inst[i].dict_data.dictId = 0;
         }
@@ -2539,7 +2552,7 @@ static void *doDecompressIn(void *in)
         if (frame_dict_id != 0 &&
             (!qz_sess->sess_params.dictionary_flag || provided_dict_id == 0)) {
             QZ_ERROR("Dictionary mismatch: Frame dictId=%u requires dictionary but none supplied\n",
-                    frame_dict_id);
+                     frame_dict_id);
             sess->thd_sess_stat = QZ_DATA_ERROR;
             goto err_exit;
         }
@@ -2551,7 +2564,7 @@ static void *doDecompressIn(void *in)
         if (data_fmt_d == ZSTD) {
             if (frame_dict_id != 0 && provided_dict_id != frame_dict_id) {
                 QZ_ERROR("Dictionary mismatch: Frame dictId=%u mismatches provided dictId=%u\n",
-                        frame_dict_id, provided_dict_id);
+                         frame_dict_id, provided_dict_id);
                 sess->thd_sess_stat = QZ_DATA_ERROR;
                 goto err_exit;
             } else if (frame_dict_id == 0 && provided_dict_id != 0) {
@@ -2564,9 +2577,9 @@ static void *doDecompressIn(void *in)
                 unsigned int processed_dict_len = MAX_DICT_SIZE;
 
                 int ret = stripEntropy(qz_sess->sess_params.dictionary,
-                                                  qz_sess->sess_params.dictionary_len,
-                                                  temp_dict,
-                                                  &processed_dict_len);
+                                       qz_sess->sess_params.dictionary_len,
+                                       temp_dict,
+                                       &processed_dict_len);
                 if (ret == QZ_OK) {
                     QZ_MEMCPY(g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->pData,
                               temp_dict, MAX_DICT_SIZE, processed_dict_len);
@@ -2590,7 +2603,8 @@ static void *doDecompressIn(void *in)
             g_process.qz_inst[i].dict_data.dictId = 0;
         }
 
-        g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->dataLenInBytes = dict_len;
+        g_process.qz_inst[i].dict_data.pDictionaryBuff->pBuffers->dataLenInBytes =
+            dict_len;
     }
 #endif
 
@@ -2693,7 +2707,7 @@ static void *doDecompressIn(void *in)
                                              g_process.qz_inst[i].dest_buffers[j],
                                              &g_process.qz_inst[i].stream[j].res,
                                              CPA_DC_FLUSH_FINAL,
-                                            (void *)(tag));
+                                             (void *)(tag));
 #ifdef CPM_5X
                 }
 #endif
@@ -2848,7 +2862,7 @@ static void *__attribute__((cold)) doDecompressOut(void *in)
                     src_send_sz = resl->consumed;
                     qz_sess->next_dest += resl->produced;
                     qz_sess->qz_in_len += (outputHeaderSz(data_fmt) + src_send_sz +
-                                               outputFooterSz(data_fmt));
+                                           outputFooterSz(data_fmt));
                     qz_sess->qz_out_len += resl->produced;
                     dest_avail_len -= resl->produced;
                     if (resl->endOfLastBlock == CPA_TRUE) {
@@ -3749,12 +3763,12 @@ int qzGetSoftwareComponentVersionList(QzSoftwareVersionInfo_T *api_info,
 }
 
 #ifdef CPM_5X
-QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
-                                        const unsigned char* src,
-                                        unsigned char* dest,
-                                        QzDictionaryParams_T* dict,
+QATZIP_API int qzCompressWithDictionary(QzSession_T *sess,
+                                        const unsigned char *src,
+                                        unsigned char *dest,
+                                        QzDictionaryParams_T *dict,
                                         qzAsyncCallbackFn callback,
-                                        QzResult_T* qzResults)
+                                        QzResult_T *qzResults)
 {
     int rc = QZ_FAIL;
     QzSess_T *qz_sess = NULL;
@@ -3794,7 +3808,8 @@ QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
     }
     qz_sess = (QzSess_T *)(sess->internal);
 
-    if(qz_sess->sess_params.data_fmt == LZ4_FH  || qz_sess->sess_params.data_fmt == LZ4_BLOCK) {
+    if (qz_sess->sess_params.data_fmt == LZ4_FH  ||
+        qz_sess->sess_params.data_fmt == LZ4_BLOCK) {
         QZ_ERROR("LZ4 dictionary compression is not supported.\n");
         return QZ_PARAMS;
     }
@@ -3811,7 +3826,7 @@ QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
         } else {
             /* Extract dictId from dictionary */
             qz_sess->sess_params.dictId = ZSTD_getDictID_fromDict(dict->dictionary,
-                                                                  dict->dictionary_len);
+                                          dict->dictionary_len);
         }
         QZ_DEBUG("ZSTD dictId for compression: %u\n", qz_sess->sess_params.dictId);
     } else {
@@ -3821,7 +3836,7 @@ QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
     src_len = qzResults->src_len;
     dest_len = qzResults->dest_len;
 
-   rc = qzCompressCrcExt(sess, src, &src_len, dest, &dest_len, 1, NULL, NULL);
+    rc = qzCompressCrcExt(sess, src, &src_len, dest, &dest_len, 1, NULL, NULL);
     qzResults->status = rc;
     qzResults->src_len = src_len;
     qzResults->dest_len = dest_len;
@@ -3829,12 +3844,12 @@ QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
     return rc;
 }
 
-QATZIP_API int qzDecompressWithDictionary(QzSession_T* sess,
-                                          const unsigned char* src,
-                                          unsigned char* dest,
-                                          QzDictionaryParams_T* dict,
-                                          qzAsyncCallbackFn callback,
-                                          QzResult_T* qzResults)
+QATZIP_API int qzDecompressWithDictionary(QzSession_T *sess,
+        const unsigned char *src,
+        unsigned char *dest,
+        QzDictionaryParams_T *dict,
+        qzAsyncCallbackFn callback,
+        QzResult_T *qzResults)
 {
     int rc = QZ_FAIL;
     QzSess_T *qz_sess = NULL;
@@ -3872,7 +3887,8 @@ QATZIP_API int qzDecompressWithDictionary(QzSession_T* sess,
 
     qz_sess = (QzSess_T *)(sess->internal);
 
-    if(qz_sess->sess_params.data_fmt == LZ4_FH || qz_sess->sess_params.data_fmt == LZ4_BLOCK) {
+    if (qz_sess->sess_params.data_fmt == LZ4_FH ||
+        qz_sess->sess_params.data_fmt == LZ4_BLOCK) {
         QZ_ERROR("LZ4 dictionary compression is not supported.\n");
         return QZ_PARAMS;
     }
@@ -3889,7 +3905,7 @@ QATZIP_API int qzDecompressWithDictionary(QzSession_T* sess,
         } else {
             /* Extract dictId from dictionary */
             qz_sess->sess_params.dictId = ZSTD_getDictID_fromDict(dict->dictionary,
-                                                                  dict->dictionary_len);
+                                          dict->dictionary_len);
         }
         QZ_DEBUG("ZSTD dictId for decompression: %u\n", qz_sess->sess_params.dictId);
     } else {
@@ -3907,12 +3923,12 @@ QATZIP_API int qzDecompressWithDictionary(QzSession_T* sess,
 }
 
 #else
-QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
-                                        const unsigned char* src,
-                                        unsigned char* dest,
-                                        QzDictionaryParams_T* dict,
+QATZIP_API int qzCompressWithDictionary(QzSession_T *sess,
+                                        const unsigned char *src,
+                                        unsigned char *dest,
+                                        QzDictionaryParams_T *dict,
                                         qzAsyncCallbackFn callback,
-                                        QzResult_T* qzResults)
+                                        QzResult_T *qzResults)
 {
 
     QZ_ERROR("Dictionary compression is not supported.\n");
@@ -3920,12 +3936,12 @@ QATZIP_API int qzCompressWithDictionary(QzSession_T* sess,
 
 }
 
-QATZIP_API int qzDecompressWithDictionary(QzSession_T* sess,
-                                          const unsigned char* src,
-                                          unsigned char* dest,
-                                          QzDictionaryParams_T* dictionary,
-                                          qzAsyncCallbackFn callback,
-                                          QzResult_T* qzResults)
+QATZIP_API int qzDecompressWithDictionary(QzSession_T *sess,
+        const unsigned char *src,
+        unsigned char *dest,
+        QzDictionaryParams_T *dictionary,
+        qzAsyncCallbackFn callback,
+        QzResult_T *qzResults)
 {
     QZ_ERROR("Dictionary decompression is not supported.\n");
     return QZ_NOT_SUPPORTED;
