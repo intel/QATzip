@@ -1130,6 +1130,22 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
                                         &(g_process.qz_inst[i].buff_meta_size));
     QZ_INST_MEM_STATUS_CHECK(status, i);
 
+    /* The destination and dictionary buffer descriptors use the standard meta
+       size from cpaDcBufferListGetMetaSize(). The source buffer descriptor must
+       be sized with cpaDcGetMetaSizeForSrcBuffWithDict() when the instance
+       supports dictionary compression. Default to the standard size otherwise. */
+    g_process.qz_inst[i].src_buff_meta_size = g_process.qz_inst[i].buff_meta_size;
+#ifdef CPM_5X
+    if (g_process.qz_inst[i].instance_cap.deflate_dict ||
+        g_process.qz_inst[i].instance_cap.lz4s_dict ||
+        g_process.qz_inst[i].instance_cap.zstd_dict) {
+        status = cpaDcGetMetaSizeForSrcBuffWithDict(g_process.dc_inst_handle[i],
+                 1, 1,
+                 &(g_process.qz_inst[i].src_buff_meta_size));
+        QZ_INST_MEM_STATUS_CHECK(status, i);
+    }
+#endif
+
     status = cpaDcGetNumIntermediateBuffers(g_process.dc_inst_handle[i],
                                             &(g_process.qz_inst[i].intermediate_cnt));
     QZ_INST_MEM_STATUS_CHECK(status, i);
@@ -1200,9 +1216,9 @@ static int getInstMem(int i, QzSessionParamsInternal_T *params)
                                               qzMalloc(sizeof(CpaBufferList), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
         QZ_INST_MEM_CHECK(g_process.qz_inst[i].src_buffers[j], i);
 
-        if (0 != g_process.qz_inst[i].buff_meta_size) {
+        if (0 != g_process.qz_inst[i].src_buff_meta_size) {
             g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData =
-                qzMalloc(g_process.qz_inst[i].buff_meta_size, QZ_AUTO_SELECT_NUMA_NODE,
+                qzMalloc(g_process.qz_inst[i].src_buff_meta_size, QZ_AUTO_SELECT_NUMA_NODE,
                          PINNED_MEM);
             QZ_INST_MEM_CHECK(g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData, i);
         } else {

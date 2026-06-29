@@ -211,6 +211,10 @@ typedef struct QzInstance_S {
     QzInstanceCapability_T instance_cap;
     CpaBufferList **intermediate_buffers;
     Cpa32U buff_meta_size;
+    /* Meta size for the source buffer list when dictionary compression/
+       decompression is used. Sized via cpaDcGetMetaSizeForSrcBuffWithDict().
+       Falls back to buff_meta_size when dictionaries are not supported. */
+    Cpa32U src_buff_meta_size;
 
     /* Tracks memory where the intermediate buffers reside. */
     Cpa16U intermediate_cnt;
