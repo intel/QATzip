@@ -6978,7 +6978,7 @@ int main(int argc, char *argv[])
         }
         file = fopen(dict_file_name, "rb");
         if (!file) {
-            QZ_ERROR("ERROR: fail to read file %s\n", dict_buf);
+            QZ_ERROR("ERROR: fail to read file %s\n", dict_file_name);
             goto done;
         }
         if (fread(dict_buf, 1, dict_sz, file) != dict_sz) {

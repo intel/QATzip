@@ -2,8 +2,6 @@
 
 QATzip is a user-space library built on top of the Intel&reg; QuickAssist Technology (QAT) user-space library. It provides extended compression and decompression capabilities by offloading these operations to Intel&reg; QAT Accelerators. QATzip generates data in the standard gzip\* format (RFC1952) with extended headers or [lz4\* blocks](https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md) and using the [lz4\* frame format](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md). The resulting data can be decompressed using any compliant gzip\* or lz4\* implementation. QATzip is optimized to fully leverage the performance benefits of Intel&reg; QuickAssist Technology.
 
-QATzip is a user-space library built on top of the Intel&reg; QuickAssist Technology (QAT) user-space library. It provides extended compression and decompression capabilities by offloading these operations to Intel&reg; QAT Accelerators. QATzip generates data in the standard gzip\* format (RFC1952) with extended headers or [lz4\* blocks](https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md) and using the [lz4\* frame format](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md). The resulting data can be decompressed using any compliant gzip\* or lz4\* implementation. QATzip is optimized to fully leverage the performance benefits of Intel&reg; QuickAssist Technology.
-
 ## Table of Contents
 
 - [Supported Formats](#supported-formats)

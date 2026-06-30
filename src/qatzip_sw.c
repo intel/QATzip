@@ -682,7 +682,8 @@ int qzLZ4BlockSWCompress(QzSession_T *sess, const unsigned char *src,
         }
 
         // Write block header with compressed size to match hardware format
-        *(unsigned int *)header_ptr = compressed_size & QZ_LZ4_BLK_SIZE_MASK;
+        unsigned int blk_header = compressed_size & QZ_LZ4_BLK_SIZE_MASK;
+        memcpy(header_ptr, &blk_header, sizeof(blk_header));
 
         dest_ptr += compressed_size;
         total_out += QZ_LZ4_BLK_HEADER_SIZE + compressed_size;
@@ -722,7 +723,8 @@ int qzLZ4BlockSWDecompress(QzSession_T *sess, const unsigned char *src,
 
     while (remaining > QZ_LZ4_BLK_HEADER_SIZE) {
         // Read block header
-        unsigned int raw_header = *(unsigned int *)src_ptr;
+        unsigned int raw_header = 0;
+        memcpy(&raw_header, src_ptr, sizeof(raw_header));
         int is_uncompressed = (raw_header & QZ_LZ4_STOREDBLOCK_FLAG) != 0;
         block_size = raw_header & QZ_LZ4_BLK_SIZE_MASK;
         src_ptr += QZ_LZ4_BLK_HEADER_SIZE;
@@ -821,6 +823,12 @@ int qzZSTDSWCompress(QzSession_T *sess, const unsigned char *src,
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
 
     ZSTD_CCtx *cctx = ZSTD_createCCtx();
+    if (NULL == cctx) {
+        QZ_ERROR("ZSTD_createCCtx error: failed to allocate compression context\n");
+        *src_len = 0;
+        *dest_len = 0;
+        return QZ_FAIL;
+    }
     /* ZSTD sw fallback better follow HW history buffer size */
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_windowLog, 16);
     if (qz_sess->sess_params.dictionary_flag) {
@@ -862,6 +870,12 @@ int qzZSTDSWDecompress(QzSession_T *sess, const unsigned char *src,
              *src_len, *dest_len);
 
     ZSTD_DCtx *dctx = ZSTD_createDCtx();
+    if (NULL == dctx) {
+        QZ_ERROR("ZSTD_createDCtx error: failed to allocate decompression context\n");
+        *src_len = 0;
+        *dest_len = 0;
+        return QZ_FAIL;
+    }
     ZSTD_DCtx_setParameter(dctx, ZSTD_d_windowLogMax, 17);
     in_sz = *src_len;
     out_sz = *dest_len;

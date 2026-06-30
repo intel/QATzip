@@ -1783,7 +1783,9 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
 
         while (sub_block_count < num_sub_blocks &&
                blk_avail >= QZ_LZ4_BLK_HEADER_SIZE) {
-            unsigned int bsz = (*(unsigned int *)blk_ptr) & QZ_LZ4_BLK_SIZE_MASK;
+            unsigned int raw_blk_header = 0;
+            memcpy(&raw_blk_header, blk_ptr, sizeof(raw_blk_header));
+            unsigned int bsz = raw_blk_header & QZ_LZ4_BLK_SIZE_MASK;
             if (bsz == 0 || bsz > blk_avail - QZ_LZ4_BLK_HEADER_SIZE) {
                 break;
             }

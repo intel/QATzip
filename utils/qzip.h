@@ -195,7 +195,6 @@ typedef enum QzSuffixCheckStatus_E {
     E_CHECK_SUFFIX_FORMAT_UNMATCH
 } QzSuffixCheckStatus_T;
 
-#define SRC_BUFF_LEN         (512 * 1024 * 1024)
 #define DICT_BUFF_MAX_LEN    (32 * 1024)
 
 typedef enum QzipDataFormat_E {

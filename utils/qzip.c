@@ -126,7 +126,7 @@ void help(void)
         "  -P, --polling     set polling mode, only supports busy polling settings",
 #ifdef CPM_5X
         "  -D, --dictionary  set dictionary file, the maximum dictionary length supported by QAT"
-        "                    is 64KB, if dictionary file is large than 64KB, the first 64KB of",
+        "                    is 32KB, if dictionary file is large than 32KB, the first 32KB of",
         "                    dictionary file is read.",
 #endif
         "  -s,               enable latency sensitive mode",
@@ -328,7 +328,7 @@ int getDictionaryFileSize(const char *dict_file_name, unsigned int *dict_size)
 {
     FILE *dict_file = NULL;
     long dict_file_size = 0;
-    dict_file = fopen(dict_file_name, "r");
+    dict_file = fopen(dict_file_name, "rb");
     if (!dict_file) {
         QZ_ERROR("Failed to open dictionary file %s!\n", dict_file_name);
         return -1;
@@ -362,7 +362,7 @@ int loadDictionaryFile(const char *dict_file_name,
     QZ_DEBUG("loadDictionaryFile: Loading dictionary from '%s'\n", dict_file_name);
     QZ_DEBUG("loadDictionaryFile: dict_buffer=%p, dict_buffer_size=%u\n",
              dict_buffer, dict_buffer_size);
-    dict_file = fopen(dict_file_name, "r");
+    dict_file = fopen(dict_file_name, "rb");
     if (!dict_file) {
         QZ_ERROR("Failed to open dictionary file %s!\n",
                  dict_file_name);
@@ -449,29 +449,33 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
          * ratios that exceed the fixed expansion ratios.
          */
         if (g_params_th.data_fmt == QZIP_ZSTD && src_file_size > 0) {
-            unsigned char *temp_buf = malloc(src_file_size);
-            if (temp_buf) {
-                int dup_fd = dup(src_fd);
-                FILE *temp_file = (dup_fd >= 0) ? fdopen(dup_fd, "r") : NULL;
-                if (temp_file) {
-                    fseek(temp_file, 0, SEEK_SET);
-                    size_t read_sz = fread(temp_buf, 1, src_file_size, temp_file);
-                    if (read_sz > 0) {
-                        unsigned long long content_size = ZSTD_getFrameContentSize(temp_buf, read_sz);
-                        if (content_size != ZSTD_CONTENTSIZE_UNKNOWN &&
-                            content_size != ZSTD_CONTENTSIZE_ERROR) {
-                            dst_buffer_size = (unsigned int)content_size;
-                            QZ_DEBUG("ZSTD frame content size: %llu bytes\n", content_size);
-                            ratio_idx = sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
-                        }
+            /*
+             * Only the frame header bytes are needed to query the content
+             * size, so avoid reading the whole (potentially huge) input file.
+             * A ZSTD frame header is at most 18 bytes.
+             */
+            unsigned char header_buf[18];
+            size_t header_len = (src_file_size < (off_t)sizeof(header_buf)) ?
+                                (size_t)src_file_size : sizeof(header_buf);
+            int dup_fd = dup(src_fd);
+            FILE *temp_file = (dup_fd >= 0) ? fdopen(dup_fd, "rb") : NULL;
+            if (temp_file) {
+                fseek(temp_file, 0, SEEK_SET);
+                size_t read_sz = fread(header_buf, 1, header_len, temp_file);
+                if (read_sz > 0) {
+                    unsigned long long content_size = ZSTD_getFrameContentSize(header_buf, read_sz);
+                    if (content_size != ZSTD_CONTENTSIZE_UNKNOWN &&
+                        content_size != ZSTD_CONTENTSIZE_ERROR) {
+                        dst_buffer_size = (unsigned int)content_size;
+                        QZ_DEBUG("ZSTD frame content size: %llu bytes\n", content_size);
+                        ratio_idx = sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
                     }
-                    fclose(temp_file);
-                } else if (dup_fd >= 0) {
-                    close(dup_fd);
                 }
-                free(temp_buf);
-                lseek(src_fd, 0, SEEK_SET);
+                fclose(temp_file);
+            } else if (dup_fd >= 0) {
+                close(dup_fd);
             }
+            lseek(src_fd, 0, SEEK_SET);
         }
         if (dst_buffer_size == 0) {
             unsigned int idx = (ratio_idx < ratio_limit) ?

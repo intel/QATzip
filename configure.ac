@@ -116,7 +116,7 @@ AC_DEFUN([CHECK_CPM5X], [
     AS_IF([test "x$have_qat_dc_cap" = "xyes"],
         [AC_CHECK_LIB([$1], [cpaDcCompressDataWithDict],
             [AC_CHECK_LIB([$1], [cpaDcZstdCompressBound],
-                [CFLAGS+=" -DCPM_5X"],
+                [CFLAGS="$CFLAGS -DCPM_5X"],
                 [have_qat_dc_cap=no],
                 [-lusdm -lcrypto])],
             [have_qat_dc_cap=no],
