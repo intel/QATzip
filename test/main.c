@@ -6986,7 +6986,7 @@ int main(int argc, char *argv[])
             fclose(file);
             goto done;
         } else {
-            QZ_DEBUG("Read %d bytes from file %s\n", dict_sz, dict_file_name);
+            QZ_DEBUG("Read %zu bytes from file %s\n", dict_sz, dict_file_name);
         }
         fclose(file);
     }
