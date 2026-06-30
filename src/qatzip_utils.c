@@ -1701,7 +1701,6 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
     unsigned char *src_ptr = src;
     unsigned int compressed_sz = 0;
     unsigned int uncompressed_sz = 0;
-    unsigned int block_sz = 0;
     StdGzF_T *qzFooter = NULL;
     int isEndWithFooter = 0;
     int ret = 0;
@@ -1798,7 +1797,6 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
             QZ_DEBUG("checkHeader: insufficient data for LZ4 block header\n");
             return QZ_BUF_ERROR;
         }
-        block_sz = total_src;
         compressed_sz = total_src;
         uncompressed_sz = (qz_sess->sess_params.hw_buff_sz > dest_avail_len) ?
                           dest_avail_len : qz_sess->sess_params.hw_buff_sz;
@@ -1848,32 +1846,20 @@ int checkHeader(QzSess_T *qz_sess, unsigned char *src,
 
     if (compressed_sz + outputHeaderSz(data_fmt) + outputFooterSz(data_fmt) >
         src_avail_len) {
-        /* For LZ4_BLOCK, block_sz now holds the total src bytes for all
+        /* For LZ4_BLOCK, block_sz holds the total src bytes for all
          * sub-blocks in the chunk (headers included). */
-        if (data_fmt == LZ4_BLOCK) {
-            if (block_sz > src_avail_len) {
-                QZ_DEBUG("checkHeader LZ4_BLOCK: incomplete source buffer - total_src=%u > src_avail=%u\n",
-                         block_sz, src_avail_len);
-                return QZ_DATA_ERROR;
-            }
-        } else {
-            QZ_DEBUG("checkHeader: incomplete source buffer\n");
-            return QZ_DATA_ERROR;
-        }
+        QZ_DEBUG("checkHeader: incomplete source buffer\n");
+        return QZ_DATA_ERROR;
     } else if (uncompressed_sz > dest_avail_len) {
         QZ_DEBUG("checkHeader: insufficient destination buffer length\n");
         return QZ_BUF_ERROR;
     }
 
-    if (data_fmt == LZ4_BLOCK) {
-        /* dest_sz = total compressed bytes for all sub-blocks (including their
-         * 4-byte headers); src_sz = expected uncompressed size for the chunk. */
-        hdr->extra.qz_e.dest_sz = block_sz;
-        hdr->extra.qz_e.src_sz = uncompressed_sz;
-    } else {
-        hdr->extra.qz_e.dest_sz = compressed_sz;
-        hdr->extra.qz_e.src_sz = uncompressed_sz;
-    }
+    /* For LZ4_BLOCK, compressed_sz is the total src bytes for all sub-blocks
+     * in the chunk (4-byte headers included); src_sz is the expected
+     * uncompressed size for the chunk. */
+    hdr->extra.qz_e.dest_sz = compressed_sz;
+    hdr->extra.qz_e.src_sz = uncompressed_sz;
     return QZ_OK;
 }
 
@@ -1920,7 +1906,7 @@ void decompBufferSetup(int i, int j, QzSess_T *qz_sess,
 
     QZ_DEBUG("doDecompressIn: Sending %u bytes starting at 0x%lx\n",
              src_send_sz, (unsigned long)src_ptr);
-    QZ_DEBUG("sending seq number %lu %d %ld\n", i, j, qz_sess->seq);
+    QZ_DEBUG("sending seq number %d %d %ld\n", i, j, qz_sess->seq);
 
     if (DEFLATE_GZIP_EXT == data_fmt ||
         DEFLATE_GZIP == data_fmt) {

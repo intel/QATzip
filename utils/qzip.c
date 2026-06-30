@@ -451,7 +451,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         if (g_params_th.data_fmt == QZIP_ZSTD && src_file_size > 0) {
             unsigned char *temp_buf = malloc(src_file_size);
             if (temp_buf) {
-                FILE *temp_file = fdopen(dup(src_fd), "r");
+                int dup_fd = dup(src_fd);
+                FILE *temp_file = (dup_fd >= 0) ? fdopen(dup_fd, "r") : NULL;
                 if (temp_file) {
                     fseek(temp_file, 0, SEEK_SET);
                     size_t read_sz = fread(temp_buf, 1, src_file_size, temp_file);
@@ -465,14 +466,17 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                         }
                     }
                     fclose(temp_file);
+                } else if (dup_fd >= 0) {
+                    close(dup_fd);
                 }
                 free(temp_buf);
                 lseek(src_fd, 0, SEEK_SET);
             }
         }
         if (dst_buffer_size == 0) {
-            dst_buffer_size = src_buffer_size *
-                              g_bufsz_expansion_ratio[ratio_idx++];
+            unsigned int idx = (ratio_idx < ratio_limit) ?
+                               ratio_idx++ : ratio_limit - 1;
+            dst_buffer_size = src_buffer_size * g_bufsz_expansion_ratio[idx];
         }
     }
 

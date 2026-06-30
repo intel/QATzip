@@ -841,9 +841,28 @@ int main(int argc, char **argv)
     }
 
     /* Get file size */
-    fseek(fp, 0, SEEK_END);
-    size_t file_size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    if (fseek(fp, 0, SEEK_END) != 0) {
+        fprintf(stderr, "Error: Cannot seek file: %s\n", input_file);
+        fclose(fp);
+        return 1;
+    }
+    long file_pos = ftell(fp);
+    if (file_pos < 0) {
+        fprintf(stderr, "Error: Cannot determine file size: %s\n", input_file);
+        fclose(fp);
+        return 1;
+    }
+    if (fseek(fp, 0, SEEK_SET) != 0) {
+        fprintf(stderr, "Error: Cannot seek file: %s\n", input_file);
+        fclose(fp);
+        return 1;
+    }
+    size_t file_size = (size_t)file_pos;
+    if (file_size == 0) {
+        fprintf(stderr, "Error: File is empty: %s\n", input_file);
+        fclose(fp);
+        return 1;
+    }
 
     /* Allocate buffer */
     uint8_t *data = malloc(file_size);
