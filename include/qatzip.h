@@ -166,8 +166,8 @@ extern"C" {
  *  Changes from Gen6 onwards
  *  1. Addition of ZSTD for both comp and decomp, no post-processing required.
  *  2. Compression level up to 12 for ZSTD
- *  3. Static Huffman is no longer supported. QATzip will silently switch to use
- *     dynamic Huffman.
+ *  3. Static Huffman is no longer supported. QATzip will fall back to software
+ *     compression, which may fail if software backup is disabled.
  *
  *****************************************************************************/
 /**
@@ -233,7 +233,7 @@ typedef enum QzDirection_E {
  *      This enumerated list identifies the data format supported by
  *    QATzip streaming API. A format can be raw deflate data block, deflate
  *    block wrapped by GZip header and footer, or deflate data block wrapped
- *    by GZip extension header and footer, or a ZSTD block.
+ *    by GZip extension header and footer.
  *
  *****************************************************************************/
 typedef enum QzDataFormat_E {
@@ -245,8 +245,6 @@ typedef enum QzDataFormat_E {
     /**< Data is in deflate wrapped by GZip extended header and footer */
     QZ_DEFLATE_RAW,
     /**< Data is in raw deflate format */
-    // QZ_ZSTD,
-    /**< Data is in ZSTD format */
     QZ_FMT_NUM
 } QzDataFormat_T;
 
@@ -581,8 +579,7 @@ typedef struct QzDictionaryParams_S {
     const unsigned char *dictionary;
     /*< Pointer to dictionary buffer */
     unsigned int dictionary_len;
-    /*< Length of dictionary buffer (maximum value of 32KB for ZSTD, otherwise
-     * 64KB) */
+    /*< Length of dictionary buffer (maximum value of 32KB) */
     int compressed; /*< non-zero indicates compressed dictionary supplied */
     unsigned long *crc64Addr; /*< If not NULL, address to store CRC64 generated
                                  on the dictionary */
