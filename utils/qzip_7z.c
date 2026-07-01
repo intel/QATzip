@@ -877,9 +877,15 @@ Qz7zPackInfo_T *resolvePackInfo(FILE *fp)
         QZ_ERROR("malloc pack error\n");
         return NULL;
     }
+    memset(pack, 0, sizeof(Qz7zPackInfo_T));
 
     pack->PackPos = getU64FromBytes(fp);
     pack->NumPackStreams = getU64FromBytes(fp);
+    if (pack->NumPackStreams > INT_MAX ||
+        pack->NumPackStreams > SIZE_MAX / sizeof(uint64_t)) {
+        QZ_ERROR("NumPackStreams too large\n");
+        goto error;
+    }
     pack->PackSize = qzMalloc(pack->NumPackStreams * sizeof(uint64_t),
                               QZ_AUTO_SELECT_NUMA_NODE,
                               PINNED_MEM);
@@ -892,7 +898,7 @@ Qz7zPackInfo_T *resolvePackInfo(FILE *fp)
         goto error;
     }
 
-    for (int i = 0; i < pack->NumPackStreams; ++i) {
+    for (uint64_t i = 0; i < pack->NumPackStreams; ++i) {
         pack->PackSize[i] = getU64FromBytes(fp);
     }
 
@@ -922,6 +928,7 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
         QZ_ERROR("malloc coders\n");
         return NULL;
     }
+    memset(coders, 0, sizeof(Qz7zCodersInfo_T));
 
     if ((c = readByte(fp)) != PROPERTY_ID_FOLDER) {
         QZ_ERROR("Resolve CodersInfo: kFolders(0x0b) expected: %02x\n", c);
@@ -929,6 +936,12 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
     }
 
     coders->numFolders = getU64FromBytes(fp);
+    if (coders->numFolders > INT_MAX ||
+        coders->numFolders > SIZE_MAX / sizeof(Qz7zFolderInfo_T) ||
+        coders->numFolders > SIZE_MAX / sizeof(uint64_t)) {
+        QZ_ERROR("numFolders too large\n");
+        goto error;
+    }
     coders->folders = qzMalloc(coders->numFolders * sizeof(Qz7zFolderInfo_T),
                                QZ_AUTO_SELECT_NUMA_NODE,
                                PINNED_MEM);
@@ -936,9 +949,11 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
         QZ_ERROR("malloc folders error\n");
         goto error;
     }
+    memset(coders->folders, 0,
+           coders->numFolders * sizeof(Qz7zFolderInfo_T));
 
     if ((c = readByte(fp)) == 0) {
-        for (i_folder = 0; i_folder < coders->numFolders; ++i_folder) {
+        for (i_folder = 0; i_folder < (int)coders->numFolders; ++i_folder) {
             Qz7zFolderInfo_T *p = &coders->folders[i_folder];
             size_t n;
             unsigned int id_size;
@@ -948,8 +963,13 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
             if (!p->coder_list) {
                 goto error;
             }
+            memset(p->coder_list, 0, sizeof(Qz7zCoder_T));
             p->coder_list->coderFirstByte.uc = readByte(fp);
             id_size = p->coder_list->coderFirstByte.st.CodecIdSize;
+            if (id_size == 0) {
+                QZ_ERROR("invalid codec id size\n");
+                goto error;
+            }
             p->coder_list->codecID = qzMalloc(id_size, QZ_AUTO_SELECT_NUMA_NODE,
                                               PINNED_MEM);
             if (!p->coder_list->codecID) {
@@ -958,10 +978,12 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
             }
             n = fread(p->coder_list->codecID, 1, id_size, fp);
             CHECK_FREAD_RETURN(n, id_size)
-            QZ_DEBUG("codec id: %0x %0x %0x\n",
-                     p->coder_list->codecID[0],
-                     p->coder_list->codecID[1],
-                     p->coder_list->codecID[2]);
+            if (id_size >= 3) {
+                QZ_DEBUG("codec id: %0x %0x %0x\n",
+                         p->coder_list->codecID[0],
+                         p->coder_list->codecID[1],
+                         p->coder_list->codecID[2]);
+            }
         }
     } else if (c == 1) {
         coders->dataStreamIndex = getU64FromBytes(fp);
@@ -983,7 +1005,7 @@ Qz7zCodersInfo_T *resolveCodersInfo(FILE *fp)
         QZ_ERROR("malloc error\n");
         goto error;
     }
-    for (int i = 0; i < coders->numFolders; ++i) {
+    for (uint64_t i = 0; i < coders->numFolders; ++i) {
         coders->unPackSize[i] = getU64FromBytes(fp);
     }
 
@@ -1003,11 +1025,17 @@ error:
 Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
 {
     unsigned char c;
-    int total = 1;
+    uint64_t total;
     int end = 0;
     int unpackstreams_resolved = 0;
     int unpacksize_resolved = 0;
     int digests_resolved = 0;
+
+    if (n_folder <= 0) {
+        QZ_ERROR("invalid folder count\n");
+        return NULL;
+    }
+    total = n_folder;
 
     Qz7zSubstreamsInfo_T *substreams = qzMalloc(sizeof(Qz7zSubstreamsInfo_T),
                                        QZ_AUTO_SELECT_NUMA_NODE,
@@ -1030,6 +1058,10 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
             }
             total = 0;
             QZ_DEBUG("Resolve SubstreamsInfo: number folders: %d\n", n_folder);
+            if ((uint64_t)n_folder > SIZE_MAX / sizeof(uint64_t)) {
+                QZ_ERROR("n_folder overflow\n");
+                goto error;
+            }
             substreams->numUnPackStreams = qzMalloc(n_folder * sizeof(uint64_t),
                                                     QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
             if (!substreams->numUnPackStreams) {
@@ -1039,6 +1071,12 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
 
             for (int i = 0; i < n_folder; ++i) {
                 substreams->numUnPackStreams[i] = getU64FromBytes(fp);
+                if (substreams->numUnPackStreams[i] == 0 ||
+                    substreams->numUnPackStreams[i] > INT_MAX ||
+                    total > INT_MAX - substreams->numUnPackStreams[i]) {
+                    QZ_ERROR("NumUnPackStreams too large\n");
+                    goto error;
+                }
                 QZ_DEBUG(" numUnPackStreams[i] = %lu\n",
                          substreams->numUnPackStreams[i]);
                 total += substreams->numUnPackStreams[i];
@@ -1056,6 +1094,11 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
             if (total - n_folder == 0) {
                 QZ_DEBUG("every folder has one file. No unpacksize part.\n");
             } else {
+                if (total < (uint64_t)n_folder ||
+                    total - n_folder > SIZE_MAX / sizeof(uint64_t)) {
+                    QZ_ERROR("unPackSize count overflow\n");
+                    goto error;
+                }
                 substreams->unPackSize = qzMalloc((total - n_folder) *
                                                   sizeof(uint64_t), QZ_AUTO_SELECT_NUMA_NODE,
                                                   PINNED_MEM);
@@ -1064,10 +1107,10 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
                     goto error;
                 }
 
-                for (int i = 0; i < total - n_folder; ++i) {
+                for (uint64_t i = 0; i < total - n_folder; ++i) {
 
                     substreams->unPackSize[i] = getU64FromBytes(fp);
-                    QZ_DEBUG("unpacksize: %lu total:%d folder:%d\n",
+                    QZ_DEBUG("unpacksize: %lu total:%lu folder:%d\n",
                              substreams->unPackSize[i], total, n_folder);
                 }
             }
@@ -1088,6 +1131,7 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
                 QZ_ERROR("malloc error\n");
                 goto error;
             }
+            memset(substreams->digests, 0, sizeof(Qz7zDigest_T));
 
             if ((c = readByte(fp)) != 1) {
                 QZ_DEBUG("Resolve Substreams Info: not allaredefined ERROR. "
@@ -1095,9 +1139,13 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
                 goto error;
             }
             substreams->digests->allAreDefined = 1;
-            QZ_DEBUG(" read allaredefined : 111 total: %d\n", total);
+            QZ_DEBUG(" read allaredefined : 111 total: %lu\n", total);
 
             substreams->digests->numDefined = total;
+            if (total > INT_MAX || total > SIZE_MAX / sizeof(uint32_t)) {
+                QZ_ERROR("CRC count overflow\n");
+                goto error;
+            }
             substreams->digests->crc = qzMalloc(total * sizeof(uint32_t),
                                                 QZ_AUTO_SELECT_NUMA_NODE,
                                                 PINNED_MEM);
@@ -1106,7 +1154,7 @@ Qz7zSubstreamsInfo_T *resolveSubstreamsInfo(int n_folder, FILE *fp)
                 goto error;
             }
 
-            for (int i = 0; i < total; ++i) {
+            for (uint64_t i = 0; i < total; ++i) {
                 readCRC(fp);
             }
 
@@ -1164,6 +1212,10 @@ static int readNames(Qz7zFileItem_T *p, uint64_t num, FILE *fp)
             if (!wc[0] && !wc[1])  // two-zero byte means the end
                 break;
 
+            if (j >= PATH_MAX - 1) {
+                QZ_ERROR("file name too long (>= PATH_MAX)\n");
+                return QZ7Z_ERR_NOT_EXPECTED_CHAR;
+            }
             path[j++] = wc[0];
         }
         path[j] = 0;
@@ -1258,6 +1310,7 @@ Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp)
     uint64_t total_num;
     uint64_t dir_num;
     uint64_t file_num;
+    Qz7zFileItem_T *p = NULL;
 
     Qz7zFilesInfo_Dec_T *files = qzMalloc(sizeof(Qz7zFilesInfo_Dec_T),
                                           QZ_AUTO_SELECT_NUMA_NODE,
@@ -1269,8 +1322,19 @@ Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp)
     memset(files, 0, sizeof(Qz7zFilesInfo_Dec_T));
 
     total_num = getU64FromBytes(fp);
-    Qz7zFileItem_T *p = qzMalloc(total_num * sizeof(
-                                     Qz7zFileItem_T), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
+    /* p[] is indexed throughout this function and its helpers
+       (readNames/readTimes/readAttributes) with int counters, so total_num
+       must fit in an int to avoid signed wraparound and OOB access. */
+    if (total_num > INT_MAX) {
+        QZ_ERROR("total_num too large (> INT_MAX)\n");
+        goto error;
+    }
+    if (total_num > SIZE_MAX / sizeof(Qz7zFileItem_T)) {
+        QZ_ERROR("total_num overflow\n");
+        goto error;
+    }
+    p = qzMalloc(total_num * sizeof(
+                     Qz7zFileItem_T), QZ_AUTO_SELECT_NUMA_NODE, PINNED_MEM);
     if (!p) {
         QZ_ERROR("malloc error\n");
         goto error;
@@ -1316,16 +1380,19 @@ Qz7zFilesInfo_Dec_T *resolveFilesInfo(FILE *fp)
             file_index = 0;
 
             u64 = getU64FromBytes(fp); // property size
+            /* Always consume all u64 property bytes to keep the input stream
+               aligned for subsequent parsing, but guard every write so we
+               never index past the p[] allocation (file_index < total_num). */
             for (i = 0; i < u64; ++i) {
                 c = readByte(fp);
                 for (j = 7; j >= 0; --j) {
-                    p[file_index].isEmpty = !!(c & 1 << j);
-                    if (p[file_index].isEmpty) {
-                        p[file_index].isDir = 0;
+                    if (file_index < total_num) {
+                        p[file_index].isEmpty = !!(c & 1 << j);
+                        if (p[file_index].isEmpty) {
+                            p[file_index].isDir = 0;
+                        }
+                        file_index++;
                     }
-                    file_index++;
-                    if (total_num == file_index)
-                        break;
                 }
             }
             break;
@@ -1877,20 +1944,71 @@ int doDecompressFile(QzSession_T *sess, const char *src_file_name)
     if (eheader->streamsInfo) {
 
         uint64_t folder_num = eheader->streamsInfo->codersInfo->numFolders;
+        uint64_t unpack_index = 0;
+        uint64_t total_stream_files = 0;
         Qz7zFileItem_T *file_items = eheader->filesInfo_Dec->items +
                                      eheader->filesInfo_Dec->dir_num;
 
-        for (int i = 0; i < folder_num; ++i) {
+        if (!eheader->streamsInfo->substreamsInfo ||
+            !eheader->streamsInfo->substreamsInfo->numUnPackStreams) {
+            QZ_ERROR("Missing substreams info\n");
+            ret = QZ7Z_ERR_RESOLVE_END_HEADER;
+            goto exit;
+        }
+
+        for (uint64_t i = 0; i < folder_num; ++i) {
+            uint64_t num_files_in_folder =
+                eheader->streamsInfo->substreamsInfo->numUnPackStreams[i];
+            if (num_files_in_folder == 0 ||
+                total_stream_files > fil_num ||
+                num_files_in_folder > fil_num - total_stream_files) {
+                QZ_ERROR("Invalid substream file count\n");
+                ret = QZ7Z_ERR_RESOLVE_END_HEADER;
+                goto exit;
+            }
+            total_stream_files += num_files_in_folder;
+        }
+
+        if (total_stream_files != fil_num) {
+            QZ_ERROR("Substream file count does not match files info\n");
+            ret = QZ7Z_ERR_RESOLVE_END_HEADER;
+            goto exit;
+        }
+
+        for (uint64_t i = 0; i < folder_num; ++i) {
             uint64_t num_files_in_folder =
                 eheader->streamsInfo->substreamsInfo->numUnPackStreams[i];
             uint64_t total_unPack_size =
                 eheader->streamsInfo->codersInfo->unPackSize[i];
-            for (int j = 0; j < num_files_in_folder - 1; ++file_index, ++j) {
+            if (num_files_in_folder > 1 &&
+                !eheader->streamsInfo->substreamsInfo->unPackSize) {
+                QZ_ERROR("Missing unpack size info\n");
+                ret = QZ7Z_ERR_RESOLVE_END_HEADER;
+                goto exit;
+            }
+            for (uint64_t j = 0; j < num_files_in_folder - 1;
+                 ++file_index, ++j, ++unpack_index) {
+                if (file_index >= fil_num) {
+                    QZ_ERROR("File index out of range\n");
+                    ret = QZ7Z_ERR_RESOLVE_END_HEADER;
+                    goto exit;
+                }
                 (file_items + file_index)->size =
-                    eheader->streamsInfo->substreamsInfo->unPackSize[j];
+                    eheader->streamsInfo->substreamsInfo->unPackSize[unpack_index];
+                if ((file_items + file_index)->size > total_unPack_size) {
+                    QZ_ERROR("Invalid unpack size\n");
+                    ret = QZ7Z_ERR_RESOLVE_END_HEADER;
+                    goto exit;
+                }
                 total_unPack_size -= (file_items + file_index)->size;
             }
+            if (file_index >= fil_num) {
+                QZ_ERROR("File index out of range\n");
+                ret = QZ7Z_ERR_RESOLVE_END_HEADER;
+                goto exit;
+            }
             (file_items + file_index)->size = total_unPack_size;
+            file_index++;
         }
 
         src_fd = open(src_file_name, O_RDONLY);
