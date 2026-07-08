@@ -2647,6 +2647,21 @@ static void *doDecompressIn(void *in)
                 sess->thd_sess_stat = rc;
                 goto err_exit;
             }
+            /* Empty member (zero compressed and/or uncompressed size): QAT HW
+             * rejects zero-length buffers, so route to SW */
+            if (QZ_OK == rc &&
+                (0 == hdr.extra.qz_e.dest_sz || 0 == hdr.extra.qz_e.src_sz) &&
+                (DEFLATE_GZIP == qz_sess->sess_params.data_fmt ||
+                 DEFLATE_GZIP_EXT == qz_sess->sess_params.data_fmt ||
+                 DEFLATE_ZLIB == qz_sess->sess_params.data_fmt)) {
+                QZ_DEBUG("doDecompressIn: empty member, falling back to SW\n");
+                if (!qz_sess->sess_params.sw_backup) {
+                    sess->thd_sess_stat = QZ_FAIL;
+                    rc = QZ_FAIL;
+                    goto err_exit;
+                }
+                rc = QZ_FORCE_SW;
+            }
         }
 
         if (g_process.qz_inst[i].heartbeat != CPA_STATUS_SUCCESS ||
@@ -4380,6 +4395,21 @@ static int AsyncDeCompressIn(QzAsyncReq_T **req_ptr)
         if (QZ_OK != rc && QZ_FORCE_SW != rc) {
             sess->thd_sess_stat = rc;
             goto err_exit;
+        }
+        /* Empty member (zero compressed and/or uncompressed size): QAT HW
+         * rejects zero-length buffers, so route to SW */
+        if (QZ_OK == rc &&
+            (0 == hdr.extra.qz_e.dest_sz || 0 == hdr.extra.qz_e.src_sz) &&
+            (DEFLATE_GZIP == qz_sess->sess_params.data_fmt ||
+             DEFLATE_GZIP_EXT == qz_sess->sess_params.data_fmt ||
+             DEFLATE_ZLIB == qz_sess->sess_params.data_fmt)) {
+            QZ_DEBUG("doDecompressIn: empty member, falling back to SW\n");
+            if (!qz_sess->sess_params.sw_backup) {
+                sess->thd_sess_stat = QZ_FAIL;
+                rc = QZ_FAIL;
+                goto err_exit;
+            }
+            rc = QZ_FORCE_SW;
         }
 
         if (g_process.qz_inst[i].heartbeat != CPA_STATUS_SUCCESS ||
