@@ -3266,6 +3266,14 @@ int qzTeardownSession(QzSession_T *sess)
             qz_sess->deflate_strm = NULL;
         }
 
+        /* Free the LZ4 decompression context so its streaming state cannot be
+         * reused by a later decompression on this session, which would cause
+         * LZ4F_decompress errors such as ERROR_maxBlockSize_invalid. */
+        if (NULL != qz_sess->dctx) {
+            LZ4F_freeDecompressionContext(qz_sess->dctx);
+            qz_sess->dctx = NULL;
+        }
+
         if (unlikely(NULL != qz_sess->RRT.latency_array)) {
             free(qz_sess->RRT.latency_array);
             qz_sess->RRT.latency_array = NULL;

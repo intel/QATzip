@@ -326,11 +326,9 @@ int main(int argc, char **argv)
                 }
             }
 
-            if (qatzipSetup(&g_sess, &g_params_th)) {
-                fprintf(stderr, "qatzipSetup session failed\n");
-                exit(ERROR);
-            }
-
+            /* Session setup and the per-file stream reset happen in
+             * processFile() (and in the 7z branch below), so no per-argument
+             * setup is needed here. */
             if (g_decompress) {
                 if (!recursive_mode)  {
                     if (suffix == E_SUFFIX_7Z) {
