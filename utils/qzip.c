@@ -1127,6 +1127,17 @@ void processFile(QzSession_T *sess, const char *in_name,
         if (makeOutName(in_name, out_name, oname, is_compress)) {
             return;
         }
+
+        /* Reset session stream state (LZ4 dctx, deflate stream) before each
+         * file. processFile() is the single per-file choke point, including
+         * recursive mode via processDir(), so a corrupt or truncated file
+         * cannot leak stale stream state into the next file. */
+        qzTeardownSession(sess);
+        if (qatzipSetup(sess, &g_params_th)) {
+            QZ_ERROR("qatzipSetup session failed\n");
+            exit(ERROR);
+        }
+
         doProcessFile(sess, in_name, oname, is_compress);
 
         if (access(oname, F_OK) == 0) {
