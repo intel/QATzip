@@ -362,7 +362,10 @@ typedef struct QzSessionParamsInternal_S {
 } QzSessionParamsInternal_T;
 
 /* lsm_met_len_shift is global variable */
-#define LSM_MET_DEPTH (1<<(lsm_met_len_shift))
+#define LSM_MET_MAX_SHIFT 30U
+#define LSM_MET_DEPTH \
+    (1U << (lsm_met_len_shift > LSM_MET_MAX_SHIFT ? \
+            LSM_MET_MAX_SHIFT : lsm_met_len_shift))
 
 typedef struct LatencyMetrix_S {
     unsigned long *latency_array;

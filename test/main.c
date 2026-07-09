@@ -6501,7 +6501,7 @@ done:
     "    -g, --loglevel        set qatzip loglevel(none|error|warn|info|debug)\n"  \
     "    -a sensitive_mode     Enable Latency sensitive mode\n" \
     "    -q async_queue_sz     default is 100, it's for async queue size\n"     \
-    "    -x lsm_met_len_shift  set LSM metric length shift (default is 6, LSM_MET_DEPTH = 1 << shift)\n" \
+    "    -x lsm_met_len_shift  set LSM metric length shift (default is 6, valid range 0-30, LSM_MET_DEPTH = 1 << shift; values above the max are rejected)\n" \
     "    -h                    Print this help message\n"
 
 void qzPrintUsageAndExit(char *progName)
@@ -6802,9 +6802,18 @@ int main(int argc, char *argv[])
                 return -1;
             }
             break;
-        case 'x':
-            lsm_met_len_shift = GET_LOWER_32BITS(strtoul(optarg, &stop, 0));
+        case 'x': {
+            unsigned long shift_val;
+            errno = 0;
+            shift_val = strtoul(optarg, &stop, 0);
+            if (*stop != '\0' || errno || shift_val > LSM_MET_MAX_SHIFT) {
+                QZ_ERROR("Error lsm_met_len_shift arg: %s (valid range 0-%u)\n",
+                         optarg, LSM_MET_MAX_SHIFT);
+                return -1;
+            }
+            lsm_met_len_shift = GET_LOWER_32BITS(shift_val);
             break;
+        }
         default:
             qzPrintUsageAndExit(argv[0]);
         }
