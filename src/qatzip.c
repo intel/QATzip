@@ -601,14 +601,10 @@ static void stopQat(void)
 
     /* scenario: it's called from inside qzinit, Hw init failed */
     if (QZ_NO_INST_ATTACH == g_process.qz_init_status) {
-        if (NULL != g_process.dc_inst_handle) {
-            free(g_process.dc_inst_handle);
-            g_process.dc_inst_handle = NULL;
-        }
-        if (NULL != g_process.qz_inst) {
-            free(g_process.qz_inst);
-            g_process.qz_inst = NULL;
-        }
+        free(g_process.dc_inst_handle);
+        g_process.dc_inst_handle = NULL;
+        free(g_process.qz_inst);
+        g_process.qz_inst = NULL;
         (void)icp_sal_userStop();
         goto reset;
     }
@@ -987,15 +983,11 @@ void cleanUpInstMem(int i)
     if (NULL != g_process.qz_inst[i].intermediate_buffers) {
         for (j = 0; j < g_process.qz_inst[i].intermediate_cnt; j++) {
             if (NULL != g_process.qz_inst[i].intermediate_buffers[j]) {
-                if (NULL != g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData) {
-                    qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData);
-                    g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData = NULL;
-                }
+                qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData);
+                g_process.qz_inst[i].intermediate_buffers[j]->pPrivateMetaData = NULL;
                 if (NULL != g_process.qz_inst[i].intermediate_buffers[j]->pBuffers) {
-                    if (NULL != g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData) {
-                        qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData);
-                        g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData = NULL;
-                    }
+                    qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData);
+                    g_process.qz_inst[i].intermediate_buffers[j]->pBuffers->pData = NULL;
                     qzFree(g_process.qz_inst[i].intermediate_buffers[j]->pBuffers);
                     g_process.qz_inst[i].intermediate_buffers[j]->pBuffers = NULL;
                 }
@@ -1011,15 +1003,11 @@ void cleanUpInstMem(int i)
     if (NULL != g_process.qz_inst[i].src_buffers) {
         for (j = 0; j < g_process.qz_inst[i].src_count; j++) {
             if (NULL != g_process.qz_inst[i].src_buffers[j]) {
-                if (NULL != g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData) {
-                    qzFree(g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData);
-                    g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData = NULL;
-                }
+                qzFree(g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData);
+                g_process.qz_inst[i].src_buffers[j]->pPrivateMetaData = NULL;
                 if (NULL != g_process.qz_inst[i].src_buffers[j]->pBuffers) {
-                    if (NULL != g_process.qz_inst[i].src_buffers[j]->pBuffers->pData) {
-                        qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData);
-                        g_process.qz_inst[i].src_buffers[j]->pBuffers->pData = NULL;
-                    }
+                    qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers->pData);
+                    g_process.qz_inst[i].src_buffers[j]->pBuffers->pData = NULL;
                     qzFree(g_process.qz_inst[i].src_buffers[j]->pBuffers);
                     g_process.qz_inst[i].src_buffers[j]->pBuffers = NULL;
                 }
@@ -1035,15 +1023,11 @@ void cleanUpInstMem(int i)
     if (NULL != g_process.qz_inst[i].dest_buffers) {
         for (j = 0; j < g_process.qz_inst[i].dest_count; j++) {
             if (NULL != g_process.qz_inst[i].dest_buffers[j]) {
-                if (NULL != g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData) {
-                    qzFree(g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData);
-                    g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData = NULL;
-                }
+                qzFree(g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData);
+                g_process.qz_inst[i].dest_buffers[j]->pPrivateMetaData = NULL;
                 if (NULL != g_process.qz_inst[i].dest_buffers[j]->pBuffers) {
-                    if (NULL != g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData) {
-                        qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData);
-                        g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData = NULL;
-                    }
+                    qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData);
+                    g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData = NULL;
                     qzFree(g_process.qz_inst[i].dest_buffers[j]->pBuffers);
                     g_process.qz_inst[i].dest_buffers[j]->pBuffers = NULL;
                 }
@@ -1059,15 +1043,11 @@ void cleanUpInstMem(int i)
     {
         CpaDcDictionaryData *dict_data = &g_process.qz_inst[i].dict_data;
         if (NULL != dict_data->pDictionaryBuff) {
-            if (NULL != dict_data->pDictionaryBuff->pPrivateMetaData) {
-                qzFree(dict_data->pDictionaryBuff->pPrivateMetaData);
-                dict_data->pDictionaryBuff->pPrivateMetaData = NULL;
-            }
+            qzFree(dict_data->pDictionaryBuff->pPrivateMetaData);
+            dict_data->pDictionaryBuff->pPrivateMetaData = NULL;
             if (NULL != dict_data->pDictionaryBuff->pBuffers) {
-                if (NULL != dict_data->pDictionaryBuff->pBuffers->pData) {
-                    qzFree(dict_data->pDictionaryBuff->pBuffers->pData);
-                    dict_data->pDictionaryBuff->pBuffers->pData = NULL;
-                }
+                qzFree(dict_data->pDictionaryBuff->pBuffers->pData);
+                dict_data->pDictionaryBuff->pBuffers->pData = NULL;
                 qzFree(dict_data->pDictionaryBuff->pBuffers);
                 dict_data->pDictionaryBuff->pBuffers = NULL;
             }
@@ -1078,10 +1058,8 @@ void cleanUpInstMem(int i)
 #endif
 
     /*stream buffer*/
-    if (NULL != g_process.qz_inst[i].stream) {
-        free(g_process.qz_inst[i].stream);
-        g_process.qz_inst[i].stream = NULL;
-    }
+    free(g_process.qz_inst[i].stream);
+    g_process.qz_inst[i].stream = NULL;
 
     qzFree(g_process.qz_inst[i].cpaSess);
     g_process.qz_inst[i].mem_setup = 0;
