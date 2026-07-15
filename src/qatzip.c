@@ -1510,7 +1510,6 @@ int qzSetupSessionLZ4Block(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
         return QZ_PARAMS;
     }
 
-    sess->hw_session_stat = QZ_FAIL;
     if (sess->internal == NULL) {
         sess->internal = calloc(1, sizeof(QzSess_T));
         if (unlikely(NULL == sess->internal)) {
@@ -1521,6 +1520,7 @@ int qzSetupSessionLZ4Block(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
         return QZ_DUPLICATE;
     }
 
+    sess->hw_session_stat = QZ_FAIL;
     qz_sess = (QzSess_T *)sess->internal;
     qzSetParamsLZ4Block(params, &qz_sess->sess_params);
 
@@ -1601,7 +1601,6 @@ int qzSetupSessionZstd(QzSession_T *sess,  QzSessionParamsZstd_T *params)
         return QZ_PARAMS;
     }
 
-    sess->hw_session_stat = QZ_FAIL;
     if (sess->internal == NULL) {
         sess->internal = calloc(1, sizeof(QzSess_T));
         if (unlikely(NULL == sess->internal)) {
@@ -1612,6 +1611,7 @@ int qzSetupSessionZstd(QzSession_T *sess,  QzSessionParamsZstd_T *params)
         return QZ_DUPLICATE;
     }
 
+    sess->hw_session_stat = QZ_FAIL;
     qz_sess = (QzSess_T *)sess->internal;
     qzSetParamsZSTD(params, &qz_sess->sess_params);
 
