@@ -33,8 +33,8 @@
  *
  ***************************************************************************/
 
-#ifndef QATZIP_INTERNAL_H
-#define QATZIP_INTERNAL_H
+#ifndef INTEL_QATZIP_INTERNAL_H
+#define INTEL_QATZIP_INTERNAL_H
 
 #ifdef __cplusplus
 extern"C" {
@@ -816,4 +816,9 @@ int qzAsyncReqSubmit(QzSession_T *sess, QzAsyncReq_T *req,
 int qzAsyncSetupHWSession(QzSession_T *sess, QzDirection_T direct);
 int qzSetupAsyncCtrl(QzSession_T *sess);
 int GetStableInstance(QzSession_T *sess);
-#endif /* QATZIP_INTERNAL_H */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* INTEL_QATZIP_INTERNAL_H */

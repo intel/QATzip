@@ -33,8 +33,8 @@
  *
  ***************************************************************************/
 
-#ifndef UTILS_QZSTD_H
-#define UTILS_QZSTD_H
+#ifndef INTEL_QZSTD_H
+#define INTEL_QZSTD_H
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include <stdio.h>
@@ -135,4 +135,4 @@ int getContentSize(unsigned char *const ptr);
 
 unsigned int getBlockSize(unsigned char *const ptr);
 
-#endif
+#endif /* INTEL_QZSTD_H */

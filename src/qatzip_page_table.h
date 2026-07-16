@@ -34,8 +34,8 @@
  ***************************************************************************/
 
 
-#ifndef QATZIP_PAGE_TABLE_H
-#define QATZIP_PAGE_TABLE_H
+#ifndef INTEL_QATZIP_PAGE_TABLE_H
+#define INTEL_QATZIP_PAGE_TABLE_H
 
 #include <stdint.h>
 #include <sys/mman.h>
@@ -185,4 +185,4 @@ static inline uint64_t loadAddr(QzPageTable_T *level, void *virt)
     return level->next[id.pg_entry.idxl0].mt;
 }
 
-#endif
+#endif /* INTEL_QATZIP_PAGE_TABLE_H */

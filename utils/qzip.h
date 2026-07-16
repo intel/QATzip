@@ -33,8 +33,8 @@
  *
  ***************************************************************************/
 
-#ifndef UTILS_QZIP_H
-#define UTILS_QZIP_H
+#ifndef INTEL_QZIP_H
+#define INTEL_QZIP_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -819,4 +819,4 @@ extern char const g_short_opts[];
 extern const struct option g_long_opts[];
 extern const unsigned int USDM_ALLOC_MAX_SZ;
 
-#endif
+#endif /* INTEL_QZIP_H */
