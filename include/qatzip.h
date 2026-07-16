@@ -47,8 +47,8 @@
  *
  *****************************************************************************/
 
-#ifndef QATZIP_H
-#define QATZIP_H
+#ifndef INTEL_QATZIP_H
+#define INTEL_QATZIP_H
 
 #ifdef __cplusplus
 extern"C" {
@@ -3314,4 +3314,4 @@ QATZIP_API int qzMetadataBlockGetCrc32(uint32_t block_num,
 }
 #endif
 
-#endif
+#endif /* INTEL_QATZIP_H */

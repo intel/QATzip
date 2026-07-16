@@ -47,8 +47,8 @@
  *
  *****************************************************************************/
 
-#ifndef QZ_UTILS_H
-#define QZ_UTILS_H
+#ifndef INTEL_QZ_UTILS_H
+#define INTEL_QZ_UTILS_H
 
 #include <stdarg.h>
 #include <stdint.h>
@@ -152,4 +152,4 @@ void logMessage(QzLogLevel_T level, const char *file, int line,
 #endif
 
 
-#endif
+#endif /* INTEL_QZ_UTILS_H */
