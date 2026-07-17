@@ -134,19 +134,27 @@ ICP_INCLUDE_CFLAGS=
 AS_IF([test -n "${ICP_ROOT}"],
 [
     # Out-of-tree QAT build
+    # Detect icp_sal_* headers under quickassist/include/icp
+    # or quickassist/lookaside/access_layer/include, depending on QAT package layout.
+    ICP_SAL_INCLUDE_DIR=
+    AS_IF([test -d "${ICP_ROOT}/quickassist/include/icp"],
+        [ICP_SAL_INCLUDE_DIR="${ICP_ROOT}/quickassist/include/icp"],
+        [test -d "${ICP_ROOT}/quickassist/lookaside/access_layer/include"],
+        [ICP_SAL_INCLUDE_DIR="${ICP_ROOT}/quickassist/lookaside/access_layer/include"])
+
     AC_MSG_CHECKING([QAT headers in ${ICP_ROOT}])
     AS_IF([test ! -e "${ICP_ROOT}/quickassist/include/cpa.h" ||
            test ! -e "${ICP_ROOT}/quickassist/include/dc/cpa_dc.h" ||
            test ! -e "${ICP_ROOT}/quickassist/utilities/libusdm_drv/qae_mem.h" ||
-           test ! -e "${ICP_ROOT}/quickassist/lookaside/access_layer/include/icp_sal_poll.h" ||
-           test ! -e "${ICP_ROOT}/quickassist/lookaside/access_layer/include/icp_sal_user.h"],
+           test -z "${ICP_SAL_INCLUDE_DIR}" ||
+           test ! -e "${ICP_SAL_INCLUDE_DIR}/icp_sal_user.h"],
         [AC_MSG_RESULT([no])
          AC_MSG_ERROR([QAT headers not found in ${ICP_ROOT}])],
         [AC_MSG_RESULT([yes])
          ICP_INCLUDE_CFLAGS="-I${ICP_ROOT}/quickassist/include \
                              -I${ICP_ROOT}/quickassist/include/dc \
                              -I${ICP_ROOT}/quickassist/utilities/libusdm_drv \
-                             -I${ICP_ROOT}/quickassist/lookaside/access_layer/include"
+                             -I${ICP_SAL_INCLUDE_DIR}"
          LDFLAGS="${LDFLAGS} -Wl,-rpath,${ICP_ROOT}/build -L${ICP_ROOT}/build"])
     AC_SUBST([ICP_INCLUDE_CFLAGS])
 
