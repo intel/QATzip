@@ -13,7 +13,8 @@ Source0:        %{url}/archive/%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  gcc >= 4.8.5
 BuildRequires:  zlib-devel >= 1.2.7
-BuildRequires:  qatlib-devel >= 22.07.0
+BuildRequires:  libzstd-devel >= 1.5.7
+BuildRequires:  qatlib-devel >= 23.08.0
 BuildRequires:  autoconf autoconf-archive automake libtool make lz4-devel numactl-devel
 # The purpose of the package is to support hardware that only exists on x86_64 platforms
 # https://bugzilla.redhat.com/show_bug.cgi?id=1987280
@@ -88,6 +89,13 @@ rm -vf %{buildroot}%{_mandir}/*.pdf
 %{_libdir}/pkgconfig/*.pc
 
 %changelog
+* Fri Jul 17 2026 Yogaraj Alamenda <yogaraj.alamenda@intel.com> - 2.0.0
+- Update to qatzip v2.0.0
+- QAT 6xxx device Features support and Bug fixes
+
+* Thu Jul 16 2026 Fedora Release Engineering <releng@fedoraproject.org> - 1.3.2-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_45_Mass_Rebuild
+
 * Thu Jan 29 2026 Deepak Sundar <deepak.sundar@intel.com> - 1.3.2-1
 - Update to qatzip v1.3.2
 - Bug fixes

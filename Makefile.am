@@ -85,6 +85,9 @@ else
 	@echo "Error : please enable lz4s postprocessing in configure!"
 endif
 
+qzstd_parser:
+	@make -C $(QZIP_DIR) qzstd_parser
+
 AM_CFLAGS=-DENABLE_TESTLOG
 testlog: clean
 	@make -C $(QATZIP_LIB_DIR) $(QATZIP_LIB) AM_CFLAGS=$(AM_CFLAGS)
@@ -119,4 +122,4 @@ rpmclean:
 
 .PHONY: rpm rpmclean libqatzip qzip qatzip-test check_code \
 	qzip_obj_without_main bt $(QATZIP_LIB) clean-local \
-	qzstd
+	qzstd qzstd_parser

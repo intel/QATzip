@@ -36,7 +36,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([qatzip], [1.3.2], [])
+AC_INIT([qatzip], [2.0.0], [])
 AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign subdir-objects tar-pax])
 AM_SILENT_RULES([yes])
 AC_USE_SYSTEM_EXTENSIONS
@@ -44,7 +44,7 @@ AC_CONFIG_MACRO_DIRS([m4])
 
 # Library versioning (libtool format: current:revision:age)
 # Resulting .so version: (current-age).age.revision
-AC_SUBST([LIBQATZIP_VERSION], [5:1:2])
+AC_SUBST([LIBQATZIP_VERSION], [6:0:3])
 
 # Programs
 AC_PROG_AWK

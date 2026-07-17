@@ -32,7 +32,8 @@
 #
 ################################################################
 
-bin_PROGRAMS = qzip qzstd_parser
+bin_PROGRAMS = qzip
+noinst_PROGRAMS = qzstd_parser
 qzip_SOURCES = \
                qzip_7z.c \
                qzip_main.c \
@@ -69,7 +70,7 @@ qzip_obj_CFLAGS = \
                   $(ICP_INCLUDE_CFLAGS)
 
 if QATZIP_LZ4S_POSTPROCESS_AC
-noinst_PROGRAMS = qzstd
+noinst_PROGRAMS += qzstd
 qzstd_SOURCES = \
                 qzstd.c \
                 qzstd_main.c
