@@ -35,16 +35,20 @@
 #                                                                         \
 #==========================================================================
 
-ARG UBUNTU_BASE=ubuntu:22.04
+ARG UBUNTU_BASE=ubuntu:26.04
 FROM ${UBUNTU_BASE} AS builder
 
-ARG QATLIB_VERSION="25.08.0"
+ARG QATLIB_VERSION="26.08.0"
 ARG ZSTD_VERSION="v1.5.7"
 ARG GID
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Enable deb-src lines for source package downloads
-RUN sed -i 's/^# deb-src/deb-src/' /etc/apt/sources.list
+# Enable deb-src lines for source package downloads.
+RUN if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+        sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources; \
+    else \
+        sed -i 's/^# deb-src/deb-src/' /etc/apt/sources.list; \
+    fi
 
 # Install build dependencies and clone sources
 RUN apt-get update && \
@@ -56,7 +60,7 @@ RUN apt-get update && \
     nasm \
     pkg-config \
     libssl-dev \
-    libpcre3-dev \
+    libpcre2-dev \
     zlib1g-dev \
     libreadline-dev \
     lua5.4 \
@@ -149,6 +153,9 @@ COPY --from=builder /usr/src/* /usr/src/
 # Copy user and group info for appuser
 COPY --from=builder /etc/group /etc/group
 COPY --from=builder /etc/passwd /etc/passwd
+
+# Remove unused Canonical Pebble binary from base image (its Go deps cause HIGH CVEs)
+RUN rm -f /usr/bin/pebble
 
 RUN ldconfig
 
