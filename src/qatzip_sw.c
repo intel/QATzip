@@ -1164,9 +1164,8 @@ int compOutSWFallback(int i, int j, QzSession_T *sess,
     QzSess_T *qz_sess = (QzSess_T *)sess->internal;
     unsigned int src_send_sz =
         g_process.qz_inst[i].src_buffers[j]->pBuffers->dataLenInBytes;
-    /* sw dest buffer is align with the inst hw buffer size */
-    unsigned int dest_receive_sz = outputHeaderSz(qz_sess->sess_params.data_fmt) +
-                                   g_process.qz_inst[i].dest_buffers[j]->pBuffers->dataLenInBytes;
+    /* Use DEST_SZ(src_send_sz), not dataLenInBytes which the QAT driver may corrupt on HW failure. */
+    unsigned int dest_receive_sz = DEST_SZ(src_send_sz);
     unsigned char *src_ptr = g_process.qz_inst[i].src_buffers[j]->pBuffers->pData;
     unsigned char *dest_ptr = g_process.qz_inst[i].dest_buffers[j]->pBuffers->pData;
 
