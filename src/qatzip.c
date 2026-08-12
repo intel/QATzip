@@ -1533,6 +1533,12 @@ int qzSetupSessionLZ4Block(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
 
     return rc;
 }
+#else
+int qzSetupSessionLZ4Block(QzSession_T *sess,  QzSessionParamsLZ4_T *params)
+{
+    QZ_ERROR("LZ4 block session setup is not supported.\n");
+    return QZ_NOT_SUPPORTED;
+}
 #endif
 
 int qzSetupSessionLZ4S(QzSession_T *sess,  QzSessionParamsLZ4S_T *params)

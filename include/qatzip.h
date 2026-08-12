@@ -278,12 +278,11 @@ typedef enum QzPollingMode_E {
 typedef enum QzCrcType_E {
     QZ_CRC32 = 0,
     /**< CRC32 checksum */
-    QZ_ADLER,
+    QZ_ADLER = 1,
     /**< Adler checksum */
-    QZ_XXHASH,
-    /**< xxhash checksum */
-    NONE
+    NONE = 2,
     /**< No checksum */
+    QZ_XXHASH = 3    /**< xxhash checksum */
 } QzCrcType_T;
 
 /**
