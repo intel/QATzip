@@ -52,6 +52,7 @@
 #include <linux/fs.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <qz_utils.h>
 #include <qatzip.h> /* new QATzip interface */
 #ifdef HAVE_QAT_HEADERS
@@ -135,6 +136,7 @@
 /* return codes from qzip */
 #define OK      0
 #define ERROR   1
+#define WARNING 2
 
 /* internal return codes for functions that implement 7z format */
 #define QZ7Z_OK                       OK
@@ -759,6 +761,11 @@ void displayStats(RunTimeList_T *time_list,
 
 void tryHelp(void);
 void help(void);
+void qzipCleanupSignal(int sig);
+/* Arrange for a partial output to be removed if we are interrupted. */
+void qzipInstallCleanupHandlers(void);
+/* Merge a per-file outcome into the process exit code; ERROR always wins. */
+void recordExitCode(int status);
 void version(void);
 char *qzipBaseName(char *fname);
 QzSuffix_T getSuffix(const char *filename);
@@ -789,8 +796,8 @@ int doProcessBuffer(QzSession_T *sess,
                     off_t *dst_file_size, unsigned char *dict,
                     unsigned int dict_len, int is_compress);
 
-void doProcessFile(QzSession_T *sess, const char *src_file_name,
-                   const char *dst_file_name, int is_compress);
+int doProcessFile(QzSession_T *sess, const char *src_file_name,
+                  const char *dst_file_name, int is_compress);
 
 void processDir(QzSession_T *sess, const char *in_name,
                 const char *out_name, int is_compress);
@@ -810,6 +817,13 @@ extern char const *const g_license_msg[2];
 extern char *g_program_name;
 extern int g_decompress;        /* g_decompress (-d) */
 extern int g_keep;                     /* keep (don't delete) input files */
+/* -f: force overwrite of output and compressed data to a terminal */
+extern int option_f;
+/* Worst status seen so far; returned by main() once every file is done. */
+extern int g_exit_code;
+/* Output being written; removed by the signal handler if armed. */
+extern char g_out_file_name[MAX_PATH_LEN];
+extern volatile sig_atomic_t g_out_file_armed;
 extern QzSession_T g_sess;
 extern QzipParams_T g_params_th;
 /* Estimate maximum data expansion after decompression */

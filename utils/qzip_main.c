@@ -41,7 +41,6 @@ int main(int argc, char **argv)
     g_program_name = qzipBaseName(argv[0]);
     char *out_name = NULL;
     FILE *stream_out = NULL;
-    int option_f = 0;
     Qz7zItemList_T *the_list;
     int is_good_7z = 0;
     int is_dir = 0;
@@ -50,6 +49,8 @@ int main(int argc, char **argv)
     int is_format_set = 0;
     int is_algorithm_set = 0;
     char resolved_path[PATH_MAX];
+
+    qzipInstallCleanupHandlers();
 
     while (true) {
         int optc;
@@ -306,7 +307,9 @@ int main(int argc, char **argv)
              */
             if (!realpath(argv[optind], resolved_path)) {
                 QZ_ERROR("%s: No such file or directory\n", argv[optind]);
-                exit(ERROR);
+                recordExitCode(ERROR);
+                optind++;
+                continue;
             }
 
             QzSuffix_T  suffix = getSuffix(argv[optind]);
@@ -317,12 +320,16 @@ int main(int argc, char **argv)
                 if (E_CHECK_SUFFIX_UNSUPPORT == check_res) {
                     QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: 7z/gz/lz4.\n",
                              argv[optind]);
-                    exit(ERROR);
+                    recordExitCode(WARNING);
+                    optind++;
+                    continue;
                 }
                 if (E_CHECK_SUFFIX_FORMAT_UNMATCH == check_res) {
                     QZ_ERROR("Error: %s: Suffix is not matched with format\n",
                              argv[optind]);
-                    exit(ERROR);
+                    recordExitCode(WARNING);
+                    optind++;
+                    continue;
                 }
             }
 
@@ -386,7 +393,9 @@ int main(int argc, char **argv)
                     else {
                         QZ_ERROR("Error: %s: Wrong suffix. Supported suffix: "
                                  "7z/gz/lz4/zst.\n", argv[optind]);
-                        exit(ERROR);
+                        recordExitCode(WARNING);
+                        optind++;
+                        continue;
                     }
                 }  else {
                     processFile(&g_sess, argv[optind++], out_name,
@@ -404,5 +413,5 @@ int main(int argc, char **argv)
         exit(ERROR);
     }
 
-    return ret;
+    return (OK == ret) ? g_exit_code : ret;
 }

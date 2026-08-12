@@ -42,6 +42,13 @@ char const *const g_license_msg[] = {
 char *g_program_name = NULL; /* program name */
 int g_decompress = 0;        /* g_decompress (-d) */
 int g_keep = 0;              /* keep (don't delete) input files */
+int option_f = 0;            /* force overwrite / write to terminal (-f) */
+char g_out_file_name[MAX_PATH_LEN] = {0};
+/* Only set once g_out_file_name holds a complete path. */
+volatile sig_atomic_t g_out_file_armed = 0;
+int g_exit_code = OK;
+/* Cleared when SIGINT arrives already ignored; see installCleanupHandler(). */
+int g_foreground = 1;
 QzSession_T g_sess;
 QzipParams_T g_params_th = {
     .huffman_hdr = QZ_HUFF_HDR_DEFAULT,
@@ -99,6 +106,59 @@ void tryHelp(void)
 {
     QZ_PRINT("Try `%s --help' for more information.\n", g_program_name);
     exit(ERROR);
+}
+
+/* Only unlink(), signal() and raise() are async-signal-safe enough to use
+ * here. Re-raising reports the death as 128+signo, the way gzip does. */
+void qzipCleanupSignal(int sig)
+{
+    if (g_out_file_armed) {
+        unlink(g_out_file_name);
+    }
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
+/* A signal the parent already ignores stays ignored, as background jobs rely
+ * on. Ignoring first leaves no window in which the handler could run. */
+static void installCleanupHandler(int sig)
+{
+    if (SIG_IGN != signal(sig, SIG_IGN)) {
+        signal(sig, qzipCleanupSignal);
+    } else if (SIGINT == sig) {
+        /* An inherited SIG_IGN on SIGINT is how gzip recognises that it is
+         * not in the foreground, and so must never stop to ask a question. */
+        g_foreground = 0;
+    }
+}
+
+void qzipInstallCleanupHandlers(void)
+{
+    installCleanupHandler(SIGINT);
+    installCleanupHandler(SIGTERM);
+    installCleanupHandler(SIGHUP);
+}
+
+/* Name the file the handler may delete. Publishing the path only after it is
+ * complete keeps a signal from unlinking a truncated name. */
+static void armOutputCleanup(const char *path)
+{
+    g_out_file_armed = 0;
+    snprintf(g_out_file_name, MAX_PATH_LEN, "%s", path);
+    g_out_file_armed = 1;
+}
+
+static void disarmOutputCleanup(void)
+{
+    g_out_file_armed = 0;
+}
+
+/* Worst-wins: a warning never masks an error already reported. */
+void recordExitCode(int status)
+{
+    if (OK == g_exit_code || ERROR == status) {
+        g_exit_code = status;
+    }
 }
 
 void help(void)
@@ -311,8 +371,13 @@ int doProcessBuffer(QzSession_T *sess,
 
     /* Write accumulated output in single I/O operation */
     bytes_written = fwrite(dst, 1, produced, dst_file);
-    assert(bytes_written == produced);
     *dst_file_size += bytes_written;
+    if (bytes_written != produced) {
+        /* A short write, ENOSPC above all, would truncate the output. */
+        perror("write");
+        *src_len = consumed;
+        return QZ_FAIL;
+    }
 
     /* Signal buffer error if output full but input remains. */
     if (!is_compress && consumed < *src_len && produced == dst_len) {
@@ -381,8 +446,27 @@ int loadDictionaryFile(const char *dict_file_name,
     return 0;
 }
 
-void doProcessFile(QzSession_T *sess, const char *src_file_name,
-                   const char *dst_file_name, int is_compress)
+/* Carry the source mode and mtime onto the output. Everything acts on the
+ * descriptor, since the path is still a temporary that could be swapped. */
+static void applySourceMetadata(int dst_fd, FILE *dst_file,
+                                const char *dst_file_name,
+                                const struct stat *src_stat)
+{
+    struct timespec times[2];
+
+    /* Flush first: a later write would overwrite the timestamps. */
+    fflush(dst_file);
+    if (fchmod(dst_fd, src_stat->st_mode & 0777)) {
+        perror(dst_file_name);
+    }
+    memset(times, 0, sizeof(times));
+    times[0].tv_nsec = UTIME_NOW;
+    times[1].tv_sec = src_stat->st_mtime;
+    futimens(dst_fd, times);
+}
+
+int doProcessFile(QzSession_T *sess, const char *src_file_name,
+                  const char *dst_file_name, int is_compress)
 {
     int ret = OK;
     struct stat src_file_stat;
@@ -402,11 +486,15 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     const unsigned int ratio_limit =
         sizeof(g_bufsz_expansion_ratio) / sizeof(unsigned int);
     unsigned int read_more = 0;
-    int src_fd = 0;
+    int src_fd = -1;
+    int dst_fd = -1;
 
     /* Initialize timing list for accurate performance measurement */
     RunTimeList_T *time_list_head = malloc(sizeof(RunTimeList_T));
-    assert(NULL != time_list_head);
+    if (NULL == time_list_head) {
+        QZ_ERROR("%s: cannot allocate the timing list\n", src_file_name);
+        return ERROR;
+    }
     gettimeofday(&time_list_head->time_s, NULL);
     time_list_head->time_e = time_list_head->time_s;
     time_list_head->next = NULL;
@@ -414,18 +502,22 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     /* Open source file */
     src_fd = open(src_file_name, O_RDONLY);
     if (src_fd < 0) {
-        QZ_INFO("Open input file %s failed\n", src_file_name);
-        exit(ERROR);
+        perror(src_file_name);
+        ret = ERROR;
+        goto exit;
     }
-    ret = fstat(src_fd, &src_file_stat);
-    assert(!ret);
+    if (fstat(src_fd, &src_file_stat)) {
+        perror(src_file_name);
+        ret = ERROR;
+        goto exit;
+    }
 
     /* Handle block devices differently for size calculation */
     if (S_ISBLK(src_file_stat.st_mode)) {
         if (ioctl(src_fd, BLKGETSIZE, &src_file_size) < 0) {
-            close(src_fd);
             perror(src_file_name);
-            exit(ERROR);
+            ret = ERROR;
+            goto exit;
         }
         src_file_size *= 512;
     } else {
@@ -439,8 +531,10 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
     if (is_compress) {
         dst_buffer_size = qzMaxCompressedLength(src_buffer_size, sess);
         if (0 == dst_buffer_size) {
-            perror("During SW compression, src file size is less than HW size!\n");
-            exit(ERROR);
+            QZ_ERROR("%s: cannot size the compression buffer: input is "
+                     "smaller than the hardware block size\n", src_file_name);
+            ret = ERROR;
+            goto exit;
         }
     } else {
         /*
@@ -497,8 +591,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         ret = getDictionaryFileSize(g_params_th.dict_filename, &dict_buffer_size);
         if (ret) {
             QZ_ERROR("Failed to get dictionary file size.\n");
-            close(src_fd);
-            exit(ERROR);
+            ret = ERROR;
+            goto exit;
         }
 
         /* Allocate buffer based on actual file size */
@@ -506,8 +600,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
         if (!dict_buffer) {
             QZ_ERROR("Failed to allocate %u bytes for dictionary buffer.\n",
                      dict_buffer_size);
-            close(src_fd);
-            exit(ERROR);
+            ret = ERROR;
+            goto exit;
         }
 
         /* Load the dictionary file */
@@ -515,21 +609,40 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                                  dict_buffer_size);
         if (ret) {
             QZ_ERROR("Failed to load dictionary file.\n");
-            close(src_fd);
-            free(dict_buffer);
-            exit(ERROR);
+            ret = ERROR;
+            goto exit;
         }
     }
 #endif
 
     src_buffer = malloc(src_buffer_size);
-    assert(src_buffer != NULL);
     dst_buffer = malloc(dst_buffer_size);
-    assert(dst_buffer != NULL);
+    if (NULL == src_buffer || NULL == dst_buffer) {
+        QZ_ERROR("%s: cannot allocate the %zu and %zu byte work buffers\n",
+                 src_file_name, src_buffer_size, dst_buffer_size);
+        ret = ERROR;
+        goto exit;
+    }
     src_file = fdopen(src_fd, "r");
-    assert(src_file != NULL);
-    dst_file = fopen(dst_file_name, "w");
-    assert(dst_file != NULL);
+    if (NULL == src_file) {
+        perror(src_file_name);
+        ret = ERROR;
+        goto exit;
+    }
+    /* O_EXCL so an existing file or planted symlink is never followed. */
+    dst_fd = open(dst_file_name, O_WRONLY | O_CREAT | O_EXCL,
+                  S_IRUSR | S_IWUSR);
+    if (dst_fd < 0) {
+        perror(dst_file_name);
+        ret = ERROR;
+        goto exit;
+    }
+    dst_file = fdopen(dst_fd, "w");
+    if (NULL == dst_file) {
+        perror(dst_file_name);
+        ret = ERROR;
+        goto exit;
+    }
 
     file_remaining = src_file_size;
     read_more = 1;
@@ -558,19 +671,34 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                  */
                 offset_revert = (long)bytes_read - (long)bytes_lookahead;
                 if (-1 == fseek(src_file, offset_revert, SEEK_CUR)) {
+                    perror(src_file_name);
                     ret = ERROR;
                     goto exit;
                 }
                 read_more = 1;
             } else if (!is_compress && QZ_DATA_ERROR == ret) {
-                /* End of compressed stream - normal completion */
+                /* Nothing decoded yet means the input was never in this
+                 * format; later it is just the end of the stream. */
+                if (0 == dst_file_size) {
+                    QZ_ERROR("%s: not in the expected compressed format\n",
+                             src_file_name);
+                    ret = ERROR;
+                    goto exit;
+                }
+                /* Only unparsable trailing bytes land here; a clean stream,
+                 * single or multi member, consumes its input and never does.
+                 * gzip keeps the output and reports a warning. */
+                QZ_ERROR("%s: decompression OK, trailing garbage ignored\n",
+                         src_file_name);
+                recordExitCode(WARNING);
                 file_remaining -= bytes_read;
                 ret = OK;
                 break;
             } else if (0 == bytes_read && QZ_BUF_ERROR == ret) {
                 /* Destination buffer too small - expand it */
                 if (ratio_limit == ratio_idx) {
-                    QZ_ERROR("Could not expand more destination buffer\n");
+                    QZ_ERROR("%s: could not expand the destination buffer "
+                             "any further\n", src_file_name);
                     ret = ERROR;
                     goto exit;
                 }
@@ -582,8 +710,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                                   g_bufsz_expansion_ratio[ratio_idx++];
                 unsigned char *new_buffer = realloc(dst_buffer, dst_buffer_size);
                 if (NULL == new_buffer) {
-                    QZ_ERROR("Fail to allocate destination buffer with size "
-                             "%zu\n", dst_buffer_size);
+                    QZ_ERROR("%s: cannot allocate a %zu byte destination "
+                             "buffer\n", src_file_name, dst_buffer_size);
                     ret = ERROR;
                     goto exit;
                 }
@@ -597,7 +725,8 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
                 read_more = 1;
             }
         } else if (QZ_OK != ret) {
-            QZ_ERROR("Process file error: %d\n", ret);
+            QZ_ERROR("%s: %s failed with error %d\n", src_file_name,
+                     is_compress ? "compression" : "decompression", ret);
             ret = ERROR;
             goto exit;
         } else {
@@ -611,21 +740,30 @@ void doProcessFile(QzSession_T *sess, const char *src_file_name,
 
 exit:
     freeTimeList(time_list_head);
-    fclose(src_file);
-    fclose(dst_file);
-    close(src_fd);
+    if (OK == ret && dst_file) {
+        applySourceMetadata(dst_fd, dst_file, dst_file_name, &src_file_stat);
+    }
+    if (src_file) {
+        fclose(src_file);  /* also closes src_fd: fdopen() transferred ownership */
+    } else if (src_fd >= 0) {
+        close(src_fd);
+    }
+    if (dst_file) {
+        fclose(dst_file);
+    } else if (dst_fd >= 0) {
+        close(dst_fd);
+    }
     free(src_buffer);
     free(dst_buffer);
-#ifdef CPM_5X
-    if (dict_buffer)
-        free(dict_buffer);
-#endif
-    if (!g_keep && OK == ret) {
-        unlink(src_file_name);
+    free(dict_buffer);
+    if (OK != ret && dst_fd >= 0) {
+        /* Never leave a partial output, or its temporary, behind. The guard
+         * keeps us from removing a file O_EXCL refused to open, which is
+         * somebody else's. */
+        unlink(dst_file_name);
     }
-    if (ret) {
-        exit(ret);
-    }
+    /* The source is removed by the caller, once the output is in place. */
+    return ret;
 }
 
 int qzipSetupSessionDeflate(QzSession_T *sess, QzipParams_T *params)
@@ -1043,6 +1181,7 @@ int makeOutName(const char *in_name, const char *out_name,
         if (!hasSuffix(in_name)) {
             QZ_ERROR("%s: Wrong suffix. Supported suffix: 7z/gz/lz4/zst\n",
                      in_name);
+            recordExitCode(WARNING);
             return -1;
         }
         /* remove suffix */
@@ -1105,48 +1244,261 @@ void processDir(QzSession_T *sess, const char *in_name,
     closedir(dir);
 }
 
+/* Stat the input, following a symbolic link only when -f is given. */
+static int statInput(const char *in_name, struct stat *in_stat)
+{
+    if (lstat(in_name, in_stat)) {
+        perror(in_name);
+        return ERROR;
+    }
+
+    if (!S_ISLNK(in_stat->st_mode)) {
+        return OK;
+    }
+
+    if (!option_f) {
+        fprintf(stderr, "%s: %s: Too many levels of symbolic links\n",
+                g_program_name, in_name);
+        return ERROR;
+    }
+
+    if (stat(in_name, in_stat)) {
+        perror(in_name);
+        return ERROR;
+    }
+    return OK;
+}
+
+/* A file reachable under other names is skipped unless -f says otherwise,
+ * since removing this one would leave those names holding the original data.
+ * gzip refuses even under -k, where nothing is removed, so we do too. */
+static int checkNotMultiplyLinked(const char *in_name,
+                                  const struct stat *in_stat)
+{
+    if (option_f || !S_ISREG(in_stat->st_mode) || in_stat->st_nlink <= 1) {
+        return OK;
+    }
+    fprintf(stderr, "%s: %s has %lu other link%s -- file ignored\n",
+            g_program_name, in_name, (unsigned long)in_stat->st_nlink - 1,
+            (2 == in_stat->st_nlink) ? "" : "s");
+    return WARNING;
+}
+
+/* Refuse when the destination turns out to be the input itself. The caller
+ * owns dst_fd; it is stat'd rather than the path so a swap cannot fool us. */
+/* Refuse when the destination turns out to be the input itself. */
+static int checkNotSameFile(const struct stat *dst_stat, const char *in_name,
+                            const char *dst_name, const struct stat *in_stat)
+{
+    if (dst_stat->st_dev == in_stat->st_dev &&
+        dst_stat->st_ino == in_stat->st_ino) {
+        fprintf(stderr, "%s: %s and %s are the same file\n",
+                g_program_name, in_name, dst_name);
+        return ERROR;
+    }
+    return OK;
+}
+
+/* A directory can never be written to. Rejecting it here means no temporary
+ * is created for a rename() that could only fail with EISDIR and leave that
+ * temporary behind. */
+static int checkNotDirectory(const struct stat *dst_stat, const char *dst_name)
+{
+    if (!S_ISDIR(dst_stat->st_mode)) {
+        return OK;
+    }
+    fprintf(stderr, "%s: %s: Is a directory\n", g_program_name, dst_name);
+    return ERROR;
+}
+
+/* Ask before clobbering an existing destination, unless -f was given. */
+static int confirmOverwrite(const char *dst_name)
+{
+    int answer, discard;
+
+    if (option_f) {
+        return OK;
+    }
+
+    /* Without a terminal to answer, or in the background where a read would
+     * stall, refuse rather than prompt. */
+    if (!g_foreground || !isatty(fileno(stdin))) {
+        fprintf(stderr, "%s: %s already exists; not overwritten\n",
+                g_program_name, dst_name);
+        return WARNING;
+    }
+
+    fprintf(stderr,
+            "%s: %s already exists; do you wish to overwrite (y or n)? ",
+            g_program_name, dst_name);
+    answer = getchar();
+    for (discard = answer; discard != '\n' && discard != EOF;
+         discard = getchar())
+        ;
+    if (answer != 'y' && answer != 'Y') {
+        fprintf(stderr, "%s: %s not overwritten\n", g_program_name, dst_name);
+        return WARNING;
+    }
+    return OK;
+}
+
+static int makeTempName(char *tmp_name, const char *dst_name)
+{
+    if (snprintf(tmp_name, MAX_PATH_LEN, "%s.qz%ld", dst_name,
+                 (long)getpid()) >= MAX_PATH_LEN) {
+        fprintf(stderr, "%s: %s: temporary name too long\n",
+                g_program_name, dst_name);
+        return ERROR;
+    }
+    return OK;
+}
+
+/* Decide where the data is written: straight to dst_name when nothing is
+ * there, otherwise to a temporary that is renamed over the existing file,
+ * since rename() is atomic and never follows a symlink at the target. */
+static int resolveWriteName(const char *in_name, const struct stat *in_stat,
+                            const char *dst_name, char *tmp_name,
+                            const char **write_name)
+{
+    struct stat dst_stat;
+    int have_dst_stat = 0;
+    int dst_fd;
+    int ret;
+
+    *write_name = dst_name;
+
+    /* Links count as existing but are never followed; FIFOs never stall. */
+    dst_fd = open(dst_name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+    if (dst_fd < 0 && ENOENT == errno) {
+        return OK;
+    }
+
+    if (dst_fd >= 0) {
+        /* Stat the descriptor, not the path, so a swap cannot fool us. */
+        ret = fstatat(dst_fd, "", &dst_stat, AT_EMPTY_PATH);
+        close(dst_fd);
+        if (ret) {
+            perror(dst_name);
+            return ERROR;
+        }
+        have_dst_stat = 1;
+
+        ret = checkNotSameFile(&dst_stat, in_name, dst_name, in_stat);
+        if (OK != ret) {
+            return ret;
+        }
+    }
+
+    ret = confirmOverwrite(dst_name);
+    if (OK != ret) {
+        return ret;
+    }
+
+    /* After the prompt, matching gzip: without -f the refusal above is what
+     * a directory destination reports, and only -f gets as far as this. */
+    if (have_dst_stat) {
+        ret = checkNotDirectory(&dst_stat, dst_name);
+        if (OK != ret) {
+            return ret;
+        }
+    }
+
+    ret = makeTempName(tmp_name, dst_name);
+    if (OK != ret) {
+        return ret;
+    }
+
+    *write_name = tmp_name;
+    return OK;
+}
+
+/* Reset stream state (LZ4 dctx, deflate stream) before each file. processFile()
+ * is the single per-file choke point, including recursive mode via
+ * processDir(), so a corrupt or truncated file cannot leak stale stream state
+ * into the next file. */
+static int resetSession(QzSession_T *sess)
+{
+    qzTeardownSession(sess);
+    if (qatzipSetup(sess, &g_params_th)) {
+        QZ_ERROR("qatzipSetup session failed\n");
+        return ERROR;
+    }
+    return OK;
+}
+
+/* Put the output under its final name, then drop the input. Removing the
+ * source only once the rename has landed means a failed rename cannot lose
+ * the original. */
+static int finishOutput(int status, const char *in_name, const char *dst_name,
+                        const char *tmp_name, int used_temp)
+{
+    /* doProcessFile() removes the temporary itself when it fails. */
+    if (OK == status && used_temp && rename(tmp_name, dst_name)) {
+        perror(dst_name);
+        fprintf(stderr, "%s: output left in %s\n", g_program_name, tmp_name);
+        status = ERROR;
+    }
+
+    disarmOutputCleanup();
+
+    if (OK == status && !g_keep) {
+        unlink(in_name);
+    }
+    return status;
+}
+
 void processFile(QzSession_T *sess, const char *in_name,
                  const char *out_name, int is_compress)
 {
-    int ret;
-    struct stat fstat;
-    struct timespec timebuf[2];
+    int status;
+    struct stat in_stat;
+    /* Final destination, and the temporary standing in for it. */
+    char dst_name[MAX_PATH_LEN];
+    char tmp_name[MAX_PATH_LEN] = {0};
+    /* Whichever of the two the compressed data actually goes to. */
+    const char *write_name;
 
-    ret = stat(in_name, &fstat);
-    if (ret) {
-        perror(in_name);
-        exit(-1);
+    status = statInput(in_name, &in_stat);
+    if (OK != status) {
+        recordExitCode(status);
+        return;
     }
 
-    if (S_ISDIR(fstat.st_mode)) {
+    if (S_ISDIR(in_stat.st_mode)) {
         processDir(sess, in_name, out_name, is_compress);
-    } else {
-        char oname[MAX_PATH_LEN];
-        memset(oname, 0, MAX_PATH_LEN);
+        return;
+    }
 
-        if (makeOutName(in_name, out_name, oname, is_compress)) {
-            return;
-        }
+    status = checkNotMultiplyLinked(in_name, &in_stat);
+    if (OK != status) {
+        recordExitCode(status);
+        return;
+    }
 
-        /* Reset session stream state (LZ4 dctx, deflate stream) before each
-         * file. processFile() is the single per-file choke point, including
-         * recursive mode via processDir(), so a corrupt or truncated file
-         * cannot leak stale stream state into the next file. */
-        qzTeardownSession(sess);
-        if (qatzipSetup(sess, &g_params_th)) {
-            QZ_ERROR("qatzipSetup session failed\n");
-            exit(ERROR);
-        }
+    memset(dst_name, 0, MAX_PATH_LEN);
+    if (makeOutName(in_name, out_name, dst_name, is_compress)) {
+        return;
+    }
 
-        doProcessFile(sess, in_name, oname, is_compress);
+    status = resolveWriteName(in_name, &in_stat, dst_name, tmp_name,
+                              &write_name);
+    if (OK != status) {
+        recordExitCode(status);
+        return;
+    }
 
-        if (access(oname, F_OK) == 0) {
-            /* Update destination file timestamps to match source file */
-            memset(timebuf, 0, sizeof(timebuf));
-            timebuf[0].tv_nsec = UTIME_NOW;
-            timebuf[1].tv_sec = fstat.st_mtime;
-            utimensat(AT_FDCWD, oname, timebuf, 0);
-        }
+    status = resetSession(sess);
+    if (OK != status) {
+        recordExitCode(status);
+        return;
+    }
+
+    armOutputCleanup(write_name);
+    status = doProcessFile(sess, in_name, write_name, is_compress);
+    status = finishOutput(status, in_name, dst_name, tmp_name,
+                          write_name == tmp_name);
+    if (OK != status) {
+        recordExitCode(ERROR);
     }
 }
 
