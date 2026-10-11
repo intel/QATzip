@@ -8,5 +8,7 @@ Description: Higher level library provides access to Intel QAT compression
 URL: https://github.com/intel/QATzip
 Version: @VERSION@
 Libs: -L${libdir} -lqatzip
+Libs.private: -lnuma @PTHREAD_LIBS@
 Cflags: -I${includedir}
 Requires: zlib, liblz4
+Requires.private: libzstd @QATLIB_PC_REQUIRES@

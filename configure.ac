@@ -202,7 +202,9 @@ AS_IF([test -n "${ICP_ROOT}"],
 
     AC_CHECK_LIB([usdm], [qaeMemAllocNUMA], [],
         [AC_MSG_ERROR([libusdm not found. Install qatlib.])])
+    QATLIB_PC_REQUIRES="qatlib"
 ])
+AC_SUBST([QATLIB_PC_REQUIRES])
 
 # Compiler flags
 CFLAGS="${CFLAGS} -Wall -Werror -std=gnu99 -pedantic -fstack-protector-strong -fPIE -fPIC -fno-delete-null-pointer-checks -fwrapv"
