@@ -74,7 +74,7 @@ AC_TYPE_UINT8_T
 AC_CHECK_HEADERS([fcntl.h limits.h pthread.h sched.h stdint.h stdio.h stdlib.h string.h sys/ioctl.h sys/stat.h sys/time.h sys/types.h unistd.h utime.h])
 
 # Function checks
-AC_CHECK_FUNCS([fork getcwd gettimeofday malloc memmove memset mkdir mmap realpath sched_getcpu strerror strrchr strtol strtoul utime])
+AC_CHECK_FUNCS([fork getcwd gettimeofday malloc memmove memset mkdir mmap realpath sched_getcpu secure_getenv strerror strrchr strtol strtoul utime])
 
 # Required libraries
 m4_ifdef([AX_PTHREAD], [], [
@@ -205,7 +205,7 @@ AS_IF([test -n "${ICP_ROOT}"],
 ])
 
 # Compiler flags
-CFLAGS="${CFLAGS} -Wall -Werror -std=gnu99 -pedantic -fstack-protector-strong -fPIE -fPIC -fno-delete-null-pointer-checks -fwrapv"
+CFLAGS="${CFLAGS} -Wall -Werror -std=gnu11 -pedantic -fstack-protector-strong -fPIE -fPIC -fno-delete-null-pointer-checks -fwrapv"
 AS_IF([test "x${CC}" = "xgcc"],
     [CFLAGS="${CFLAGS} -fno-strict-overflow"])
 
