@@ -205,7 +205,7 @@ AS_IF([test -n "${ICP_ROOT}"],
 ])
 
 # Compiler flags
-CFLAGS="${CFLAGS} -Wall -Werror -std=gnu99 -pedantic -fstack-protector-strong -fPIE -fPIC -fno-delete-null-pointer-checks -fwrapv"
+CFLAGS="${CFLAGS} -Wall -Werror -std=gnu11 -pedantic -fstack-protector-strong -fPIE -fPIC -fno-delete-null-pointer-checks -fwrapv"
 AS_IF([test "x${CC}" = "xgcc"],
     [CFLAGS="${CFLAGS} -fno-strict-overflow"])
 
