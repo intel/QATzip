@@ -43,7 +43,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <sys/time.h>
-#include <bits/types.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
@@ -710,7 +709,7 @@ const char *getSectionName(void)
     static char section_name[QAT_SECTION_NAME_SIZE];
     int len;
     char *pre_section_name;
-#if __GLIBC_PREREQ(2, 17)
+#ifdef HAVE_SECURE_GETENV
     pre_section_name = secure_getenv("QAT_SECTION_NAME");
 #else
     pre_section_name = getenv("QAT_SECTION_NAME");

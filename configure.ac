@@ -74,7 +74,7 @@ AC_TYPE_UINT8_T
 AC_CHECK_HEADERS([fcntl.h limits.h pthread.h sched.h stdint.h stdio.h stdlib.h string.h sys/ioctl.h sys/stat.h sys/time.h sys/types.h unistd.h utime.h])
 
 # Function checks
-AC_CHECK_FUNCS([fork getcwd gettimeofday malloc memmove memset mkdir mmap realpath sched_getcpu strerror strrchr strtol strtoul utime])
+AC_CHECK_FUNCS([fork getcwd gettimeofday malloc memmove memset mkdir mmap realpath sched_getcpu secure_getenv strerror strrchr strtol strtoul utime])
 
 # Required libraries
 m4_ifdef([AX_PTHREAD], [], [

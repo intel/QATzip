@@ -267,7 +267,10 @@ int main(int argc, char **argv)
                 exit(ERROR);
             }
             stream_out = stdout;
-            stdout = freopen(NULL, "w", stdout);
+            if (NULL == freopen(NULL, "w", stdout)) {
+                fprintf(stderr, "freopen: %s\n", strerror(errno));
+                exit(ERROR);
+            }
             processStream(&g_sess, stdin, stream_out, g_decompress == 0);
         }
     } else if (g_params_th.data_fmt == QZIP_DEFLATE_RAW &&
